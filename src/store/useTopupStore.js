@@ -1,0 +1,215 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { mockTopups } from '../data/mockData';
+import apiClient from '../services/client';
+import useNotificationStore from './useNotificationStore';
+import useAuthStore from './useAuthStore';
+import useAdminStore from './useAdminStore';
+
+const useTopupStore = create(
+  persist(
+    (set, get) => ({
+      // =====================================================================================
+      // FINANCIAL SNAPSHOT SYSTEM - CRITICAL BUSINESS LOGIC
+      // =====================================================================================
+      // Each topup transaction gets a FINANCIAL SNAPSHOT at approval time that includes:
+      // - originalCurrency: The currency the user paid in
+      // - originalAmount: The exact amount paid
+      // - exchangeRateAtExecution: Exchange rate at the moment of approval
+      // - convertedAmountAtExecution: Amount converted at execution time
+      // - finalAmountAtExecution: Final coins credited to wallet
+      // - pricingSnapshot: Complete pricing context (fees, discounts, etc.)
+      //
+      // This prevents dynamic recalculation when exchange rates change later.
+      // =====================================================================================
+      topups: mockTopups,
+
+      loadTopups: async () => {
+        try {
+          const topups = await apiClient.topups.list();
+          set({ topups: Array.isArray(topups) ? topups : mockTopups });
+        } catch (_error) {
+          set({ topups: mockTopups });
+        }
+      },
+
+      requestTopup: async (amountOrPayload, method, userId, userName) => {
+        const isPayloadObject = typeof amountOrPayload === 'object' && amountOrPayload !== null;
+        const requestedAmount = isPayloadObject
+          ? Number(amountOrPayload.requestedAmount || amountOrPayload.amount || 0)
+          : Number(amountOrPayload || 0);
+
+        const topupType = isPayloadObject && amountOrPayload.type ? amountOrPayload.type : 'regular';
+        const gameDetails = isPayloadObject && amountOrPayload.gameDetails ? amountOrPayload.gameDetails : null;
+
+        const newTopup = {
+          id: Date.now(),
+          userId: isPayloadObject ? amountOrPayload.userId : userId,
+          userName: isPayloadObject ? amountOrPayload.userName : userName,
+          amount: requestedAmount,
+          requestedAmount,
+          requestedCoins: requestedAmount,
+          status: topupType === 'game_topup' ? 'approved' : 'pending', // Auto-approve game top-ups
+          createdAt: new Date().toISOString(),
+          time: new Date().toLocaleTimeString(),
+          method: isPayloadObject ? amountOrPayload.paymentChannel : method,
+          paymentChannel: isPayloadObject ? amountOrPayload.paymentChannel : method,
+          currencyCode: isPayloadObject ? amountOrPayload.currencyCode : 'USD',
+          proofImage: isPayloadObject ? amountOrPayload.proofImage : '',
+          senderWalletNumber: isPayloadObject ? amountOrPayload.senderWalletNumber : '',
+          type: topupType,
+          gameDetails: gameDetails,
+        };
+
+        // Auto-create financial snapshot for game top-ups
+        if (topupType === 'game_topup') {
+          const currencies = await apiClient.system.currencies().catch(() => []);
+          const userCurrency = currencies.find(c => c.code === (newTopup.currencyCode || 'USD')) || { code: 'USD', rate: 1 };
+          const exchangeRate = Number(userCurrency.rate || 1);
+          const convertedAmount = requestedAmount * exchangeRate;
+
+          newTopup.financialSnapshot = {
+            originalCurrency: newTopup.currencyCode || 'USD',
+            originalAmount: requestedAmount,
+            exchangeRateAtExecution: exchangeRate,
+            convertedAmountAtExecution: convertedAmount,
+            finalAmountAtExecution: convertedAmount,
+            pricingSnapshot: {
+              baseRate: exchangeRate,
+              fees: 0,
+              discount: 0,
+              finalRate: exchangeRate
+            },
+            feesSnapshot: {
+              processingFee: 0,
+              transferFee: 0,
+              totalFees: 0
+            }
+          };
+          newTopup.creditedCoins = convertedAmount;
+          newTopup.adminNote = 'Auto-approved - Game top-up';
+        }
+
+        const created = await apiClient.topups.create(newTopup);
+        const finalTopup = created || newTopup;
+        set(state => ({
+          topups: [finalTopup, ...state.topups]
+        }));
+
+        // Auto-credit coins for game top-ups
+        if (topupType === 'game_topup' && finalTopup.financialSnapshot) {
+          useAdminStore.getState().updateUserCoins(
+            finalTopup.userId,
+            finalTopup.financialSnapshot.finalAmountAtExecution,
+            null,
+            () => {
+              useNotificationStore.getState().addNotification({
+                title: 'تم شحن الرصيد تلقائياً',
+                message: `تم إضافة ${finalTopup.financialSnapshot.finalAmountAtExecution} عملة إلى رصيدك`,
+                type: 'success',
+              });
+            }
+          );
+        }
+
+        useNotificationStore.getState().addNotification({
+          title: topupType === 'game_topup' ? 'طلب شحن لعبة جديد' : 'طلب شحن جديد',
+          message: `طلب شحن ${topupType === 'game_topup' ? 'لعبة ' : ''}جديد من ${finalTopup?.userName || userName || 'عميل'}`,
+          type: 'info',
+        });
+      },
+
+      updateTopupStatus: async (id, status, review = {}) => {
+        const target = (get().topups || []).find((t) => t.id === id);
+        if (!target) return;
+
+        // Get current exchange rates for financial snapshot
+        const currencies = await apiClient.system.currencies().catch(() => []);
+        const userCurrency = currencies.find(c => c.code === (target.currencyCode || 'USD')) || { code: 'USD', rate: 1, symbol: '$' };
+
+        let updatedTopup = { ...target, status };
+
+        // Create financial snapshot when approving the topup
+        if (status === 'approved' && !target.financialSnapshot) {
+          const actualPaidAmount = Number(review.actualPaidAmount || target.requestedAmount || 0);
+          const exchangeRate = Number(userCurrency.rate || 1);
+          const convertedAmount = actualPaidAmount * exchangeRate;
+
+          updatedTopup.financialSnapshot = {
+            originalCurrency: target.currencyCode || 'USD',
+            originalAmount: actualPaidAmount,
+            exchangeRateAtExecution: exchangeRate,
+            convertedAmountAtExecution: convertedAmount,
+            finalAmountAtExecution: convertedAmount, // Amount credited to wallet
+            pricingSnapshot: {
+              baseRate: exchangeRate,
+              fees: 0,
+              discount: 0,
+              finalRate: exchangeRate
+            },
+            feesSnapshot: {
+              processingFee: 0,
+              transferFee: 0,
+              totalFees: 0
+            }
+          };
+
+          // Update legacy fields for backward compatibility
+          updatedTopup.actualPaidAmount = actualPaidAmount;
+          updatedTopup.creditedCoins = convertedAmount;
+          updatedTopup.adminNote = review.adminNote || '';
+        }
+
+        // Update user balance if approving topup
+        if (status === 'approved' && useAdminStore.getState().loadUsers) {
+          await useAdminStore.getState().loadUsers();
+        }
+
+        const updated = await apiClient.topups.updateStatus(id, status, updatedTopup);
+        const finalUpdate = updated || updatedTopup;
+
+        set(state => ({
+          topups: state.topups.map(t => t.id === id ? finalUpdate : t)
+        }));
+
+        const requestedAmount = Number(finalUpdate?.requestedAmount ?? finalUpdate?.requestedCoins ?? target?.requestedAmount ?? target?.requestedCoins ?? 0);
+        const actualAmount = Number(finalUpdate?.actualPaidAmount ?? requestedAmount);
+
+        if (status === 'approved' || status === 'completed') {
+          useNotificationStore.getState().addNotification({
+            title: 'قبول طلب شحن',
+            message: actualAmount !== requestedAmount
+              ? `تم قبول طلب ${target?.id || id} بالمبلغ الفعلي ${actualAmount} فقط`
+              : `تم قبول طلب الشحن ${target?.id || id}`,
+            type: 'success',
+          });
+        } else if (status === 'rejected' || status === 'denied') {
+          useNotificationStore.getState().addNotification({
+            title: 'رفض طلب شحن',
+            message: `تم رفض طلب الشحن ${target?.id || id}`,
+            type: 'warning',
+          });
+        }
+      },
+
+      updateTopupRequest: async (id, payload = {}) => {
+        const updated = await apiClient.topups.updateRequest(id, payload);
+        set((state) => ({
+          topups: state.topups.map((item) => (item.id === id ? { ...item, ...updated } : item)),
+        }));
+
+        const requestedAmount = Number(updated?.requestedAmount ?? updated?.requestedCoins ?? updated?.amount ?? 0);
+        useNotificationStore.getState().addNotification({
+          title: 'تعديل طلب شحن',
+          message: `تم تعديل مبلغ الطلب ${id} إلى ${requestedAmount}`,
+          type: 'info',
+        });
+      }
+    }),
+    {
+      name: 'topups-storage',
+    }
+  )
+);
+
+export default useTopupStore;

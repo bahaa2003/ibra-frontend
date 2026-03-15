@@ -1,0 +1,298 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Bell, Coins, CreditCard, Globe, KeyRound, LayoutDashboard, LogOut, Palette, Shield, User2, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import SettingsSection from '../components/settings/SettingsSection';
+import SettingsItem from '../components/settings/SettingsItem';
+import Button, { cn } from '../components/ui/Button';
+import Switch from '../components/ui/Switch';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../components/ui/Toast';
+import useAuthStore from '../store/useAuthStore';
+
+const SETTINGS_PREFS_KEY = 'ibra-settings-prefs-v1';
+
+const Settings = () => {
+  const navigate = useNavigate();
+  const { language, setLanguage } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
+  const { addToast } = useToast();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
+
+  const [notifications, setNotifications] = useState({
+    orders: true,
+    balance: true,
+    offers: false
+  });
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_PREFS_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      setNotifications((prev) => ({
+        ...prev,
+        ...parsed
+      }));
+    } catch {
+      setNotifications({ orders: true, balance: true, offers: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_PREFS_KEY, JSON.stringify(notifications));
+  }, [notifications]);
+
+  const isEnglish = language === 'en';
+  const text = useMemo(
+    () =>
+      isEnglish
+        ? {
+            title: isAdmin ? 'Admin Settings' : 'Settings',
+            subtitle: isAdmin ? 'Manage dashboard preferences and admin shortcuts' : 'Control your preferences and account configuration',
+            accountSection: isAdmin ? 'Admin Tools' : 'Account',
+            accountSectionDescription: isAdmin ? 'Quick links for the main admin dashboard areas' : 'Manage your personal profile and account details',
+            myAccount: 'My Account',
+            myAccountDescription: 'View and edit your account data',
+            dashboardOverview: 'Dashboard Home',
+            dashboardOverviewDescription: 'Return to the main admin dashboard',
+            usersManager: 'Users Management',
+            usersManagerDescription: 'Manage customers, balances, and account actions',
+            paymentsManager: 'Payment Methods',
+            paymentsManagerDescription: 'Manage grouped payment methods and transfer options',
+            topupsManager: 'Payment Requests',
+            topupsManagerDescription: 'Review transfer confirmations and top-up operations',
+            currenciesManager: 'Currencies',
+            currenciesManagerDescription: 'Manage enabled currencies and defaults',
+            languageSection: 'Language',
+            languageSectionDescription: 'Choose your preferred application language',
+            appearanceSection: 'Appearance',
+            appearanceSectionDescription: 'Customize your app look and visual theme',
+            darkMode: 'Dark mode',
+            darkModeDescription: 'Use premium dark look across the app',
+            notificationsSection: 'Notifications',
+            notificationsSectionDescription: 'Select which alerts you would like to receive',
+            notificationsOrders: 'Orders notifications',
+            notificationsBalance: 'Balance notifications',
+            notificationsOffers: 'Offers notifications',
+            securitySection: 'Security',
+            securitySectionDescription: 'Quick actions for password and security controls',
+            changePassword: 'Change password',
+            changePasswordDescription: 'Open account security panel to update password',
+            twoFactor: 'Two-factor authentication',
+            twoFactorDescription: 'Enable or disable email OTP protection',
+            logoutAllDevices: 'Sign out from all devices',
+            logoutAllDevicesDescription: 'Placeholder action until backend session APIs are connected',
+            open: 'Open',
+            active: 'Active',
+            simulatedActionDone: 'Placeholder action executed. Connect backend endpoint later.',
+            arabic: 'Arabic',
+            english: 'English'
+          }
+        : {
+            title: isAdmin ? 'إعدادات الأدمن' : 'الإعدادات',
+            subtitle: isAdmin ? 'تحكم في تفضيلات لوحة الإدارة والاختصارات السريعة' : 'تحكم في تفضيلاتك وإعدادات حسابك',
+            accountSection: isAdmin ? 'أدوات الإدارة' : 'الحساب',
+            accountSectionDescription: isAdmin ? 'اختصارات سريعة لأهم أقسام لوحة الأدمن' : 'إدارة بياناتك الشخصية وإعدادات الحساب',
+            myAccount: 'حسابي',
+            myAccountDescription: 'عرض وتعديل بيانات حسابك',
+            dashboardOverview: 'الرئيسية',
+            dashboardOverviewDescription: 'الرجوع إلى الصفحة الرئيسية للوحة الأدمن',
+            usersManager: 'إدارة المستخدمين',
+            usersManagerDescription: 'إدارة العملاء والأرصدة وإجراءات الحساب',
+            paymentsManager: 'طرق الدفع',
+            paymentsManagerDescription: 'إدارة مجموعات الدفع ووسائل التحويل',
+            topupsManager: 'طلبات الدفع',
+            topupsManagerDescription: 'مراجعة تأكيدات التحويل وطلبات الشحن',
+            currenciesManager: 'العملات',
+            currenciesManagerDescription: 'إدارة العملات المفعلة والافتراضية',
+            languageSection: 'اللغة',
+            languageSectionDescription: 'اختر لغة التطبيق المفضلة لديك',
+            appearanceSection: 'المظهر',
+            appearanceSectionDescription: 'تحكم في شكل التطبيق وتجربة العرض',
+            darkMode: 'الوضع الداكن',
+            darkModeDescription: 'استخدام الواجهة الداكنة داخل التطبيق',
+            notificationsSection: 'الإشعارات',
+            notificationsSectionDescription: 'حدد الإشعارات التي تريد استقبالها',
+            notificationsOrders: 'إشعارات الطلبات',
+            notificationsBalance: 'إشعارات الرصيد',
+            notificationsOffers: 'إشعارات العروض',
+            securitySection: 'الأمان',
+            securitySectionDescription: 'اختصارات لتغيير كلمة المرور وضبط الحماية',
+            changePassword: 'تغيير كلمة المرور',
+            changePasswordDescription: 'فتح قسم الأمان في صفحة حسابي لتحديث كلمة المرور',
+            twoFactor: 'المصادقة الثنائية',
+            twoFactorDescription: 'تفعيل أو تعطيل التحقق برمز البريد الإلكتروني',
+            logoutAllDevices: 'تسجيل الخروج من كل الأجهزة',
+            logoutAllDevicesDescription: 'إجراء تجريبي حتى يتم ربط واجهات الجلسات في الـ Backend',
+            open: 'فتح',
+            active: 'مفعل',
+            simulatedActionDone: 'تم تنفيذ إجراء تجريبي. اربطه لاحقًا بواجهة الخلفية.',
+            arabic: 'العربية',
+            english: 'English'
+          },
+    [isAdmin, isEnglish]
+  );
+
+  const handlePlaceholderSecurityAction = () => {
+    addToast(text.simulatedActionDone, 'info');
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-4">
+      <motion.header
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-white/10 bg-gray-950/35 p-5 backdrop-blur-md"
+      >
+        <h1 className="text-2xl font-bold text-white">{text.title}</h1>
+        <p className="mt-1 text-sm text-gray-300">{text.subtitle}</p>
+      </motion.header>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <SettingsSection icon={isAdmin ? LayoutDashboard : User2} title={text.accountSection} description={text.accountSectionDescription}>
+          {isAdmin && (
+            <>
+              <SettingsItem
+                icon={LayoutDashboard}
+                title={text.dashboardOverview}
+                description={text.dashboardOverviewDescription}
+                action={text.open}
+                onClick={() => navigate('/dashboard')}
+              />
+              <SettingsItem
+                icon={Users}
+                title={text.usersManager}
+                description={text.usersManagerDescription}
+                action={text.open}
+                onClick={() => navigate('/admin/users')}
+              />
+              <SettingsItem
+                icon={CreditCard}
+                title={text.paymentsManager}
+                description={text.paymentsManagerDescription}
+                action={text.open}
+                onClick={() => navigate('/admin/payment-methods')}
+              />
+              <SettingsItem
+                icon={Bell}
+                title={text.topupsManager}
+                description={text.topupsManagerDescription}
+                action={text.open}
+                onClick={() => navigate('/admin/payments')}
+              />
+              <SettingsItem
+                icon={Coins}
+                title={text.currenciesManager}
+                description={text.currenciesManagerDescription}
+                action={text.open}
+                onClick={() => navigate('/admin/currencies')}
+              />
+            </>
+          )}
+          <SettingsItem
+            icon={User2}
+            title={text.myAccount}
+            description={text.myAccountDescription}
+            action={text.open}
+            onClick={() => navigate('/account')}
+          />
+        </SettingsSection>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <SettingsSection icon={Globe} title={text.languageSection} description={text.languageSectionDescription}>
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={language === 'ar' ? 'primary' : 'ghost'}
+                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'ar' && 'text-gray-200 hover:bg-white/10')}
+                onClick={() => setLanguage('ar')}
+              >
+                {text.arabic}
+              </Button>
+              <Button
+                type="button"
+                variant={language === 'en' ? 'primary' : 'ghost'}
+                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'en' && 'text-gray-200 hover:bg-white/10')}
+                onClick={() => setLanguage('en')}
+              >
+                {text.english}
+              </Button>
+            </div>
+          </div>
+        </SettingsSection>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <SettingsSection icon={Palette} title={text.appearanceSection} description={text.appearanceSectionDescription}>
+          <div className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">{text.darkMode}</p>
+              <p className="mt-1 text-xs text-gray-300/85">{text.darkModeDescription}</p>
+            </div>
+            <Switch checked={isDark} onChange={toggleTheme} />
+          </div>
+        </SettingsSection>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <SettingsSection icon={Bell} title={text.notificationsSection} description={text.notificationsSectionDescription}>
+          {[
+            { key: 'orders', label: text.notificationsOrders },
+            { key: 'balance', label: text.notificationsBalance },
+            { key: 'offers', label: text.notificationsOffers }
+          ].map((item) => (
+            <div
+              key={item.key}
+              className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+            >
+              <p className="min-w-0 text-sm font-semibold text-white">{item.label}</p>
+              <Switch
+                checked={Boolean(notifications[item.key])}
+                onChange={(checked) =>
+                  setNotifications((prev) => ({
+                    ...prev,
+                    [item.key]: checked
+                  }))
+                }
+              />
+            </div>
+          ))}
+        </SettingsSection>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <SettingsSection icon={Shield} title={text.securitySection} description={text.securitySectionDescription}>
+          <SettingsItem
+            icon={KeyRound}
+            title={text.changePassword}
+            description={text.changePasswordDescription}
+            action={text.open}
+            onClick={() => navigate('/account#password')}
+          />
+          <SettingsItem
+            icon={Shield}
+            title={text.twoFactor}
+            description={text.twoFactorDescription}
+            action={text.open}
+            onClick={() => navigate('/account-security')}
+          />
+          <SettingsItem
+            icon={LogOut}
+            title={text.logoutAllDevices}
+            description={text.logoutAllDevicesDescription}
+            action={text.active}
+            destructive
+            onClick={handlePlaceholderSecurityAction}
+          />
+        </SettingsSection>
+      </motion.section>
+    </div>
+  );
+};
+
+export default Settings;

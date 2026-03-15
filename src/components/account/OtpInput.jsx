@@ -1,0 +1,97 @@
+import React, { useMemo, useRef } from 'react';
+import { cn } from '../ui/Button';
+
+const OtpInput = ({ value, onChange, length = 6, disabled = false, className }) => {
+  const refs = useRef([]);
+  const digits = useMemo(
+    () => Array.from({ length }).map((_, index) => value?.[index] || ''),
+    [length, value]
+  );
+
+  const updateValue = (nextDigits) => {
+    onChange?.(nextDigits.join(''));
+  };
+
+  const handleChange = (index, inputValue) => {
+    if (disabled) return;
+    const clean = String(inputValue || '').replace(/\D/g, '');
+    if (!clean) {
+      const next = [...digits];
+      next[index] = '';
+      updateValue(next);
+      return;
+    }
+
+    const next = [...digits];
+    clean.split('').forEach((char, offset) => {
+      const targetIndex = index + offset;
+      if (targetIndex < length) {
+        next[targetIndex] = char;
+      }
+    });
+    updateValue(next);
+
+    const focusIndex = Math.min(index + clean.length, length - 1);
+    refs.current[focusIndex]?.focus();
+    refs.current[focusIndex]?.select?.();
+  };
+
+  const handleKeyDown = (index, event) => {
+    if (disabled) return;
+
+    if (event.key === 'Backspace' && !digits[index] && index > 0) {
+      refs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      refs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === 'ArrowRight' && index < length - 1) {
+      event.preventDefault();
+      refs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (event) => {
+    if (disabled) return;
+    event.preventDefault();
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    if (!pasted) return;
+
+    const next = Array.from({ length }).map((_, index) => pasted[index] || '');
+    updateValue(next);
+
+    const focusIndex = Math.min(pasted.length, length - 1);
+    refs.current[focusIndex]?.focus();
+  };
+
+  return (
+    <div dir="ltr" className={cn('flex items-center justify-start gap-2', className)} onPaste={handlePaste}>
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          ref={(element) => {
+            refs.current[index] = element;
+          }}
+          inputMode="numeric"
+          autoComplete={index === 0 ? 'one-time-code' : 'off'}
+          maxLength={1}
+          value={digit}
+          disabled={disabled}
+          onChange={(event) => handleChange(index, event.target.value)}
+          onKeyDown={(event) => handleKeyDown(index, event)}
+          className={cn(
+            'h-12 w-11 rounded-xl border border-white/20 bg-white/5 text-center text-base font-bold text-white outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/35 disabled:opacity-55',
+            disabled && 'cursor-not-allowed'
+          )}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default OtpInput;
