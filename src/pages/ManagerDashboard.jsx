@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import useAuthStore from '../store/useAuthStore';
 import useOrderStore from '../store/useOrderStore';
 import useTopupStore from '../store/useTopupStore';
+import { formatDate, formatNumber } from '../utils/intl';
 
 const ManagerDashboard = () => {
   const { user } = useAuthStore();
@@ -25,7 +26,7 @@ const ManagerDashboard = () => {
     .slice(0, 8);
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">لوحة المانجر</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -47,9 +48,9 @@ const ManagerDashboard = () => {
           <TableBody>
             {latestTopups.map((t) => (
               <TableRow key={t.id}>
-                <TableCell>{new Date(t.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDate(t.createdAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })}</TableCell>
                 <TableCell>{t.userName || t.userId}</TableCell>
-                <TableCell>{t.requestedCoins || t.amount}</TableCell>
+                <TableCell>{formatNumber(t.requestedCoins || t.amount, 'ar-EG')}</TableCell>
                 <TableCell>
                   <Badge variant={t.status === 'approved' || t.status === 'completed' ? 'success' : t.status === 'rejected' ? 'danger' : 'warning'}>
                     {t.status}
@@ -77,7 +78,7 @@ const ManagerDashboard = () => {
           <TableBody>
             {latestOrders.map((o) => (
               <TableRow key={o.id}>
-                <TableCell>{new Date(o.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDate(o.createdAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })}</TableCell>
                 <TableCell>{o.productName || o.productId}</TableCell>
                 <TableCell>{o.userName || o.userId}</TableCell>
                 <TableCell>{o.supplierName || '-'}</TableCell>

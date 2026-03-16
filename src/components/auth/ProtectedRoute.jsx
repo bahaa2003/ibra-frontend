@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
+import { getDefaultRouteForRole, hasRequiredRole } from '../../utils/authRoles';
 
 const ProtectedRoute = ({ children, roles = [] }) => {
   const { user, isAuthenticated } = useAuthStore();
@@ -15,13 +16,9 @@ const ProtectedRoute = ({ children, roles = [] }) => {
     return <Navigate to="/auth" state={{ from: location, pendingApproval: true }} replace />;
   }
 
-  const fallbackPath = user?.role === 'admin'
-    ? '/admin/payments'
-    : user?.role === 'manager'
-      ? '/manager/dashboard'
-      : '/dashboard';
+  const fallbackPath = getDefaultRouteForRole(user?.role);
 
-  if (roles.length > 0 && !roles.includes(user.role)) {
+  if (roles.length > 0 && !hasRequiredRole(user?.role, roles)) {
     return <Navigate to={fallbackPath} replace />;
   }
 

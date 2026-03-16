@@ -4,11 +4,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useLanguage } from '../../context/LanguageContext';
+import useAuthStore from '../../store/useAuthStore';
+import { getDefaultRouteForRole } from '../../utils/authRoles';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const { dir } = useLanguage();
+  const { user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -37,18 +40,23 @@ const Layout = () => {
     };
   }, [isSidebarOpen]);
 
-  const isHomePage = location.pathname === '/dashboard' || location.pathname === '/manager/dashboard';
+  const isHomePage = [
+    '/dashboard',
+    '/manager/dashboard',
+    '/admin/dashboard',
+  ].includes(location.pathname);
+  const shellOffset = !isMobile ? (isSidebarOpen ? '288px' : '88px') : '0';
 
   const handleGoBack = () => {
     if (window.history.length > 1) {
       navigate(-1);
       return;
     }
-    navigate('/dashboard');
+    navigate(getDefaultRouteForRole(user?.role));
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-[var(--color-text)]">
+    <div className="min-h-screen overflow-x-clip bg-transparent text-[var(--color-text)]">
       <Sidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
@@ -56,10 +64,19 @@ const Layout = () => {
       />
 
       <div
-        className="min-h-screen transition-all duration-300"
-        style={{ [dir === 'rtl' ? 'marginRight' : 'marginLeft']: !isMobile ? (isSidebarOpen ? '288px' : '88px') : '0' }}
+        className="min-h-screen min-w-0 max-w-full transition-all duration-300"
+        style={{ [dir === 'rtl' ? 'marginRight' : 'marginLeft']: shellOffset }}
       >
-        <Header toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+        <div
+          className="fixed top-0 z-40 transition-all duration-300"
+          style={{
+            [dir === 'rtl' ? 'right' : 'left']: shellOffset,
+            [dir === 'rtl' ? 'left' : 'right']: '0',
+          }}
+        >
+          <Header toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+        </div>
+        <div className="h-[4.5rem] sm:h-[4.75rem]" aria-hidden="true" />
 
         {!isHomePage && (
           <div className="mx-auto mt-4 max-w-[var(--shell-max-width)] px-4 md:px-6 lg:px-8">
@@ -75,8 +92,8 @@ const Layout = () => {
           </div>
         )}
 
-        <main className={`overflow-x-hidden px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8 ${location.pathname === '/dashboard' ? 'scrollbar-hide' : ''}`}>
-          <div className="mx-auto w-full max-w-[var(--shell-max-width)] animate-[page-fade-in_0.35s_ease-out]">
+        <main className={`min-w-0 overflow-x-hidden px-3 py-5 sm:px-4 md:px-6 md:py-6 lg:px-8 lg:py-8 ${isHomePage ? 'scrollbar-hide' : ''}`}>
+          <div className="mx-auto w-full min-w-0 max-w-[var(--shell-max-width)] animate-[page-fade-in_0.35s_ease-out]">
             <Outlet />
           </div>
         </main>

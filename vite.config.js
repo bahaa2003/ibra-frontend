@@ -13,13 +13,28 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL),
       'process.env.VITE_APP_ENV': JSON.stringify(env.VITE_APP_ENV || mode),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('react-router')) return 'router-vendor';
+            if (id.includes('framer-motion')) return 'motion-vendor';
+            if (id.includes('i18next')) return 'i18n-vendor';
+            if (id.includes('lucide-react')) return 'icons-vendor';
+            if (id.includes('zustand')) return 'state-vendor';
+            if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
+            return 'vendor';
+          },
+        },
       },
     },
     server: {

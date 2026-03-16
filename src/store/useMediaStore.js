@@ -107,7 +107,8 @@ const useMediaStore = create(
       },
 
       loadProducts: () => {
-        Promise.all([apiClient.products.list(), apiClient.categories.list()])
+        set({ isLoading: true, error: null });
+        return Promise.all([apiClient.products.list(), apiClient.categories.list()])
           .then(([products, categories]) => {
             const safeCategories = Array.isArray(categories) && categories.length
               ? categories
@@ -116,9 +117,11 @@ const useMediaStore = create(
             set({
               products: normalizeProducts(products, safeCategories),
               categories: safeCategories,
+              isLoading: false,
+              error: null,
             });
           })
-          .catch(() => {
+          .catch((error) => {
             const { products, categories } = get();
             if (!Array.isArray(products) || products.length === 0) {
               set({ products: normalizeProducts(mockProducts, categories || mockCategories) });
@@ -126,6 +129,11 @@ const useMediaStore = create(
             if (!Array.isArray(categories) || categories.length === 0) {
               set({ categories: mockCategories });
             }
+
+            set({
+              isLoading: false,
+              error: error?.message || null,
+            });
           });
       },
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, X, Search } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import useAdminStore from '../../store/useAdminStore';
 import useGroupStore from '../../store/useGroupStore';
 import useSystemStore from '../../store/useSystemStore';
@@ -11,9 +11,19 @@ import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
 import { useToast } from '../../components/ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDateTime, formatNumber } from '../../utils/intl';
 
 const AdminUsers = () => {
-  const { users, loadUsers, updateUserStatus, updateUserGroup, updateUserCoins, updateUserCurrency, deleteUser, resetUserPassword } = useAdminStore();
+  const {
+    users,
+    loadUsers,
+    updateUserStatus,
+    updateUserGroup,
+    updateUserCoins,
+    updateUserCurrency,
+    deleteUser,
+    resetUserPassword
+  } = useAdminStore();
   const { groups, loadGroups } = useGroupStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { user: actor } = useAuthStore();
@@ -21,11 +31,8 @@ const AdminUsers = () => {
   const { t } = useLanguage();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  
-  // Group selection modal
+
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-  
-  // Top-up modal
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
@@ -40,23 +47,27 @@ const AdminUsers = () => {
     loadCurrencies();
   }, [loadUsers, loadGroups, loadCurrencies]);
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users.filter((user) => {
     const matchesFilter = filter === 'all' ? true : user.status === filter;
     const matchesSearch = user.name.toLowerCase().includes(search.toLowerCase()) || user.email.toLowerCase().includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
+  const getStatusVariant = (status) => {
+    if (status === 'active') return 'success';
+    if (status === 'pending') return 'warning';
+    return 'danger';
+  };
+
   const handleStatusChange = (userId, status) => {
-    // If approving, open modal to select group if user doesn't have one or if we want to confirm
     if (status === 'active') {
-       const user = users.find(u => u.id === userId);
-       setSelectedUser(user);
-       // Default to existing group or first available group
-       setSelectedGroup(user.groupId || (groups.length > 0 ? groups[0].id : ''));
-       setIsGroupModalOpen(true);
+      const user = users.find((entry) => entry.id === userId);
+      setSelectedUser(user);
+      setSelectedGroup(user.groupId || (groups.length > 0 ? groups[0].id : ''));
+      setIsGroupModalOpen(true);
     } else {
       updateUserStatus(userId, status, actor);
-       addToast(t('userActionDenied'), 'error');
+      addToast(t('userActionDenied'), 'error');
     }
   };
 
@@ -64,12 +75,10 @@ const AdminUsers = () => {
     if (!selectedUser) return;
 
     try {
-      // If user was previously active, only update group.
       if (selectedUser.status === 'active') {
         await updateUserGroup(selectedUser.id, selectedGroup, actor);
         addToast(t('groupUpdated') || 'تم تحديث مجموعة المستخدم', 'success');
       } else {
-        // Approve pending user then assign selected group.
         await updateUserStatus(selectedUser.id, 'active', actor);
         await updateUserGroup(selectedUser.id, selectedGroup, actor);
         addToast(t('userActionApproved'), 'success');
@@ -124,7 +133,7 @@ const AdminUsers = () => {
     if (!selectedUser || !settingsGroup) return;
     await updateUserGroup(selectedUser.id, settingsGroup, actor);
     addToast('تم تحديث المجموعة بنجاح', 'success');
-    setSelectedUser({ ...selectedUser, groupId: settingsGroup, group: groups.find(g => g.id === settingsGroup)?.name || settingsGroup });
+    setSelectedUser({ ...selectedUser, groupId: settingsGroup, group: groups.find((g) => g.id === settingsGroup)?.name || settingsGroup });
     loadUsers();
   };
 
@@ -143,7 +152,7 @@ const AdminUsers = () => {
         return true;
       }
     } catch (_error) {
-      // Continue with fallback below.
+      // Continue with fallback.
     }
 
     try {
@@ -178,21 +187,21 @@ const AdminUsers = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+    <div className="min-w-0 space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('userManagement')}</h1>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
           <div className="flex-1 md:w-64">
-            <Input 
-              placeholder={t('searchUsers')} 
+            <Input
+              placeholder={t('searchUsers')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              icon={<Search className="w-4 h-4" />}
+              icon={<Search className="h-4 w-4" />}
               variant="search"
             />
           </div>
-          <select 
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
+          <select
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm sm:w-auto dark:border-gray-700 dark:bg-gray-800"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >
@@ -204,7 +213,72 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {filteredUsers.map((user) => (
+          <article
+            key={user.id}
+            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="flex items-start gap-3">
+              <img src={user.avatar} alt={user.name} className="h-10 w-10 shrink-0 rounded-full bg-gray-200" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-900 dark:text-white">{user.name}</p>
+                    <p className="mt-1 truncate text-xs text-gray-500">{user.email}</p>
+                  </div>
+                  <Badge variant={getStatusVariant(user.status)}>
+                    {t(`status_${user.status}`) || user.status}
+                  </Badge>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">{t('role')}</p>
+                    <p className="mt-1 font-medium text-gray-900 dark:text-white">{t(`role_${user.role}`) || user.role}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">{t('group')}</p>
+                    <p className="mt-1 font-medium text-gray-900 dark:text-white">{user.group}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">{t('coins')}</p>
+                    <p className="mt-1 font-medium text-gray-900 dark:text-white">{formatNumber(user.coins, 'ar-EG')}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">ID</p>
+                    <p className="mt-1 truncate font-medium text-gray-900 dark:text-white">{user.id}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {user.status === 'pending' && (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 text-white hover:bg-green-700"
+                    onClick={() => handleStatusChange(user.id, 'active')}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => handleStatusChange(user.id, 'denied')}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {user.status !== 'pending' && user.role === 'customer' && (
+                <Button size="sm" variant="outline" onClick={() => openUserSettings(user)}>
+                  إعدادات
+                </Button>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:block dark:border-gray-700 dark:bg-gray-800">
         <Table>
           <TableHeader>
             <TableRow>
@@ -218,17 +292,21 @@ const AdminUsers = () => {
           </TableHeader>
           <TableBody>
             {filteredUsers.map((user) => (
-              <TableRow key={user.id} onClick={() => openUserSettings(user)} className={user.role === 'customer' ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/30' : ''}>
+              <TableRow
+                key={user.id}
+                onClick={() => openUserSettings(user)}
+                className={user.role === 'customer' ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/30' : ''}
+              >
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-gray-200" />
+                    <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full bg-gray-200" />
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
                       <div className="text-xs text-gray-500">{user.email}</div>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="capitalize text-center">{t(`role_${user.role}`) || user.role}</TableCell>
+                <TableCell className="text-center capitalize">{t(`role_${user.role}`) || user.role}</TableCell>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
                     <Badge variant="info">{user.group}</Badge>
@@ -236,45 +314,35 @@ const AdminUsers = () => {
                 </TableCell>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center gap-2">
-                    <span className="font-semibold">{user.coins.toLocaleString()}</span>
+                    <span className="font-semibold">{formatNumber(user.coins, 'ar-EG')}</span>
                   </div>
                 </TableCell>
                 <TableCell className="text-center">
-                  <Badge 
-                    variant={
-                      user.status === 'active' ? 'success' : 
-                      user.status === 'pending' ? 'warning' : 'danger'
-                    }
-                  >
-                     {t(`status_${user.status}`) || user.status}
+                  <Badge variant={getStatusVariant(user.status)}>
+                    {t(`status_${user.status}`) || user.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                   {user.status === 'pending' && (
                     <div className="flex justify-end gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="success" 
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                      <Button
+                        size="sm"
+                        className="bg-green-600 text-white hover:bg-green-700"
                         onClick={() => handleStatusChange(user.id, 'active')}
                       >
-                        <Check className="w-4 h-4" />
+                        <Check className="h-4 w-4" />
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="danger"
-                        onClick={() => handleStatusChange(user.id, 'denied')}
-                      >
-                        <X className="w-4 h-4" />
+                      <Button size="sm" variant="danger" onClick={() => handleStatusChange(user.id, 'denied')}>
+                        <X className="h-4 w-4" />
                       </Button>
                     </div>
                   )}
                   {user.status !== 'pending' && user.role === 'customer' && (
                     <div className="flex justify-end">
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         variant="outline"
-                        className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                        className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                         onClick={() => openUserSettings(user)}
                       >
                         إعدادات
@@ -291,36 +359,36 @@ const AdminUsers = () => {
       <Modal
         isOpen={isGroupModalOpen}
         onClose={() => setIsGroupModalOpen(false)}
-        title={t('editGroup') || "Select User Group"}
+        title={t('editGroup') || 'Select User Group'}
       >
         <div className="space-y-4">
-            <p className="text-sm text-gray-500">
-                Select the group for user <strong>{selectedUser?.name}</strong>.
-            </p>
-            <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('group')}
-                </label>
-                <select
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
-                    value={selectedGroup}
-                    onChange={(e) => setSelectedGroup(e.target.value)}
-                >
-                    {groups.map(g => (
-                        <option key={g.id} value={g.id}>
-                            {g.name} ({g.discount}% {t('discount') || 'خصم'})
-                        </option>
-                    ))}
-                </select>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-                <Button variant="ghost" onClick={() => setIsGroupModalOpen(false)}>
-                    {t('cancel')}
-                </Button>
-                <Button onClick={confirmApproval}>
-                    {t('save')}
-                </Button>
-            </div>
+          <p className="text-sm text-gray-500">
+            Select the group for user <strong>{selectedUser?.name}</strong>.
+          </p>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('group')}
+            </label>
+            <select
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+            >
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name} ({g.discount}% {t('discount') || 'خصم'})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsGroupModalOpen(false)}>
+              {t('cancel')}
+            </Button>
+            <Button onClick={confirmApproval}>
+              {t('save')}
+            </Button>
+          </div>
         </div>
       </Modal>
 
@@ -328,9 +396,10 @@ const AdminUsers = () => {
         isOpen={isUserSettingsOpen}
         onClose={() => setIsUserSettingsOpen(false)}
         title={selectedUser ? `Customer Settings - ${selectedUser.name}` : 'Customer Settings'}
+        size="lg"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
+          <div className="space-y-1 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
             <p className="text-sm text-gray-500">بيانات العميل</p>
             <p className="font-semibold text-gray-900 dark:text-white">{selectedUser?.name}</p>
             <p className="text-xs text-gray-500">{selectedUser?.email}</p>
@@ -339,14 +408,14 @@ const AdminUsers = () => {
             <p className="text-xs text-gray-500">الحالة: {selectedUser?.status}</p>
             <p className="text-xs text-gray-500">المجموعة: {selectedUser?.group}</p>
             <p className="text-xs text-gray-500">العملة: {selectedUser?.currency || '-'}</p>
-            <p className="text-xs text-gray-500">الرصيد: {selectedUser?.coins?.toLocaleString?.() ?? 0}</p>
-            <p className="text-xs text-gray-500">تاريخ الانضمام: {selectedUser?.joinDate ? new Date(selectedUser.joinDate).toLocaleString() : '-'}</p>
+            <p className="text-xs text-gray-500">الرصيد: {formatNumber(selectedUser?.coins ?? 0, 'ar-EG')}</p>
+            <p className="text-xs text-gray-500">تاريخ الانضمام: {selectedUser?.joinDate ? formatDateTime(selectedUser.joinDate, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'}</p>
           </div>
 
-          <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+          <div className="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">كلمة المرور</p>
             <p className="text-xs text-gray-500">كلمة المرور مخزنة بشكل مشفر ولا يمكن عرضها كنص واضح.</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={handleResetPassword}>إعادة تعيين كلمة المرور</Button>
               {temporaryPassword && (
                 <Button variant="outline" onClick={() => copyToClipboard(temporaryPassword)}>نسخ</Button>
@@ -363,9 +432,9 @@ const AdminUsers = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">المجموعة</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <select
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
                 value={settingsGroup}
                 onChange={(e) => setSettingsGroup(e.target.value)}
               >
@@ -381,9 +450,9 @@ const AdminUsers = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">العملة</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <select
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
                 value={settingsCurrency}
                 onChange={(e) => setSettingsCurrency(e.target.value)}
               >
@@ -409,8 +478,8 @@ const AdminUsers = () => {
             <Button onClick={handleSettingsTopup} className="w-full">تطبيق الشحنة</Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleSettingsBlock}>
+          <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+            <Button variant="outline" className="border-red-200 text-red-600 hover:bg-red-50" onClick={handleSettingsBlock}>
               {selectedUser?.status === 'denied' ? 'Unblock User' : 'Block User'}
             </Button>
             <Button variant="danger" onClick={handleSettingsDelete}>
@@ -419,7 +488,6 @@ const AdminUsers = () => {
           </div>
         </div>
       </Modal>
-
     </div>
   );
 };

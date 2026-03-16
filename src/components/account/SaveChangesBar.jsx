@@ -21,14 +21,14 @@ const SaveChangesBar = ({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          className="rounded-2xl border border-white/15 bg-gray-900/85 p-3 shadow-xl backdrop-blur-md"
+          className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.92)] p-3 shadow-[var(--shadow-medium)] backdrop-blur-md"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="flex items-center gap-2 text-sm text-gray-200">
+            <p className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
               {isDirty ? (
-                <CircleAlert className="h-4 w-4 text-amber-300" />
+                <CircleAlert className="h-4 w-4 text-amber-500 dark:text-amber-300" />
               ) : (
-                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-300" />
               )}
               {isDirty ? dirtyHint : cleanHint}
             </p>

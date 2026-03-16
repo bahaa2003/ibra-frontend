@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeftRight,
   Building2,
   ChevronLeft,
   Code2,
@@ -30,6 +29,7 @@ import LanguageSwitcher from '../ui/LanguageSwitcher';
 import brandIconImage from '../../assets/box_.png';
 import brandWordmarkImage from '../../assets/ibra.png';
 import { buildWhatsAppLink } from '../../utils/whatsapp';
+import { getDefaultRouteForRole, hasRequiredRole } from '../../utils/authRoles';
 
 const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const { user, logout } = useAuthStore();
@@ -70,11 +70,12 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const navItems = [
     {
       icon: user?.role === 'customer' ? Home : LayoutDashboard,
-      label: user?.role === 'customer' ? t('header.home') : t('sidebar.dashboard'),
-      path: '/dashboard',
-      roles: ['customer']
+      label: user?.role === 'customer'
+        ? t('header.home')
+        : t('sidebar.dashboard', { defaultValue: dir === 'rtl' ? 'لوحة التحكم' : 'Dashboard' }),
+      path: getDefaultRouteForRole(user?.role),
+      roles: ['customer', 'manager', 'admin']
     },
-    { icon: LayoutDashboard, label: t('sidebar.managerDashboard'), path: '/manager/dashboard', roles: ['manager'] },
     { icon: User, label: t('sidebar.myAccount', { defaultValue: 'حسابي' }), path: '/account', roles: ['admin', 'customer', 'manager'] },
     { icon: ShieldCheck, label: t('sidebar.accountProtection', { defaultValue: 'حماية الحساب' }), path: '/account-security', roles: ['admin', 'customer', 'manager'] },
     { icon: Gamepad2, label: t('sidebar.browseStore'), path: '/products', roles: ['admin', 'customer'] },
@@ -85,7 +86,6 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     { icon: Users, label: t('sidebar.groupsManager'), path: '/admin/groups', roles: ['admin'] },
     { icon: Package, label: t('sidebar.productsManager'), path: '/admin/products', roles: ['admin'] },
     { icon: Building2, label: t('sidebar.suppliersManager'), path: '/admin/suppliers', roles: ['admin'] },
-    { icon: ArrowLeftRight, label: t('sidebar.topups'), path: '/admin/topups', roles: ['admin'] },
     { icon: ShieldCheck, label: t('sidebar.paymentsManager'), path: '/admin/payments', roles: ['admin'] },
     { icon: CreditCard, label: t('sidebar.paymentMethods'), path: '/admin/payment-methods', roles: ['admin'] },
     { icon: Coins, label: t('sidebar.currencies'), path: '/admin/currencies', roles: ['admin'] },
@@ -100,7 +100,7 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     }
   ];
 
-  const filteredNavItems = navItems.filter((item) => item.roles.includes(user?.role || 'customer'));
+  const filteredNavItems = navItems.filter((item) => hasRequiredRole(user?.role || 'customer', item.roles));
 
   return (
     <>

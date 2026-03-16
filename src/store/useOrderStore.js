@@ -33,6 +33,14 @@ const useOrderStore = create(
       },
       
       addOrder: async (order) => {
+        const orderFieldsValues = order?.orderFieldsValues || order?.orderFields || {};
+        const playerId = String(
+          order?.playerId ||
+          orderFieldsValues?.playerId ||
+          orderFieldsValues?.uid ||
+          ''
+        ).trim();
+
         // Get current pricing and exchange rates for financial snapshot
         const currencies = await apiClient.system.currencies().catch(() => []);
         const products = await apiClient.products.list().catch(() => []);
@@ -50,6 +58,9 @@ const useOrderStore = create(
         
         const orderWithSnapshot = {
           ...order,
+          playerId,
+          orderFields: orderFieldsValues,
+          orderFieldsValues,
           financialSnapshot: {
             originalCurrency: userCurrency.code,
             originalAmount: basePrice,

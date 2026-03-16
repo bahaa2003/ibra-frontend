@@ -20,16 +20,16 @@ const SettingsItem = ({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-right transition-colors',
-        onClick && 'hover:border-indigo-400/45 hover:bg-indigo-500/10',
+        'group flex w-full items-center gap-3 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.7)] px-4 py-3 text-right transition-colors',
+        onClick && 'hover:border-[color:rgb(var(--color-primary-rgb)/0.36)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]',
         className
       )}
     >
       {Icon ? (
         <span
           className={cn(
-            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-gray-200',
-            destructive && 'text-rose-300'
+            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.9)] text-[var(--color-text-secondary)]',
+            destructive && 'text-rose-500 dark:text-rose-300'
           )}
         >
           <Icon className="h-[18px] w-[18px]" />
@@ -37,14 +37,14 @@ const SettingsItem = ({
       ) : null}
 
       <div className="flex-1">
-        <p className={cn('text-sm font-semibold text-white', destructive && 'text-rose-200')}>{title}</p>
+        <p className={cn('text-sm font-semibold text-[var(--color-text)]', destructive && 'text-rose-600 dark:text-rose-200')}>{title}</p>
         {description ? (
-          <p className={cn('mt-1 text-xs text-gray-300/85', destructive && 'text-rose-200/80')}>{description}</p>
+          <p className={cn('mt-1 text-xs text-[var(--color-text-secondary)]', destructive && 'text-rose-500/90 dark:text-rose-200/80')}>{description}</p>
         ) : null}
       </div>
 
       {action || onClick ? (
-        <span className="inline-flex items-center gap-2 text-xs font-medium text-gray-300">
+        <span className="inline-flex items-center gap-2 text-xs font-medium text-[var(--color-muted)]">
           {action || null}
           {onClick ? (
             dir === 'rtl' ? (

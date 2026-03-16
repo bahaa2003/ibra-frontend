@@ -281,14 +281,14 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
 
   return (
     <>
-      <Card className="rounded-2xl border border-white/10 bg-gray-950/35 p-5 dark:border-white/10 dark:bg-gray-900/60">
+      <Card className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5 shadow-[var(--shadow-subtle)]">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="flex items-center gap-2 text-base font-semibold text-white">
-              <Shield className="h-[18px] w-[18px] text-indigo-300" />
+            <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--color-text)]">
+              <Shield className="h-[18px] w-[18px] text-[var(--color-primary)]" />
               {text.title}
             </h3>
-            <p className="mt-1 text-sm text-gray-300/85">{text.description}</p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{text.description}</p>
           </div>
           <Badge variant={badgeState.variant}>{badgeState.label}</Badge>
         </div>
@@ -306,7 +306,7 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
         </div>
 
         {emailChangedPending ? (
-          <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
             {text.saveEmailFirst}
           </div>
         ) : null}
@@ -315,12 +315,12 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
           <div
             className={`mb-3 rounded-xl border p-3 text-sm ${
               feedback.type === 'success'
-                ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+                ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
                 : feedback.type === 'error'
-                  ? 'border-rose-400/25 bg-rose-500/10 text-rose-200'
+                  ? 'border-rose-400/25 bg-rose-500/10 text-rose-800 dark:text-rose-200'
                   : feedback.type === 'warning'
-                    ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                    : 'border-indigo-400/30 bg-indigo-500/10 text-indigo-200'
+                    ? 'border-amber-400/30 bg-amber-500/10 text-amber-800 dark:text-amber-200'
+                    : 'border-indigo-400/30 bg-indigo-500/10 text-indigo-800 dark:text-indigo-200'
             }`}
           >
             {feedback.message}
@@ -333,10 +333,10 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              className="space-y-4 rounded-2xl border border-white/10 bg-black/25 p-4"
+              className="space-y-4 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)] p-4"
             >
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-gray-200">
-                {text.sentTo} <span className="font-semibold text-indigo-200">{maskedEmail || previewMaskedEmail || email}</span>
+              <div className="rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.88)] p-3 text-sm text-[var(--color-text-secondary)]">
+                {text.sentTo} <span className="font-semibold text-[var(--color-primary)]">{maskedEmail || previewMaskedEmail || email}</span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -351,15 +351,15 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
                 </Button>
 
                 {countdown > 0 ? (
-                  <span className="text-xs text-gray-300">
+                  <span className="text-xs text-[var(--color-text-secondary)]">
                     {text.countdown} {countdown}s
                   </span>
                 ) : null}
               </div>
 
               {(requestId || status === STATUS.ERROR_INVALID || status === STATUS.ERROR_EXPIRED) ? (
-                <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                  <p className="text-sm text-gray-200">{text.verifyHint}</p>
+                <div className="space-y-3 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-3">
+                  <p className="text-sm text-[var(--color-text)]">{text.verifyHint}</p>
                   <OtpInput value={otp} onChange={setOtp} disabled={status === STATUS.VERIFYING} />
 
                   <div className="flex flex-wrap items-center gap-2">

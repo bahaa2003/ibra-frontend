@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, CreditCard, Smartphone, Building } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatNumber } from '../../utils/intl';
 
 const PaymentMethodCard = ({ method, isSelected, onClick }) => {
   const { dir } = useLanguage();
@@ -166,10 +167,10 @@ const AddBalance = () => {
           <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div>
               <p className="text-gray-400 text-sm">الرصيد الحالي</p>
-              <p className="text-white text-2xl font-bold">{currentBalance.toLocaleString()} {currentCurrency}</p>
+              <p className="text-white text-2xl font-bold">{formatNumber(currentBalance, 'en-US')} {currentCurrency}</p>
             </div>
             <div className="text-gray-400 text-sm">
-              ≈ {Math.round(currentBalance / 50)} USD
+              ≈ {formatNumber(Math.round(currentBalance / 50), 'en-US')} USD
             </div>
           </div>
         </motion.div>

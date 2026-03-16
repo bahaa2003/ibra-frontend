@@ -15,6 +15,9 @@
     background-color: var(--color-bg);
     color-scheme: light;
     scroll-behavior: smooth;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   html.dark {
@@ -23,6 +26,9 @@
 
   body {
     min-height: 100vh;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     color: var(--color-text);
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;
@@ -60,6 +66,13 @@
 
   a {
     color: inherit;
+  }
+
+  #root {
+    min-height: 100vh;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   ::selection {
@@ -378,6 +391,26 @@
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes marquee-smooth-loop {
   from {
     transform: translateX(calc(-100% - 1rem));
@@ -406,6 +439,11 @@
   .marquee-track-smooth {
     animation: none;
     transform: translateX(0);
+  }
+
+  .animate-\[fade-in_180ms_ease-out\],
+  .animate-\[sheet-up_240ms_ease-out\] {
+    animation: none !important;
   }
 }
 

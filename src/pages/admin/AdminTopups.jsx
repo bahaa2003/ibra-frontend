@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, X, Eye } from 'lucide-react';
+import { Check, Eye, X } from 'lucide-react';
 import useTopupStore from '../../store/useTopupStore';
 import useAuthStore from '../../store/useAuthStore';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
@@ -9,13 +9,13 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDate, formatNumber, formatTime } from '../../utils/intl';
 
 const AdminTopups = () => {
   const { topups, loadTopups, updateTopupStatus } = useTopupStore();
-  const { user: actor } = useAuthStore();
   const { addToast } = useToast();
   const { t } = useLanguage();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTopup, setSelectedTopup] = useState(null);
   const [amount, setAmount] = useState('');
@@ -26,27 +26,41 @@ const AdminTopups = () => {
     loadTopups();
   }, [loadTopups]);
 
+  const getStatusVariant = (status) => {
+    if (status === 'approved') return 'success';
+    if (status === 'rejected') return 'danger';
+    return 'warning';
+  };
+
+  const getDisplayAmount = (topup) => {
+    if (topup.financialSnapshot) {
+      return `${formatNumber(topup.financialSnapshot.originalAmount, 'ar-EG')} ${topup.financialSnapshot.originalCurrency}`;
+    }
+
+    return formatNumber(topup.requestedAmount || topup.requestedCoins || 0, 'ar-EG');
+  };
+
   const handleApproveClick = (topup) => {
     setSelectedTopup(topup);
-    setAmount(topup.requestedCoins.toString());
+    setAmount(String(topup.requestedCoins || topup.requestedAmount || ''));
     setIsModalOpen(true);
   };
 
   const handleConfirmApprove = async () => {
     if (!selectedTopup) return;
-    
+
     const finalAmount = parseInt(amount, 10);
     if (!finalAmount || finalAmount <= 0) {
       addToast('المبلغ غير صالح', 'error');
       return;
     }
-    
+
     await updateTopupStatus(selectedTopup.id, 'approved', {
       actualPaidAmount: finalAmount,
       currencyCode: selectedTopup.currencyCode || 'USD',
       adminNote: '',
     });
-    
+
     addToast(`${t('approve')} ${finalAmount} ${t('coins')}`, 'success');
     setIsModalOpen(false);
   };
@@ -64,10 +78,81 @@ const AdminTopups = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('topupRequests')}</h1>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {topups.map((topup) => (
+          <article
+            key={topup.id}
+            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white">{topup.userName}</p>
+                <p className="mt-1 text-xs text-gray-500">المعرف: {topup.userId}</p>
+                <p className="mt-1 text-xs text-gray-500">{formatDate(topup.createdAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+              </div>
+              <Badge variant={getStatusVariant(topup.status)}>
+                {t(`status_${topup.status}`) || topup.status}
+              </Badge>
+            </div>
+
+            <div className="mt-4 space-y-2 text-sm">
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">{t('amount')}:</span>{' '}
+                {getDisplayAmount(topup)}
+              </p>
+
+              {topup.financialSnapshot && (
+                <p className="text-xs text-gray-500">
+                  → {formatNumber(topup.financialSnapshot.finalAmountAtExecution, 'ar-EG')} coins
+                </p>
+              )}
+
+              {topup.paymentChannel && (
+                <p className="text-gray-700 dark:text-gray-300">
+                  <span className="font-medium text-gray-900 dark:text-white">{t('paymentMethod')}:</span>{' '}
+                  {topup.paymentChannel}
+                </p>
+              )}
+
+              {topup.type === 'game_topup' && topup.gameDetails && (
+                <p className="text-xs font-medium text-blue-600">
+                  {topup.gameDetails.gameName} - {topup.gameDetails.packageName}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => handleViewDetails(topup)}>
+                <Eye className="h-4 w-4" />
+              </Button>
+              {topup.status === 'pending' && topup.type !== 'game_topup' && (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 text-white hover:bg-green-700"
+                    onClick={() => handleApproveClick(topup)}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => handleReject(topup.id)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {topup.status === 'pending' && topup.type === 'game_topup' && (
+                <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                  تلقائي
+                </span>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:block dark:border-gray-700 dark:bg-gray-800">
         <Table>
           <TableHeader>
             <TableRow>
@@ -81,74 +166,55 @@ const AdminTopups = () => {
           <TableBody>
             {topups.map((topup) => (
               <TableRow key={topup.id}>
-                <TableCell>{new Date(topup.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDate(topup.createdAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })}</TableCell>
                 <TableCell className="text-center">
                   <div className="font-medium text-gray-900 dark:text-white">{topup.userName}</div>
                   <div className="text-xs text-gray-500">المعرف: {topup.userId}</div>
                 </TableCell>
                 <TableCell className="text-center">
-                  <div className="font-medium">
-                    {topup.financialSnapshot 
-                      ? `${topup.financialSnapshot.originalAmount} ${topup.financialSnapshot.originalCurrency}`
-                      : topup.requestedAmount || topup.requestedCoins
-                    }
-                  </div>
+                  <div className="font-medium">{getDisplayAmount(topup)}</div>
                   {topup.financialSnapshot && (
                     <div className="text-xs text-gray-500">
-                      → {topup.financialSnapshot.finalAmountAtExecution} coins
+                      → {formatNumber(topup.financialSnapshot.finalAmountAtExecution, 'ar-EG')} coins
                     </div>
                   )}
                   {topup.type === 'game_topup' && topup.gameDetails && (
-                    <div className="text-xs text-blue-600 font-medium">
-                      🎮 {topup.gameDetails.gameName} - {topup.gameDetails.packageName}
+                    <div className="text-xs font-medium text-blue-600">
+                      {topup.gameDetails.gameName} - {topup.gameDetails.packageName}
                     </div>
                   )}
                   {topup.actualPaidAmount && topup.actualPaidAmount !== (topup.requestedAmount || topup.requestedCoins) && (
                     <div className="text-xs text-amber-600">
-                      الفعلي: {topup.actualPaidAmount} {topup.currencyCode}
+                      الفعلي: {formatNumber(topup.actualPaidAmount, 'ar-EG')} {topup.currencyCode}
                     </div>
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Badge 
-                    variant={
-                       topup.status === 'approved' ? 'success' : 
-                       topup.status === 'rejected' ? 'danger' : 'warning'
-                    }
-                  >
-                   {t(`status_${topup.status}`) || topup.status}
+                  <Badge variant={getStatusVariant(topup.status)}>
+                    {t(`status_${topup.status}`) || topup.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-end">
                   <div className="flex justify-end gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => handleViewDetails(topup)}
-                    >
-                      <Eye className="w-4 h-4" />
+                    <Button size="sm" variant="outline" onClick={() => handleViewDetails(topup)}>
+                      <Eye className="h-4 w-4" />
                     </Button>
                     {topup.status === 'pending' && topup.type !== 'game_topup' && (
                       <>
-                        <Button 
-                          size="sm" 
-                          variant="success" 
-                          className="bg-green-600 hover:bg-green-700 text-white"
+                        <Button
+                          size="sm"
+                          className="bg-green-600 text-white hover:bg-green-700"
                           onClick={() => handleApproveClick(topup)}
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="danger"
-                          onClick={() => handleReject(topup.id)}
-                        >
-                          <X className="w-4 h-4" />
+                        <Button size="sm" variant="danger" onClick={() => handleReject(topup.id)}>
+                          <X className="h-4 w-4" />
                         </Button>
                       </>
                     )}
                     {topup.status === 'pending' && topup.type === 'game_topup' && (
-                      <span className="text-xs text-blue-600 font-medium px-2 py-1 bg-blue-100 dark:bg-blue-900/20 rounded">
+                      <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
                         تلقائي
                       </span>
                     )}
@@ -163,9 +229,9 @@ const AdminTopups = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={t('topupRequests') || "اعتماد طلب شحن"}
+        title={t('topupRequests') || 'اعتماد طلب شحن'}
         footer={
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>{t('cancel')}</Button>
             <Button onClick={handleConfirmApprove}>{t('confirm')}</Button>
           </div>
@@ -173,13 +239,13 @@ const AdminTopups = () => {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-             {t('approve')} <strong>{selectedTopup?.userName}</strong>.
+            {t('approve')} <strong>{selectedTopup?.userName}</strong>.
           </p>
-          <Input 
+          <Input
             label={t('coins')}
-            type="number" 
-            value={amount} 
-            onChange={(e) => setAmount(e.target.value)} 
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
           />
         </div>
       </Modal>
@@ -187,93 +253,83 @@ const AdminTopups = () => {
       <Modal
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
-        title={t('topupDetails') || "تفاصيل الشحنة"}
+        title={t('topupDetails') || 'تفاصيل الشحنة'}
         size="lg"
       >
         {detailsTopup && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('user')}</h3>
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('user')}</h3>
                 <p className="text-gray-600 dark:text-gray-300">{detailsTopup.userName}</p>
                 <p className="text-sm text-gray-500">المعرف: {detailsTopup.userId}</p>
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('date')}</h3>
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('date')}</h3>
                 <p className="text-gray-600 dark:text-gray-300">
-                  {new Date(detailsTopup.createdAt).toLocaleDateString()} {new Date(detailsTopup.createdAt).toLocaleTimeString()}
+                  {formatDate(detailsTopup.createdAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric' })} {formatTime(detailsTopup.createdAt, 'ar-EG')}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('amount')}</h3>
-                <p className="text-gray-600 dark:text-gray-300">
-                  {detailsTopup.financialSnapshot 
-                    ? `${detailsTopup.financialSnapshot.originalAmount} ${detailsTopup.financialSnapshot.originalCurrency}`
-                    : detailsTopup.requestedAmount || detailsTopup.requestedCoins
-                  }
-                </p>
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('amount')}</h3>
+                <p className="text-gray-600 dark:text-gray-300">{getDisplayAmount(detailsTopup)}</p>
                 {detailsTopup.financialSnapshot && (
                   <p className="text-sm text-gray-500">
-                    → {detailsTopup.financialSnapshot.finalAmountAtExecution} coins
+                    → {formatNumber(detailsTopup.financialSnapshot.finalAmountAtExecution, 'ar-EG')} coins
                   </p>
                 )}
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('status')}</h3>
-                <Badge 
-                  variant={
-                     detailsTopup.status === 'approved' ? 'success' : 
-                     detailsTopup.status === 'rejected' ? 'danger' : 'warning'
-                  }
-                >
-                 {t(`status_${detailsTopup.status}`) || detailsTopup.status}
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('status')}</h3>
+                <Badge variant={getStatusVariant(detailsTopup.status)}>
+                  {t(`status_${detailsTopup.status}`) || detailsTopup.status}
                 </Badge>
               </div>
             </div>
 
             {detailsTopup.paymentChannel && (
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('paymentMethod')}</h3>
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('paymentMethod')}</h3>
                 <p className="text-gray-600 dark:text-gray-300">{detailsTopup.paymentChannel}</p>
               </div>
             )}
 
             {detailsTopup.senderWalletNumber && (
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('senderWallet')}</h3>
-                <p className="text-gray-600 dark:text-gray-300">{detailsTopup.senderWalletNumber}</p>
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('senderWallet')}</h3>
+                <p className="break-all text-gray-600 dark:text-gray-300">{detailsTopup.senderWalletNumber}</p>
               </div>
             )}
 
             {detailsTopup.proofImage && (
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('proofOfPayment')}</h3>
-                <img 
-                  src={detailsTopup.proofImage} 
-                  alt="Proof of payment" 
-                  className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-700"
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('proofOfPayment')}</h3>
+                <img
+                  src={detailsTopup.proofImage}
+                  alt="Proof of payment"
+                  className="h-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700"
                 />
               </div>
             )}
 
             {detailsTopup.financialSnapshot && (
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('financialDetails')}</h3>
-                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between">
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('financialDetails')}</h3>
+                <div className="space-y-2 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('exchangeRate')}:</span>
-                    <span className="font-medium">1 {detailsTopup.financialSnapshot.originalCurrency} = {detailsTopup.financialSnapshot.exchangeRateAtExecution} coins</span>
+                    <span className="text-end font-medium">1 {detailsTopup.financialSnapshot.originalCurrency} = {formatNumber(detailsTopup.financialSnapshot.exchangeRateAtExecution, 'ar-EG')} coins</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('convertedAmount')}:</span>
-                    <span className="font-medium">{detailsTopup.financialSnapshot.convertedAmountAtExecution} coins</span>
+                    <span className="text-end font-medium">{formatNumber(detailsTopup.financialSnapshot.convertedAmountAtExecution, 'ar-EG')} coins</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('finalAmount')}:</span>
-                    <span className="font-medium">{detailsTopup.financialSnapshot.finalAmountAtExecution} coins</span>
+                    <span className="text-end font-medium">{formatNumber(detailsTopup.financialSnapshot.finalAmountAtExecution, 'ar-EG')} coins</span>
                   </div>
                 </div>
               </div>
@@ -281,23 +337,23 @@ const AdminTopups = () => {
 
             {detailsTopup.type === 'game_topup' && detailsTopup.gameDetails && (
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">{t('gameDetails')}</h3>
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between">
+                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('gameDetails')}</h3>
+                <div className="space-y-2 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('gameName')}:</span>
-                    <span className="font-medium">{detailsTopup.gameDetails.gameName}</span>
+                    <span className="text-end font-medium">{detailsTopup.gameDetails.gameName}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('gameId')}:</span>
-                    <span className="font-medium">{detailsTopup.gameDetails.gameId}</span>
+                    <span className="text-end font-medium">{detailsTopup.gameDetails.gameId}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('package')}:</span>
-                    <span className="font-medium">{detailsTopup.gameDetails.packageName}</span>
+                    <span className="text-end font-medium">{detailsTopup.gameDetails.packageName}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="text-gray-600 dark:text-gray-300">{t('quantity')}:</span>
-                    <span className="font-medium">{detailsTopup.gameDetails.quantity}</span>
+                    <span className="text-end font-medium">{formatNumber(detailsTopup.gameDetails.quantity, 'ar-EG')}</span>
                   </div>
                 </div>
               </div>

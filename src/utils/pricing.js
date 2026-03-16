@@ -1,3 +1,5 @@
+import { formatNumber } from './intl';
+
 export const GROUP_MARKUPS = {
   Normal: 0.05, // 5% markup
   VIP: 0.02,    // 2% markup
@@ -49,10 +51,10 @@ export const convertPriceByCurrency = (baseAmount, currencyCode = 'USD', currenc
 export const formatCurrencyAmount = (amount, currencyCode = 'USD', currencies = [], locale = 'ar-EG') => {
   const meta = getCurrencyMeta(currencyCode, currencies);
   const value = Number(amount || 0);
-  const formatted = new Intl.NumberFormat(locale, {
+  const formatted = formatNumber(value, locale, {
     maximumFractionDigits: value % 1 === 0 ? 0 : 2,
     minimumFractionDigits: value % 1 === 0 ? 0 : 2
-  }).format(value);
+  });
 
   return `${formatted} ${meta.symbol}`;
 };

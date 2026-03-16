@@ -1,9 +1,15 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import Button from './Button';
+import Button, { cn } from './Button';
 
-const Modal = ({ isOpen, onClose, title, children, footer }) => {
+const sizeClassNames = {
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+};
+
+const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -15,28 +21,31 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
             onClick={onClose}
             className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="premium-card-premium flex max-h-[90vh] w-full max-w-lg pointer-events-auto flex-col"
+              className={cn(
+                'premium-card-premium pointer-events-auto flex max-h-[92vh] w-full flex-col overflow-hidden rounded-[1.6rem] sm:max-h-[90vh] sm:rounded-[var(--radius-2xl)]',
+                sizeClassNames[size] || sizeClassNames.md
+              )}
             >
-              <div className="flex items-center justify-between border-b border-[color:rgb(var(--color-border-rgb)/0.9)] p-6">
-                <h3 className="text-lg font-semibold text-[var(--color-text)]">
+              <div className="flex items-center justify-between gap-3 border-b border-[color:rgb(var(--color-border-rgb)/0.9)] px-4 py-4 sm:p-6">
+                <h3 className="min-w-0 text-base font-semibold text-[var(--color-text)] sm:text-lg">
                   {title}
                 </h3>
                 <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="w-5 h-5" />
+                  <X className="h-5 w-5" />
                 </Button>
               </div>
-              
-              <div className="p-6 overflow-y-auto">
+
+              <div className="overflow-y-auto px-4 py-4 sm:p-6">
                 {children}
               </div>
 
               {footer && (
-                <div className="rounded-b-[var(--radius-2xl)] border-t border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.72)] p-6">
+                <div className="border-t border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.72)] px-4 py-4 sm:rounded-b-[var(--radius-2xl)] sm:p-6">
                   {footer}
                 </div>
               )}

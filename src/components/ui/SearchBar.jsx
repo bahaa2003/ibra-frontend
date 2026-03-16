@@ -23,7 +23,7 @@ const SearchBar = ({ value, onChange, placeholder, className, ...props }) => {
           )}
         />
         <input
-          type="text"
+          type="search"
           className={cn(
             searchInputClassName,
             isRTL ? 'pr-12 pl-4 text-right' : 'pl-12 pr-4 text-left'
@@ -32,6 +32,9 @@ const SearchBar = ({ value, onChange, placeholder, className, ...props }) => {
           value={value}
           onChange={handleChange}
           id="search-input"
+          autoComplete="off"
+          spellCheck={false}
+          enterKeyHint="search"
           {...props}
         />
       </div>

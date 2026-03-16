@@ -1,15 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, AlertCircle, Info } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, AlertCircle, Info, Search, Check, Package } from 'lucide-react';
 import useMediaStore from '../../store/useMediaStore';
 import apiClient from '../../services/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import Input from '../../components/ui/Input';
+import Input, { inputBaseClassName, selectClassName } from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import { useToast } from '../../components/ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatNumber } from '../../utils/intl';
 import { validateProductForm, getProductStatus, getAvailableProductStatuses, getScheduleVisibilityModes } from '../../utils/productStatus';
+
+const getProviderProductSearchToken = (product) =>
+    `${product?.name || ''} ${product?.priceCoins || ''}`.toLowerCase();
+
+const formatProviderProductPrice = (value, language) => {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return '';
+    }
+
+    const formatted = formatNumber(amount, language === 'en' ? 'en-US' : 'ar-EG');
+    return language === 'en' ? `$${formatted} USD` : `${formatted} دولار`;
+};
 
 const AdminProducts = () => {
     const {
@@ -24,7 +38,8 @@ const AdminProducts = () => {
         resetProducts,
     } = useMediaStore();
     const { addToast } = useToast();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const isEnglish = language === 'en';
 
     const [activeTab, setActiveTab] = useState('products');
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -32,6 +47,7 @@ const AdminProducts = () => {
     const [editingProduct, setEditingProduct] = useState(null);
     const [providers, setProviders] = useState([]);
     const [providerProducts, setProviderProducts] = useState([]);
+    const [providerProductQuery, setProviderProductQuery] = useState('');
     const [isSyncingPrice, setIsSyncingPrice] = useState(false);
     const [productForm, setProductForm] = useState({
         name: '',
@@ -130,7 +146,7 @@ const AdminProducts = () => {
                 const nextItems = Array.isArray(items) ? items : [];
                 setProviderProducts(nextItems);
                 if (!nextItems.some((p) => p.id === (productForm.externalProductId || productForm.providerProductId))) {
-                    setProductForm((prev) => ({ ...prev, externalProductId: '', providerProductId: '' }));
+                    setProductForm((prev) => ({ ...prev, externalProductId: '', providerProductId: '', externalProductName: '' }));
                 }
             })
             .catch(() => {
@@ -139,9 +155,28 @@ const AdminProducts = () => {
             });
     }, [isProductModalOpen, productForm.providerId, productForm.providerProductId, productForm.supplierId, productForm.externalProductId, addToast]);
 
-    const syncProviderPrice = async (manualOverride) => {
-        const supplierId = productForm.supplierId || productForm.providerId;
-        const externalProductId = productForm.externalProductId || productForm.providerProductId;
+    useEffect(() => {
+        setProviderProductQuery('');
+    }, [isProductModalOpen, productForm.providerId, productForm.supplierId]);
+
+    const selectedSupplierId = productForm.supplierId || productForm.providerId;
+    const selectedProviderProductId = productForm.externalProductId || productForm.providerProductId;
+    const selectedProviderProduct = useMemo(
+        () => providerProducts.find((product) => product.id === selectedProviderProductId) || null,
+        [providerProducts, selectedProviderProductId]
+    );
+    const filteredProviderProducts = useMemo(() => {
+        const normalizedQuery = String(providerProductQuery || '').trim().toLowerCase();
+        if (!normalizedQuery) {
+            return providerProducts;
+        }
+
+        return providerProducts.filter((product) => getProviderProductSearchToken(product).includes(normalizedQuery));
+    }, [providerProducts, providerProductQuery]);
+
+    const syncProviderPrice = async (manualOverride, supplierIdOverride, externalProductIdOverride) => {
+        const supplierId = supplierIdOverride || productForm.supplierId || productForm.providerId;
+        const externalProductId = externalProductIdOverride || productForm.externalProductId || productForm.providerProductId;
         if (!supplierId || !externalProductId) return;
         try {
             setIsSyncingPrice(true);
@@ -155,6 +190,22 @@ const AdminProducts = () => {
             addToast('تعذر مزامنة سعر المزود', 'error');
         } finally {
             setIsSyncingPrice(false);
+        }
+    };
+
+    const handleProviderProductSelect = (value) => {
+        const selected = providerProducts.find((product) => product.id === value);
+        setProductForm((prev) => ({
+            ...prev,
+            externalProductId: value,
+            providerProductId: value,
+            externalProductName: selected?.name || '',
+        }));
+
+        if (productForm.syncPriceWithProvider && value && selectedSupplierId) {
+            setTimeout(() => {
+                syncProviderPrice(undefined, selectedSupplierId, value);
+            }, 0);
         }
     };
 
@@ -568,7 +619,7 @@ const AdminProducts = () => {
                 </>
             )}
 
-            <Modal isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} title={editingProduct ? t('editProduct') : t('addProduct')}>
+            <Modal isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} title={editingProduct ? t('editProduct') : t('addProduct')} size="xl">
                 <form onSubmit={handleProductSubmit} className="space-y-6">
                     {/* ========== 1. المعلومات الأساسية ========== */}
                     <div>
@@ -588,12 +639,12 @@ const AdminProducts = () => {
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">القسم</label>
                                 <select
-                                    className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+                                    className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                     value={productForm.category}
                                     onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
                                 >
                                     {(categories || []).map((c) => (
-                                        <option key={c.id} value={c.id}>{`${c.name} - ${c.nameAr}`}</option>
+                                        <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{`${c.name} - ${c.nameAr}`}</option>
                                     ))}
                                 </select>
                             </div>
@@ -621,41 +672,112 @@ const AdminProducts = () => {
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">اختر المورد</label>
                                     <select
-                                        className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                         value={productForm.supplierId || productForm.providerId}
                                         onChange={(e) => setProductForm({ ...productForm, supplierId: e.target.value, providerId: e.target.value, externalProductId: '', providerProductId: '' })}
                                     >
-                                        <option value="">اختر المزود</option>
+                                        <option value="" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">اختر المزود</option>
                                         {providers.map((provider) => (
-                                            <option key={provider.id} value={provider.id}>{provider.name}</option>
+                                            <option key={provider.id} value={provider.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{provider.name}</option>
                                         ))}
                                     </select>
                                 </div>
 
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">اختر المنتج من المورد</label>
-                                    <select
-                                        className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
-                                        value={productForm.externalProductId || productForm.providerProductId}
-                                        onChange={(e) => {
-                                            const value = e.target.value;
-                                            const selected = providerProducts.find((p) => p.id === value);
-                                            setProductForm({ ...productForm, externalProductId: value, providerProductId: value, externalProductName: selected?.name || '' });
-                                            if (productForm.syncPriceWithProvider && value) {
-                                                setTimeout(() => {
-                                                    syncProviderPrice();
-                                                }, 0);
-                                            }
-                                        }}
-                                        disabled={!(productForm.supplierId || productForm.providerId)}
-                                    >
-                                        <option value="">اختر منتج المزود</option>
-                                        {providerProducts.map((providerProduct) => (
-                                            <option key={providerProduct.id} value={providerProduct.id}>
-                                                {providerProduct.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.92)] p-3 shadow-[var(--shadow-subtle)]">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-elevated-rgb)/0.74)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                                                        {selectedProviderProduct?.name || (isEnglish ? 'No provider product selected yet' : 'لم يتم اختيار منتج من المورد بعد')}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-[var(--color-muted)]">
+                                                        {selectedProviderProduct?.priceCoins
+                                                            ? formatProviderProductPrice(selectedProviderProduct.priceCoins, language)
+                                                            : (isEnglish ? 'Choose a supplier first, then select a product' : 'اختر المورد أولاً ثم اختر المنتج المناسب')}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {selectedSupplierId ? (
+                                                <>
+                                                    <div className="relative">
+                                                        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+                                                        <input
+                                                            type="text"
+                                                            value={providerProductQuery}
+                                                            onChange={(e) => setProviderProductQuery(e.target.value)}
+                                                            placeholder={isEnglish ? 'Search supplier products by name' : 'ابحث داخل منتجات المورد بالاسم'}
+                                                            className={`${inputBaseClassName} h-11 pr-10`}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between gap-3 px-1 text-xs text-[var(--color-muted)]">
+                                                        <span>
+                                                            {isEnglish ? `${filteredProviderProducts.length} products found` : `${filteredProviderProducts.length} منتج متاح`}
+                                                        </span>
+                                                        {selectedProviderProduct ? (
+                                                            <span className="truncate text-[var(--color-primary)]">
+                                                                {isEnglish ? `Selected: ${selectedProviderProduct.name}` : `المحدد: ${selectedProviderProduct.name}`}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+
+                                                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                                                        {filteredProviderProducts.length ? filteredProviderProducts.map((providerProduct) => {
+                                                            const isSelected = providerProduct.id === selectedProviderProductId;
+                                                            const providerPrice = formatProviderProductPrice(providerProduct.priceCoins, language);
+
+                                                            return (
+                                                                <button
+                                                                    key={providerProduct.id}
+                                                                    type="button"
+                                                                    onClick={() => handleProviderProductSelect(providerProduct.id)}
+                                                                    className={`flex w-full items-start gap-3 rounded-[var(--radius-md)] border px-3 py-3 text-start transition-all ${
+                                                                        isSelected
+                                                                            ? 'border-[color:rgb(var(--color-primary-rgb)/0.4)] bg-[color:rgb(var(--color-primary-rgb)/0.12)] shadow-[0_14px_28px_-24px_rgb(var(--color-primary-rgb)/0.55)]'
+                                                                            : 'border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.88)] hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                                                                        isSelected
+                                                                            ? 'border-[color:rgb(var(--color-primary-rgb)/0.34)] bg-[color:rgb(var(--color-primary-rgb)/0.14)] text-[var(--color-primary)]'
+                                                                            : 'border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)] text-[var(--color-text-secondary)]'
+                                                                    }`}>
+                                                                        <Package className="h-4 w-4" />
+                                                                    </span>
+
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="truncate text-sm font-semibold text-[var(--color-text)]">{providerProduct.name || providerProduct.id}</p>
+                                                                        {providerPrice ? (
+                                                                            <p className="mt-1 text-xs font-medium text-[var(--color-primary)]">
+                                                                                {providerPrice}
+                                                                            </p>
+                                                                        ) : null}
+                                                                    </div>
+
+                                                                    {isSelected ? (
+                                                                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.16)] text-[var(--color-primary)]">
+                                                                            <Check className="h-4 w-4" />
+                                                                        </span>
+                                                                    ) : null}
+                                                                </button>
+                                                            );
+                                                        }) : (
+                                                            <div className="rounded-[var(--radius-md)] border border-dashed border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-elevated-rgb)/0.68)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+                                                                {isEnglish ? 'No matching supplier products were found.' : 'لا توجد منتجات مطابقة لهذا البحث.'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="rounded-[var(--radius-md)] border border-dashed border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-elevated-rgb)/0.68)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+                                                    {isEnglish ? 'Select a supplier first to load its products here.' : 'اختر المورد أولاً حتى تظهر منتجاته هنا بشكل منظم.'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -679,24 +801,24 @@ const AdminProducts = () => {
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">وضع التسعير الخارجي</label>
                                     <select
-                                        className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                         value={productForm.externalPricingMode}
                                         onChange={(e) => setProductForm({ ...productForm, externalPricingMode: e.target.value })}
                                     >
-                                        <option value="use_supplier_price">استخدام سعر المزود</option>
-                                        <option value="use_local_price">استخدام السعر المحلي</option>
-                                        <option value="supplier_price_plus_margin">سعر المزود + هامش</option>
+                                        <option value="use_supplier_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام سعر المزود</option>
+                                        <option value="use_local_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام السعر المحلي</option>
+                                        <option value="supplier_price_plus_margin" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">سعر المزود + هامش</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">نوع هامش المزود</label>
                                     <select
-                                        className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                         value={productForm.supplierMarginType}
                                         onChange={(e) => setProductForm({ ...productForm, supplierMarginType: e.target.value })}
                                     >
-                                        <option value="fixed">ثابت</option>
-                                        <option value="percentage">نسبة مئوية</option>
+                                        <option value="fixed" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">ثابت</option>
+                                        <option value="percentage" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">نسبة مئوية</option>
                                     </select>
                                 </div>
                             </div>
@@ -790,15 +912,6 @@ const AdminProducts = () => {
                                 ) : null}
                             </div>
 
-                            <Input
-                                label={productForm.syncPriceWithProvider ? 'Final Price (Synced)' : 'حدد السعر (Coins)'}
-                                type="number"
-                                value={productForm.basePriceCoins}
-                                onChange={(e) => setProductForm({ ...productForm, basePriceCoins: e.target.value })}
-                                required={!productForm.syncPriceWithProvider}
-                                disabled={Boolean(productForm.syncPriceWithProvider)}
-                            />
-
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <Input
                                     label="الحد الأدنى للطلب (Qty)"
@@ -814,13 +927,27 @@ const AdminProducts = () => {
                                     onChange={(e) => setProductForm({ ...productForm, maximumOrderQty: e.target.value })}
                                     required
                                 />
-                                <Input
-                                    label="خطوة الزيادة (Step)"
-                                    type="number"
-                                    value={productForm.stepQty}
-                                    onChange={(e) => setProductForm({ ...productForm, stepQty: e.target.value })}
-                                    required
-                                />
+                                <div className="w-full">
+                                    <Input
+                                        label={isEnglish ? 'Final Price' : 'السعر النهائي'}
+                                        type="number"
+                                        value={productForm.basePriceCoins}
+                                        onChange={(e) => setProductForm({ ...productForm, basePriceCoins: e.target.value })}
+                                        readOnly={Boolean(productForm.syncPriceWithProvider)}
+                                        disabled={Boolean(productForm.syncPriceWithProvider)}
+                                        required
+                                        suffix={(
+                                            <span className="text-xs font-semibold text-[var(--color-muted)]">
+                                                {isEnglish ? 'USD' : 'دولار'}
+                                            </span>
+                                        )}
+                                    />
+                                    <p className="mt-1 text-xs text-[var(--color-muted)]">
+                                        {productForm.syncPriceWithProvider
+                                            ? (isEnglish ? 'This final price is synced automatically from the pricing settings above.' : 'هذا السعر النهائي يتم تحديثه تلقائيًا من إعدادات التسعير الموجودة بالأعلى.')
+                                            : (isEnglish ? 'Enter the final price here when the product is not linked to a supplier.' : 'أدخل السعر النهائي هنا عندما لا يكون المنتج مربوطًا بمورد.')}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -941,12 +1068,12 @@ const AdminProducts = () => {
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">طريقة التعامل خارج فترة الجدولة</label>
                                         <select
-                                            className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+                                            className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                             value={productForm.scheduleVisibilityMode}
                                             onChange={(e) => setProductForm({ ...productForm, scheduleVisibilityMode: e.target.value })}
                                         >
                                             {getScheduleVisibilityModes().map((mode) => (
-                                                <option key={mode.value} value={mode.value}>{mode.label}</option>
+                                                <option key={mode.value} value={mode.value} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{mode.label}</option>
                                             ))}
                                         </select>
                                     </div>

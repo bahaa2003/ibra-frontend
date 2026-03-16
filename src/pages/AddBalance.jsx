@@ -46,8 +46,6 @@ const AddBalance = () => {
   const currentBalance = Number(user?.coins || 0);
   const currentCurrency = String(user?.currency || 'USD').toUpperCase();
   const balanceDisplayValue = formatWalletAmount(currentBalance, currentCurrency);
-  const approxUsdAmount = currentCurrency === 'USD' ? currentBalance : Math.round(currentBalance / 50);
-  const approxUsdValue = formatWalletAmount(approxUsdAmount, 'USD');
 
   const paymentGroups = useMemo(
     () => getActivePaymentGroups(paymentSettings),
@@ -76,26 +74,27 @@ const AddBalance = () => {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className={isRTL ? 'text-right' : 'text-left'}
+          className="space-y-4"
         >
-          <h1 className="mb-2 text-3xl font-bold text-gray-900 dark:text-white">{t('wallet.addBalance')}</h1>
-          <p className="text-gray-600 dark:text-gray-400">{t('payments.manualOnly')}</p>
+          <div className={isRTL ? 'text-right' : 'text-left'}>
+            <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{t('wallet.addBalance')}</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('payments.manualOnly')}</p>
+          </div>
         </motion.div>
 
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="rounded-2xl border border-gray-200 bg-white/85 p-6 backdrop-blur-xl dark:border-gray-800 dark:bg-gray-900/70"
+          className="rounded-2xl border border-gray-200 bg-white/85 p-4 backdrop-blur-xl sm:p-6 dark:border-gray-800 dark:bg-gray-900/70"
         >
-          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${isRTL ? 'sm:flex-row-reverse' : ''}`}>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('wallet.currentBalance')}</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {balanceDisplayValue}
               </p>
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">≈ {approxUsdValue}</div>
           </div>
         </motion.div>
 
@@ -125,21 +124,21 @@ const AddBalance = () => {
                   <button
                     type="button"
                     onClick={() => setOpenGroupId((previous) => (previous === group.id ? null : group.id))}
-                    className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-3 text-start transition-colors hover:bg-gray-100/75 dark:hover:bg-gray-800/60"
+                    className="flex w-full flex-col items-start gap-4 rounded-xl px-3 py-3 text-start transition-colors hover:bg-gray-100/75 sm:flex-row sm:items-center sm:justify-between dark:hover:bg-gray-800/60"
                   >
-                    <div className={`flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                    <div className={`flex min-w-0 items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
                         <Building2 className="h-6 w-6" />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{group.name}</h3>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-semibold text-gray-900 sm:text-lg dark:text-white">{group.name}</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {group.description || (isRTL ? `يحتوي على ${group.methods.length} طرق دفع` : `Contains ${group.methods.length} payment methods`)}
                         </p>
                       </div>
                     </div>
 
-                    <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                    <div className={`flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start ${isRTL ? 'flex-row-reverse' : ''}`}>
                       <span className="rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.1)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)]">
                         {isRTL ? `${group.methods.length} وسائل` : `${group.methods.length} methods`}
                       </span>
@@ -156,7 +155,7 @@ const AddBalance = () => {
                         transition={{ duration: 0.22, ease: 'easeOut' }}
                         className="overflow-hidden"
                       >
-                        <div className="grid gap-6 px-3 pb-3 pt-2 md:grid-cols-2">
+                        <div className="grid gap-4 px-2 pb-2 pt-2 md:grid-cols-2">
                           {group.methods.map((method, methodIndex) => {
                             const presentation = getMethodPresentation(method);
 
@@ -185,7 +184,7 @@ const AddBalance = () => {
 
             {!paymentGroups.length && (
               <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-6 text-center text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-400">
-                {isRTL ? 'لا توجد مجموعات دفع مفعلة حالياً.' : 'No active payment groups are available right now.'}
+                {isRTL ? 'لا توجد مجموعات دفع مفعلة حاليًا.' : 'No active payment groups are available right now.'}
               </div>
             )}
           </div>
@@ -195,7 +194,7 @@ const AddBalance = () => {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.5 }}
-          className="rounded-2xl border border-gray-200 bg-white/80 p-6 backdrop-blur-xl dark:border-gray-800 dark:bg-gray-900/65"
+          className="rounded-2xl border border-gray-200 bg-white/80 p-4 backdrop-blur-xl sm:p-6 dark:border-gray-800 dark:bg-gray-900/65"
         >
           <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">{t('payments.importantInfo')}</h3>
           <div className="space-y-3 text-gray-700 dark:text-gray-300">

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownLeft, ShoppingCart, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatDateTime } from '../../utils/intl';
 import { formatWalletAmount } from '../../utils/storefront';
 
 const TransactionCard = ({ transaction, index }) => {
@@ -96,7 +97,7 @@ const TransactionCard = ({ transaction, index }) => {
 
           <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
             <div className="text-gray-600 dark:text-gray-400 text-xs">
-              {new Date(transaction.date).toLocaleDateString(locale, {
+              {formatDateTime(transaction.date, locale, {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

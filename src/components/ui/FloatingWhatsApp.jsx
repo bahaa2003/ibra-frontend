@@ -1,15 +1,27 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSystemStore from '../../store/useSystemStore';
+import useAuthStore from '../../store/useAuthStore';
+import { isAdminRole } from '../../utils/authRoles';
 import { buildWhatsAppLink } from '../../utils/whatsapp';
 
 const FloatingWhatsApp = () => {
   const { i18n } = useTranslation();
+  const { user } = useAuthStore();
   const { paymentSettings, loadPaymentSettings } = useSystemStore();
+  const shouldHideForRole = isAdminRole(user?.role);
 
   useEffect(() => {
+    if (shouldHideForRole) {
+      return;
+    }
+
     loadPaymentSettings();
-  }, [loadPaymentSettings]);
+  }, [loadPaymentSettings, shouldHideForRole]);
+
+  if (shouldHideForRole) {
+    return null;
+  }
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar')
     .toLowerCase()

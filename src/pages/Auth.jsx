@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../components/ui/LanguageSwitcher';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { COUNTRY_CATALOG } from '../data/countryCatalog';
+import { getDefaultRouteForRole } from '../utils/authRoles';
 import brandIconImage from '../assets/box_.png';
 
 const GoogleMark = () => (
@@ -210,13 +211,7 @@ const Auth = () => {
           setIsLogin(true); // Switch to login view
       } else {
           const loggedInUser = useAuthStore.getState().user;
-          if (loggedInUser?.role === 'admin') {
-            navigate('/admin/payments');
-          } else if (loggedInUser?.role === 'manager') {
-            navigate('/manager/dashboard');
-          } else {
-            navigate('/dashboard');
-          }
+          navigate(getDefaultRouteForRole(loggedInUser?.role));
       }
     }
   };
@@ -238,13 +233,7 @@ const Auth = () => {
     );
 
     const loggedInUser = useAuthStore.getState().user;
-    if (loggedInUser?.role === 'admin') {
-      navigate('/admin/payments');
-    } else if (loggedInUser?.role === 'manager') {
-      navigate('/manager/dashboard');
-    } else {
-      navigate('/dashboard');
-    }
+    navigate(getDefaultRouteForRole(loggedInUser?.role));
   };
 
   return (
@@ -314,9 +303,9 @@ const Auth = () => {
       </div>
 
       <div className="absolute left-1/2 top-5 z-20 -translate-x-1/2">
-        <div className="flex items-center gap-2 rounded-full border border-white/55 bg-white/70 px-3 py-2 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
+        <div className="flex items-center gap-2 rounded-full border border-white/55 bg-white/70 px-2.5 py-2 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70">
           <LanguageSwitcher variant="glass" />
-          <ThemeToggle />
+          <ThemeToggle variant="glass" />
         </div>
       </div>
 

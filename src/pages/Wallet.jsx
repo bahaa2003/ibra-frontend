@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
 import useSystemStore from '../store/useSystemStore';
+import apiClient from '../services/client';
 import BalanceCard from '../components/wallet/BalanceCard';
 import StatsCards from '../components/wallet/StatsCards';
 import FilterBar from '../components/wallet/FilterBar';
@@ -38,63 +39,66 @@ const Wallet = () => {
 
   const usdEquivalent = currencyRate > 0 ? Math.round(balance / currencyRate) : balance;
 
+  const [walletStats, setWalletStats] = useState(null);
+
+  // Fetch real wallet stats from BE aggregation
+  useEffect(() => {
+    apiClient.wallet?.getStats?.()
+      .then((data) => setWalletStats(data))
+      .catch(() => setWalletStats(null)); // graceful fallback
+  }, []);
+
   const stats = useMemo(
     () => ({
-      totalDeposits: formatWalletAmount(balance + 2750, userCurrency),
-      totalSpent: formatWalletAmount(2750, userCurrency),
-      netBalance: formatWalletAmount(balance, userCurrency),
-      totalTransactions: formatWalletNumber(24)
+      totalDeposits: formatWalletAmount(walletStats?.totalDeposits ?? balance, userCurrency),
+      totalSpent: formatWalletAmount(walletStats?.totalSpent ?? 0, userCurrency),
+      netBalance: formatWalletAmount(walletStats?.netBalance ?? balance, userCurrency),
+      totalTransactions: formatWalletNumber(walletStats?.totalTransactions ?? 0),
     }),
-    [balance, userCurrency]
+    [balance, userCurrency, walletStats]
   );
 
-  const transactions = useMemo(
-    () => [
-      {
-        id: '1',
-        type: 'deposit',
-        descriptionKey: 'wallet.typeDeposit',
-        amount: 500,
-        currency: userCurrency,
-        status: 'completed',
-        date: '2024-01-15T10:30:00Z',
-        reference: 'TXN-001'
-      },
-      {
-        id: '2',
-        type: 'purchase',
-        descriptionKey: 'wallet.typePurchase',
-        amount: -325,
-        currency: userCurrency,
-        status: 'completed',
-        date: '2024-01-14T15:45:00Z',
-        reference: 'ORD-001'
-      },
-      {
-        id: '3',
-        type: 'transfer',
-        descriptionKey: 'wallet.typeTransfer',
-        amount: -200,
-        currency: userCurrency,
-        status: 'completed',
-        date: '2024-01-13T09:20:00Z',
-        reference: 'TRF-001'
-      },
-      {
-        id: '4',
-        type: 'deposit',
-        descriptionKey: 'wallet.typeDeposit',
-        amount: 1000,
-        currency: userCurrency,
-        status: 'pending',
-        date: '2024-01-12T14:10:00Z',
-        reference: 'TXN-002'
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
+
+  // Fetch real transactions from BE
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setTxLoading(true);
+      try {
+        const res = await apiClient.wallet?.getTransactions?.();
+        const items = Array.isArray(res) ? res : (res?.transactions || res?.data || []);
+        const mapped = items.map((tx) => {
+          const typeMap = { CREDIT: 'deposit', DEBIT: 'purchase', REFUND: 'transfer' };
+          const feType = typeMap[tx.type] || 'deposit';
+          const signedAmount = feType === 'purchase' ? -Math.abs(tx.amount) : Math.abs(tx.amount);
+          return {
+            id: tx._id || tx.id,
+            type: feType,
+            description: tx.description || feType,
+            amount: signedAmount,
+            currency: userCurrency,
+            status: (tx.status || 'completed').toLowerCase(),
+            date: tx.createdAt || tx.date,
+            reference: tx.reference || null,
+          };
+        });
+        setTransactions(mapped);
+      } catch {
+        setTransactions([]);
+      } finally {
+        setTxLoading(false);
       }
-    ],
-    [userCurrency]
-  );
+    };
+    fetchTransactions();
+  }, [userCurrency]);
 
-  const [filteredTransactions, setFilteredTransactions] = useState(transactions);
+  const [filteredTransactions, setFilteredTransactions] = useState([]);
+
+  // Sync filtered list when transactions change
+  useEffect(() => {
+    setFilteredTransactions(transactions);
+  }, [transactions]);
 
   const handleFilterChange = (filters) => {
     let filtered = [...transactions];

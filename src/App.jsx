@@ -1,33 +1,48 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/layout/Layout';
-import Auth from './pages/Auth';
-import Landing from './pages/Landing';
-import Dashboard from './pages/Dashboard';
-import Products from './pages/Products';
-import ProductDetails from './pages/ProductDetails';
-import Wallet from './pages/Wallet';
-import ApiSandbox from './pages/ApiSandbox';
-import Settings from './pages/Settings';
-import Account from './pages/Account';
-import AccountSecurity from './pages/AccountSecurity';
-import ManagerDashboard from './pages/ManagerDashboard';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminGroups from './pages/admin/AdminGroups';
-import AdminProducts from './pages/admin/AdminProducts';
-import AdminTopups from './pages/admin/AdminTopups';
-import AdminCurrencies from './pages/admin/AdminCurrencies';
-import AdminPayments from './pages/admin/AdminPayments';
-import AdminPaymentMethods from './pages/admin/AdminPaymentMethods';
-import AdminSupervisors from './pages/admin/AdminSupervisors';
-import AdminSuppliers from './pages/admin/AdminSuppliers';
-import AddBalance from './pages/AddBalance';
-import PaymentDetails from './pages/PaymentDetails';
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import FloatingWhatsApp from './components/ui/FloatingWhatsApp';
+import Loader from './components/ui/Loader';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
+import { ADMIN_ROLES } from './utils/authRoles';
+
+const Layout = lazy(() => import('./components/layout/Layout'));
+const Auth = lazy(() => import('./pages/Auth'));
+const Landing = lazy(() => import('./pages/Landing'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Products = lazy(() => import('./pages/Products'));
+const ProductDetails = lazy(() => import('./pages/ProductDetails'));
+const Wallet = lazy(() => import('./pages/Wallet'));
+const ApiSandbox = lazy(() => import('./pages/ApiSandbox'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Account = lazy(() => import('./pages/Account'));
+const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
+const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminGroups = lazy(() => import('./pages/admin/AdminGroups'));
+const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
+const AdminCurrencies = lazy(() => import('./pages/admin/AdminCurrencies'));
+const AdminPayments = lazy(() => import('./pages/admin/AdminPayments'));
+const AdminPaymentMethods = lazy(() => import('./pages/admin/AdminPaymentMethods'));
+const AdminSupervisors = lazy(() => import('./pages/admin/AdminSupervisors'));
+const AdminSuppliers = lazy(() => import('./pages/admin/AdminSuppliers'));
+const AddBalance = lazy(() => import('./pages/AddBalance'));
+const PaymentDetails = lazy(() => import('./pages/PaymentDetails'));
+
+const RouteLoader = () => (
+  <div className="min-h-screen">
+    <Loader />
+  </div>
+);
+
+const renderSuspended = (element) => (
+  <Suspense fallback={<RouteLoader />}>
+    {element}
+  </Suspense>
+);
 
 function App() {
   return (
@@ -36,176 +51,190 @@ function App() {
         <ToastProvider>
           <BrowserRouter>
             <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/auth" element={<Auth />} />
-        
-        <Route element={<Layout />}>
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/products" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <Products />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/products/:id" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <ProductDetails />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/wallet" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <Wallet />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/wallet/add-balance" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <AddBalance />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/wallet/payment-details/:methodId" 
-            element={
-              <ProtectedRoute roles={['customer']}>
-                <PaymentDetails />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/api-sandbox" 
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <ApiSandbox />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/settings" 
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            } 
-          />
-          <Route
-            path="/account"
-            element={
-              <ProtectedRoute>
-                <Account />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/account-security"
-            element={
-              <ProtectedRoute>
-                <AccountSecurity />
-              </ProtectedRoute>
-            }
-          />
+              <Route path="/" element={renderSuspended(<Landing />)} />
+              <Route path="/auth" element={renderSuspended(<Auth />)} />
 
-          <Route
-            path="/manager/dashboard"
-            element={
-              <ProtectedRoute roles={['manager', 'admin']}>
-                <ManagerDashboard />
-              </ProtectedRoute>
-            }
-          />
+              <Route element={renderSuspended(<Layout />)}>
+                <Route
+                  path="/dashboard"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<Dashboard />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/products"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<Products />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/products/:id"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<ProductDetails />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/wallet"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<Wallet />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/wallet/add-balance"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<AddBalance />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/wallet/payment-details/:methodId"
+                  element={(
+                    <ProtectedRoute roles={['customer']}>
+                      {renderSuspended(<PaymentDetails />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/api-sandbox"
+                  element={(
+                    <ProtectedRoute roles={['admin']}>
+                      {renderSuspended(<ApiSandbox />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/settings"
+                  element={(
+                    <ProtectedRoute>
+                      {renderSuspended(<Settings />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/account"
+                  element={(
+                    <ProtectedRoute>
+                      {renderSuspended(<Account />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/account-security"
+                  element={(
+                    <ProtectedRoute>
+                      {renderSuspended(<AccountSecurity />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/manager/dashboard"
+                  element={(
+                    <ProtectedRoute roles={['manager', 'admin']}>
+                      {renderSuspended(<ManagerDashboard />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      <Navigate to="/admin/dashboard" replace />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/dashboard"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminDashboard />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/users"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminUsers />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/supervisors"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminSupervisors />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/groups"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminGroups />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/products"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminProducts />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/topups"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      <Navigate to="/admin/payments" replace />
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/payments"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminPayments />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/payment-methods"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminPaymentMethods />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/currencies"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminCurrencies />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/suppliers"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminSuppliers />)}
+                    </ProtectedRoute>
+                  )}
+                />
+              </Route>
 
-          {/* Admin Routes */}
-          <Route 
-            path="/admin/users" 
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminUsers />
-              </ProtectedRoute>
-            } 
-          />
-          <Route
-            path="/admin/supervisors"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminSupervisors />
-              </ProtectedRoute>
-            }
-          />
-          <Route             path="/admin/groups" 
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminGroups />
-              </ProtectedRoute>
-            } 
-          />
-          <Route             path="/admin/products" 
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminProducts />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/admin/topups" 
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminTopups />
-              </ProtectedRoute>
-            } 
-          />
-          <Route
-            path="/admin/payments"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminPayments />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/payment-methods"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminPaymentMethods />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/currencies"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminCurrencies />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/suppliers"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AdminSuppliers />
-              </ProtectedRoute>
-            }
-          />
-        </Route>
-
-        {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
             <FloatingWhatsApp />
           </BrowserRouter>
         </ToastProvider>

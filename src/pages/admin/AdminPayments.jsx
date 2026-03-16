@@ -1,9 +1,8 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Eye, Pencil, Save, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, Eye, Pencil, X } from 'lucide-react';
 import useTopupStore from '../../store/useTopupStore';
-import useAuthStore from '../../store/useAuthStore';
-import useSystemStore from '../../store/useSystemStore';
 import useAdminStore from '../../store/useAdminStore';
+import useSystemStore from '../../store/useSystemStore';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
@@ -11,7 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { useToast } from '../../components/ui/Toast';
-import { getPrimaryCountryCodeForCurrency } from '../../utils/currencyCountryMap';
+import { formatDateTime, formatNumber } from '../../utils/intl';
 
 const statusVariant = (status) => {
   if (status === 'approved' || status === 'completed') return 'success';
@@ -24,25 +23,8 @@ const isPendingLike = (status) => status === 'pending' || status === 'requested'
 const AdminPayments = () => {
   const { topups, loadTopups, updateTopupStatus, updateTopupRequest } = useTopupStore();
   const { users, loadUsers } = useAdminStore();
-  const { currencies, loadCurrencies, paymentSettings, loadPaymentSettings, savePaymentSettings } = useSystemStore();
-  const { user: actor } = useAuthStore();
+  const { currencies, loadCurrencies } = useSystemStore();
   const { addToast } = useToast();
-
-  const fallbackCountries = useMemo(() => ([
-    { cca2: 'US', name: { common: 'United States' }, currencies: { USD: {} } },
-    { cca2: 'EG', name: { common: 'Egypt' }, currencies: { EGP: {} } },
-    { cca2: 'SA', name: { common: 'Saudi Arabia' }, currencies: { SAR: {} } },
-    { cca2: 'GB', name: { common: 'United Kingdom' }, currencies: { GBP: {} } },
-    { cca2: 'AE', name: { common: 'United Arab Emirates' }, currencies: { AED: {} } },
-  ]), []);
-  const [countries, setCountries] = useState([]);
-  const [selectedCountryCode, setSelectedCountryCode] = useState('');
-
-  const [settingsForm, setSettingsForm] = useState({
-    countryAccounts: [],
-    instructions: '',
-    whatsappNumber: '',
-  });
 
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -56,108 +38,14 @@ const AdminPayments = () => {
     requestedAmount: '',
     adminNote: '',
   });
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   useEffect(() => {
     loadTopups();
     loadUsers();
     loadCurrencies();
-    loadPaymentSettings();
-  }, [loadTopups, loadUsers, loadCurrencies, loadPaymentSettings]);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadCountriesList = async () => {
-      try {
-        const response = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2,currencies');
-        if (!response.ok) throw new Error('Failed to load countries');
-        const data = await response.json();
-        if (mounted && Array.isArray(data)) {
-          setCountries(data);
-        }
-      } catch (_error) {
-        if (mounted) setCountries(fallbackCountries);
-      }
-    };
-    loadCountriesList();
-    return () => {
-      mounted = false;
-    };
-  }, [fallbackCountries]);
-
-  useEffect(() => {
-    setSettingsForm({
-      countryAccounts: Array.isArray(paymentSettings?.countryAccounts) ? paymentSettings.countryAccounts : [],
-      instructions: paymentSettings?.instructions || '',
-      whatsappNumber: paymentSettings?.whatsappNumber || '',
-    });
-  }, [paymentSettings]);
-
-  const eligibleCountries = useMemo(() => {
-    const source = (countries && countries.length) ? countries : fallbackCountries;
-    const allowedCountryCodes = new Set(
-      (currencies || [])
-        .map((item) => getPrimaryCountryCodeForCurrency(item?.code))
-        .filter(Boolean)
-    );
-
-    return source
-      .filter((country) => allowedCountryCodes.has(country?.cca2))
-      .sort((a, b) => String(a?.name?.common || '').localeCompare(String(b?.name?.common || '')));
-  }, [countries, fallbackCountries, currencies]);
-
-  useEffect(() => {
-    if (!eligibleCountries.length) {
-      setSelectedCountryCode('');
-      return;
-    }
-    if (!eligibleCountries.some((c) => c.cca2 === selectedCountryCode)) {
-      setSelectedCountryCode(eligibleCountries[0].cca2);
-    }
-  }, [eligibleCountries, selectedCountryCode]);
-
-  const selectedCountry = useMemo(
-    () => eligibleCountries.find((c) => c.cca2 === selectedCountryCode) || null,
-    [eligibleCountries, selectedCountryCode]
-  );
-
-  const selectedCountryCurrencyCode = useMemo(() => {
-    const selectedCode = (selectedCountry?.cca2 || '').toUpperCase();
-    const mapped = (currencies || []).find((item) => getPrimaryCountryCodeForCurrency(item?.code) === selectedCode);
-    return String(mapped?.code || 'USD').toUpperCase();
-  }, [selectedCountry, currencies]);
-
-  const selectedCountryAccount = useMemo(() => {
-    return (settingsForm.countryAccounts || []).find((item) => item.countryCode === selectedCountryCode) || {
-      countryCode: selectedCountryCode,
-      countryName: selectedCountry?.name?.common || '',
-      currencyCode: selectedCountryCurrencyCode,
-      cashWalletNumber: '',
-      bankAccountNumber: '',
-      bankAccountName: '',
-    };
-  }, [settingsForm.countryAccounts, selectedCountryCode, selectedCountry, selectedCountryCurrencyCode]);
-
-  const updateSelectedCountryAccount = (patch) => {
-    if (!selectedCountryCode) return;
-    const nextItem = {
-      ...selectedCountryAccount,
-      ...patch,
-      countryCode: selectedCountryCode,
-      countryName: selectedCountry?.name?.common || selectedCountryAccount.countryName || '',
-      currencyCode: selectedCountryCurrencyCode,
-    };
-
-    setSettingsForm((prev) => {
-      const list = Array.isArray(prev.countryAccounts) ? prev.countryAccounts : [];
-      const index = list.findIndex((item) => item.countryCode === selectedCountryCode);
-      if (index === -1) {
-        return { ...prev, countryAccounts: [...list, nextItem] };
-      }
-      const nextList = [...list];
-      nextList[index] = nextItem;
-      return { ...prev, countryAccounts: nextList };
-    });
-  };
+  }, [loadTopups, loadUsers, loadCurrencies]);
 
   const requests = useMemo(
     () => [...(topups || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
@@ -181,15 +69,6 @@ const AdminPayments = () => {
       adminNote: request?.adminNote || '',
     });
     setIsEditModalOpen(true);
-  };
-
-  const handleSavePaymentSettings = async () => {
-    try {
-      await savePaymentSettings(settingsForm, actor);
-      addToast('تم حفظ إعدادات الدفع', 'success');
-    } catch (error) {
-      addToast(error?.message || 'فشل حفظ الإعدادات', 'error');
-    }
   };
 
   const handleApprove = async () => {
@@ -257,80 +136,105 @@ const AdminPayments = () => {
   };
 
   const findUserCurrency = (userId) => users.find((u) => u.id === userId)?.currency || 'USD';
+  const formatRequestDate = (value) => formatDateTime(value, 'ar-EG', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const formatRequestAmount = (value) => formatNumber(value, 'ar-EG');
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة عمليات الدفع</h1>
+    <div className="min-w-0 space-y-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عمليات الشحن</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          مراجعة طلبات الشحن اليدوي وإدارة بيانات الاستلام وطرق الدفع من مكان واحد.
+        </p>
+      </header>
 
-      <Card className="p-5 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">بيانات الاستلام (يحددها الأدمن)</h2>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">اختر الدولة</label>
-          <select
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            value={selectedCountryCode}
-            onChange={(e) => setSelectedCountryCode(e.target.value)}
-          >
-            {eligibleCountries.map((country) => {
-              const code = (currencies || []).find((item) => getPrimaryCountryCodeForCurrency(item?.code) === country.cca2)?.code || 'USD';
-              return (
-                <option key={country.cca2} value={country.cca2}>
-                  {country.name?.common} ({country.cca2}) - {code}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="رقم محفظة الكاش"
-            value={selectedCountryAccount.cashWalletNumber || ''}
-            onChange={(e) => updateSelectedCountryAccount({ cashWalletNumber: e.target.value })}
-            placeholder="مثال: 01000000000"
-          />
-          <Input
-            label="رقم الحساب البنكي"
-            value={selectedCountryAccount.bankAccountNumber || ''}
-            onChange={(e) => updateSelectedCountryAccount({ bankAccountNumber: e.target.value })}
-            placeholder="IBAN / Account Number"
-          />
-        </div>
-        <Input
-          label="اسم صاحب الحساب البنكي"
-          value={selectedCountryAccount.bankAccountName || ''}
-          onChange={(e) => updateSelectedCountryAccount({ bankAccountName: e.target.value })}
-          placeholder="اسم المستفيد"
-        />
-        <Input
-          label="رقم واتساب التواصل"
-          value={settingsForm.whatsappNumber}
-          onChange={(e) => setSettingsForm((prev) => ({ ...prev, whatsappNumber: e.target.value }))}
-          placeholder="مثال: 201001234567"
-          dir="ltr"
-        />
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">تعليمات إضافية للعميل</label>
-          <textarea
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-            rows={3}
-            value={settingsForm.instructions}
-            onChange={(e) => setSettingsForm((prev) => ({ ...prev, instructions: e.target.value }))}
-            placeholder="اكتب تعليمات التحويل ورفع الإيصال"
-          />
-        </div>
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-xs text-gray-500">
-          الدولة الحالية: <strong>{selectedCountry?.name?.common || '-'}</strong> | العملة: <strong>{selectedCountryCurrencyCode}</strong>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={handleSavePaymentSettings}>
-            <Save className="w-4 h-4 mr-2" /> حفظ إعدادات الدفع
-          </Button>
-        </div>
-      </Card>
+      <Card className="min-w-0 p-4 sm:p-5">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">طلبات الشحن</h2>
 
-      <Card className="p-5">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">جدول طلبات الدفع</h2>
-        <div className="overflow-x-auto">
+        <div className="space-y-3 lg:hidden">
+          {requests.map((request) => (
+            <article
+              key={request.id}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 dark:text-white">{request.userName || request.userId}</p>
+                  <p className="mt-1 text-xs text-gray-500">{formatRequestDate(request.createdAt || Date.now())}</p>
+                </div>
+                <Badge variant={statusVariant(request.status)}>{request.status}</Badge>
+              </div>
+
+              <div className="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">المستخدم:</span>{' '}
+                  {request.userEmail || request.userId}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">الدولة:</span>{' '}
+                  {request.transferCountryName || '-'}
+                  {request.transferCountryCode ? ` (${request.transferCountryCode})` : ''}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">قناة الدفع:</span>{' '}
+                  {request.paymentChannel === 'bank_transfer' ? 'تحويل بنكي' : 'محفظة كاش'}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">العملة:</span>{' '}
+                  {request.currencyCode || findUserCurrency(request.userId)}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">المبلغ المطلوب:</span>{' '}
+                  {formatRequestAmount(request.requestedAmount ?? request.requestedCoins ?? request.amount ?? 0)}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">المبلغ الفعلي:</span>{' '}
+                  {request.actualPaidAmount ? formatRequestAmount(request.actualPaidAmount) : '-'}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900 dark:text-white">الإيصال:</span>{' '}
+                  {request.proofImage ? (
+                    <button
+                      type="button"
+                      onClick={() => { setReceiptPreviewUrl(request.proofImage); setIsReceiptModalOpen(true); }}
+                      className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-700"
+                    >
+                      <Eye className="h-4 w-4" /> عرض
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400">لا يوجد</span>
+                  )}
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {isPendingLike(request.status) ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openEditModal(request)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" onClick={() => openApproveModal(request)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => handleReject(request)}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400">تمت المراجعة</span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -349,10 +253,10 @@ const AdminPayments = () => {
             <TableBody>
               {requests.map((request) => (
                 <TableRow key={request.id}>
-                  <TableCell>{new Date(request.createdAt || Date.now()).toLocaleString()}</TableCell>
+                  <TableCell>{formatRequestDate(request.createdAt || Date.now())}</TableCell>
                   <TableCell>
                     <div className="font-medium text-gray-900 dark:text-white">{request.userName || request.userId}</div>
-                    <div className="text-xs text-gray-500">{request.userId}</div>
+                    <div className="text-xs text-gray-500">{request.userEmail || request.userId}</div>
                   </TableCell>
                   <TableCell className="text-center">
                     {request.transferCountryName || '-'}
@@ -360,18 +264,17 @@ const AdminPayments = () => {
                   </TableCell>
                   <TableCell className="text-center">{request.paymentChannel === 'bank_transfer' ? 'تحويل بنكي' : 'محفظة كاش'}</TableCell>
                   <TableCell className="text-center">{request.currencyCode || findUserCurrency(request.userId)}</TableCell>
-                  <TableCell className="text-center">{Number(request.requestedAmount ?? request.requestedCoins ?? request.amount ?? 0).toLocaleString()}</TableCell>
-                  <TableCell className="text-center">{request.actualPaidAmount ? Number(request.actualPaidAmount).toLocaleString() : '-'}</TableCell>
+                  <TableCell className="text-center">{formatRequestAmount(request.requestedAmount ?? request.requestedCoins ?? request.amount ?? 0)}</TableCell>
+                  <TableCell className="text-center">{request.actualPaidAmount ? formatRequestAmount(request.actualPaidAmount) : '-'}</TableCell>
                   <TableCell className="text-center">
                     {request.proofImage ? (
-                      <a
-                        href={request.proofImage}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => { setReceiptPreviewUrl(request.proofImage); setIsReceiptModalOpen(true); }}
                         className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-700"
                       >
                         <Eye className="w-4 h-4" /> عرض
-                      </a>
+                      </button>
                     ) : (
                       <span className="text-xs text-gray-400">لا يوجد</span>
                     )}
@@ -440,7 +343,7 @@ const AdminPayments = () => {
       <Modal
         isOpen={isReviewModalOpen}
         onClose={() => setIsReviewModalOpen(false)}
-        title="اعتماد طلب الدفع"
+        title="اعتماد طلب الشحن"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsReviewModalOpen(false)}>إلغاء</Button>
@@ -507,6 +410,32 @@ const AdminPayments = () => {
             />
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={isReceiptModalOpen}
+        onClose={() => { setIsReceiptModalOpen(false); setReceiptPreviewUrl(null); }}
+        title="عرض الإيصال"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => { setIsReceiptModalOpen(false); setReceiptPreviewUrl(null); }}>إغلاق</Button>
+            {receiptPreviewUrl && (
+              <a href={receiptPreviewUrl} target="_blank" rel="noreferrer">
+                <Button>فتح بحجم كامل</Button>
+              </a>
+            )}
+          </div>
+        }
+      >
+        {receiptPreviewUrl ? (
+          <img
+            src={receiptPreviewUrl}
+            alt="Payment receipt"
+            className="max-h-[70vh] w-full rounded-lg object-contain bg-gray-50 dark:bg-gray-900"
+          />
+        ) : (
+          <p className="text-sm text-gray-500">لا توجد صورة إيصال.</p>
+        )}
       </Modal>
     </div>
   );

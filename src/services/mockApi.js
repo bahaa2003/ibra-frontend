@@ -810,18 +810,24 @@ const mockApi = {
         String(supplier.supplierType || '').toLowerCase() !== 'manual'
       );
 
-      if (canAutoFulfill) {
-        const mappings = Array.isArray(product.supplierFieldMappings) && product.supplierFieldMappings.length
-          ? product.supplierFieldMappings
-          : (Array.isArray(supplier.supplierFieldMappings) ? supplier.supplierFieldMappings : []);
+        if (canAutoFulfill) {
+          const mappings = Array.isArray(product.supplierFieldMappings) && product.supplierFieldMappings.length
+            ? product.supplierFieldMappings
+            : (Array.isArray(supplier.supplierFieldMappings) ? supplier.supplierFieldMappings : []);
 
-        const internalSource = {
-          orderReference: newOrder.id,
-          externalProductId: product.externalProductId,
-          quantity: Number(orderData.quantity || 1),
-          playerId: String(orderData.playerId || ''),
-          userId: String(orderData.userId || ''),
-        };
+          const orderFieldsValues = {
+            ...(orderData.orderFieldsValues || {}),
+            ...(orderData.orderFields || {}),
+          };
+
+          const internalSource = {
+            ...orderFieldsValues,
+            orderReference: newOrder.id,
+            externalProductId: product.externalProductId,
+            quantity: Number(orderData.quantity || 1),
+            playerId: String(orderData.playerId || orderFieldsValues.playerId || orderFieldsValues.uid || ''),
+            userId: String(orderData.userId || ''),
+          };
 
         const payload = {};
         mappings.forEach((m) => {

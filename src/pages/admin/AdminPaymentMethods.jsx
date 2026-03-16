@@ -7,6 +7,7 @@ import { useToast } from '../../components/ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
 import useSystemStore from '../../store/useSystemStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { formatNumber } from '../../utils/intl';
 import {
   createPaymentEntityId,
   normalizePaymentGroups,
@@ -286,7 +287,7 @@ const AdminPaymentMethods = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <header className="space-y-2">
         <h1 className="text-3xl font-bold text-[var(--color-text)]">
           {tx('إدارة مجموعات وطرق الدفع', 'Payment Groups & Methods')}
@@ -299,7 +300,7 @@ const AdminPaymentMethods = () => {
         </p>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {[
           {
             label: tx('إجمالي المجموعات', 'Total Groups'),
@@ -319,13 +320,13 @@ const AdminPaymentMethods = () => {
             className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.92)] p-5 shadow-[var(--shadow-subtle)]"
           >
             <p className="text-sm text-[var(--color-text-secondary)]">{card.label}</p>
-            <p className="mt-3 text-3xl font-bold text-[var(--color-text)]">{card.value}</p>
+            <p className="mt-3 text-3xl font-bold text-[var(--color-text)]">{formatNumber(card.value, isEnglish ? 'en-US' : 'ar-EG')}</p>
           </div>
         ))}
       </div>
 
       <div className={`flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
-        <Button onClick={openAddGroupModal} disabled={isPersisting}>
+        <Button onClick={openAddGroupModal} disabled={isPersisting} className="w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           <span>{tx('إضافة مجموعة جديدة', 'Add New Group')}</span>
         </Button>
@@ -335,16 +336,16 @@ const AdminPaymentMethods = () => {
         {paymentGroups.map((group) => (
           <section
             key={group.id}
-            className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5 shadow-[var(--shadow-subtle)]"
+            className="min-w-0 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-4 shadow-[var(--shadow-subtle)] sm:p-5"
           >
             <div className={`flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between ${isRTL ? 'lg:flex-row-reverse' : ''}`}>
-              <div className={`flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-soft))] text-[var(--color-button-text)]">
+              <div className={`flex min-w-0 items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-soft))] text-[var(--color-button-text)]">
                   <Building2 className="h-6 w-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                    <h2 className="text-xl font-semibold text-[var(--color-text)]">{group.name}</h2>
+                    <h2 className="truncate text-lg font-semibold text-[var(--color-text)] sm:text-xl">{group.name}</h2>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
                         group.isActive !== false
@@ -364,7 +365,7 @@ const AdminPaymentMethods = () => {
                 </div>
               </div>
 
-              <div className={`flex flex-wrap gap-2 ${isRTL ? 'justify-start' : 'justify-end'}`}>
+              <div className={`flex w-full flex-wrap gap-2 lg:w-auto ${isRTL ? 'justify-start' : 'justify-end'}`}>
                 <Button variant="outline" size="sm" onClick={() => openAddMethodModal(group.id)} disabled={isPersisting}>
                   <Plus className="h-4 w-4" />
                   <span>{tx('إضافة طريقة', 'Add Method')}</span>
@@ -381,16 +382,16 @@ const AdminPaymentMethods = () => {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-2">
               {group.methods.map((method) => (
                 <div
                   key={method.id}
-                  className="rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-surface-rgb)/0.8)] p-4"
+                  className="min-w-0 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-surface-rgb)/0.8)] p-4"
                 >
                   <div className={`flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                    <div>
+                    <div className="min-w-0">
                       <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                        <h3 className="font-semibold text-[var(--color-text)]">{method.name}</h3>
+                        <h3 className="truncate font-semibold text-[var(--color-text)]">{method.name}</h3>
                         <span
                           className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                             method.isActive !== false
@@ -406,7 +407,7 @@ const AdminPaymentMethods = () => {
                       </p>
                     </div>
 
-                    <div className={`flex gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                    <div className={`flex shrink-0 flex-wrap gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                       <Button variant="ghost" size="icon" onClick={() => handleToggleMethod(group.id, method.id)} disabled={isPersisting}>
                         {method.isActive !== false ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </Button>
@@ -419,14 +420,14 @@ const AdminPaymentMethods = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-[var(--color-text-secondary)]">
+                  <div className="mt-4 space-y-2 break-words text-sm text-[var(--color-text-secondary)]">
                     <p>
                       <span className="font-medium text-[var(--color-text)]">{tx('النوع:', 'Type:')}</span>{' '}
                       {getMethodTypeLabel(method.type)}
                     </p>
                     <p>
                       <span className="font-medium text-[var(--color-text)]">{tx('رقم الحساب:', 'Account:')}</span>{' '}
-                      {method.accountNumber || tx('غير محدد', 'Not set')}
+                      <span className="break-all">{method.accountNumber || tx('غير محدد', 'Not set')}</span>
                     </p>
                     {method.bankName && (
                       <p>
@@ -459,7 +460,7 @@ const AdminPaymentMethods = () => {
         onClose={() => setGroupModalOpen(false)}
         title={editingGroupId ? tx('تعديل مجموعة الدفع', 'Edit Payment Group') : tx('إضافة مجموعة دفع', 'Add Payment Group')}
         footer={(
-          <div className={`flex gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex flex-col gap-3 sm:flex-row ${isRTL ? 'sm:flex-row-reverse' : ''}`}>
             <Button variant="ghost" className="flex-1" onClick={() => setGroupModalOpen(false)}>
               {tx('إلغاء', 'Cancel')}
             </Button>
@@ -506,7 +507,7 @@ const AdminPaymentMethods = () => {
         onClose={() => setMethodModalOpen(false)}
         title={editingMethodRef.methodId ? tx('تعديل طريقة الدفع', 'Edit Payment Method') : tx('إضافة طريقة دفع', 'Add Payment Method')}
         footer={(
-          <div className={`flex gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex flex-col gap-3 sm:flex-row ${isRTL ? 'sm:flex-row-reverse' : ''}`}>
             <Button variant="ghost" className="flex-1" onClick={() => setMethodModalOpen(false)}>
               {tx('إلغاء', 'Cancel')}
             </Button>

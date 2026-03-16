@@ -8,6 +8,7 @@ import Modal from '../../components/ui/Modal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { useToast } from '../../components/ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
+import { formatDateTime, formatNumber } from '../../utils/intl';
 
 const defaultForm = {
   supplierName: '',
@@ -180,7 +181,7 @@ const AdminSuppliers = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة الموردين</h1>
         <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> إضافة مورد جديد</Button>
@@ -199,7 +200,52 @@ const AdminSuppliers = () => {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <div className="space-y-3 md:hidden">
+        {filtered.map((row) => (
+          <article
+            key={row.id}
+            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-gray-900 dark:text-white">{row.supplierName}</p>
+                <p className="mt-1 text-xs text-gray-500">{row.supplierCode}</p>
+              </div>
+              <Badge variant={row.isActive ? 'success' : 'secondary'}>{row.isActive ? 'نشط' : 'غير نشط'}</Badge>
+            </div>
+
+            <div className="mt-4 space-y-2 text-sm">
+              <p className="break-all text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">الرابط:</span> {row.baseUrl || '-'}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">نوع الربط:</span> {row.supplierType}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">الاتصال:</span>{' '}
+                {row.lastConnectionTestStatus || 'لم يتم الاختبار'}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">آخر اختبار:</span>{' '}
+                {row.lastConnectionTestAt ? formatDateTime(row.lastConnectionTestAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'}
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                <span className="font-medium text-gray-900 dark:text-white">منتجات مرتبطة:</span>{' '}
+                {formatNumber(row.linkedProductsCount || 0, 'ar-EG')}
+              </p>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => testConnection(row)}><PlugZap className="w-4 h-4" /></Button>
+              <Button size="sm" variant="outline" onClick={() => syncProducts(row)}><RefreshCw className="w-4 h-4" /></Button>
+              <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil className="w-4 h-4" /></Button>
+              <Button size="sm" variant="danger" onClick={() => deactivate(row)}><Power className="w-4 h-4" /></Button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white md:block dark:border-gray-700 dark:bg-gray-800">
         <Table>
           <TableHeader>
             <TableRow>
@@ -230,8 +276,8 @@ const AdminSuppliers = () => {
                     {row.lastConnectionTestStatus || 'لم يتم الاختبار'}
                   </Badge>
                 </TableCell>
-                <TableCell>{row.lastConnectionTestAt ? new Date(row.lastConnectionTestAt).toLocaleString() : '-'}</TableCell>
-                <TableCell>{row.linkedProductsCount || 0}</TableCell>
+                <TableCell>{row.lastConnectionTestAt ? formatDateTime(row.lastConnectionTestAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'}</TableCell>
+                <TableCell>{formatNumber(row.linkedProductsCount || 0, 'ar-EG')}</TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-2">
                     <Button size="sm" variant="outline" onClick={() => testConnection(row)}><PlugZap className="w-4 h-4" /></Button>

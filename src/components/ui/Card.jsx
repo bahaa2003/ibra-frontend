@@ -13,7 +13,7 @@ const Card = ({ className, children, variant = 'default', ...props }) => {
   return (
     <div
       className={cn(
-        'overflow-hidden',
+        'min-w-0 overflow-hidden',
         variants[variant] || variants.default,
         className
       )}

@@ -3,6 +3,7 @@ import chatAppsImage from '../assets/chatApps.webp';
 import gamesChargingImage from '../assets/gamesCharging.webp';
 import brandIconImage from '../assets/box_.png';
 import { calculateProductPrice } from './pricing';
+import { formatNumber } from './intl';
 import { getProductStatus } from './productStatus';
 
 const CATEGORY_DISPLAY_CONFIG = {
@@ -38,8 +39,34 @@ const CATEGORY_DISPLAY_CONFIG = {
 
 const categoryOrder = { all: 0, games: 1, apps: 2, cards: 3 };
 
+const normalizeSearchToken = (value) => String(value || '')
+  .replace(/[\u0000-\u001F\u007F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+
+const resolveProductDisplayName = (product, language = 'ar') => (
+  language === 'ar' ? product?.nameAr || product?.name : product?.name || product?.nameAr
+) || '';
+
+const resolveProductDisplayDescription = (product, language = 'ar') => (
+  language === 'ar' ? product?.descriptionAr || product?.description : product?.description || product?.descriptionAr
+) || '';
+
+const compareStorefrontProducts = (left, right, language = 'ar') => {
+  const orderDelta = Number(left?.displayOrder || 0) - Number(right?.displayOrder || 0);
+  if (orderDelta !== 0) return orderDelta;
+
+  return String(left?.displayName || '').localeCompare(
+    String(right?.displayName || ''),
+    language === 'ar' ? 'ar' : 'en'
+  );
+};
+
 export const getStorefrontLanguage = (i18n) =>
   String(i18n?.resolvedLanguage || i18n?.language || 'ar').toLowerCase().startsWith('en') ? 'en' : 'ar';
+
+export const sanitizeStorefrontQuery = (value) => normalizeSearchToken(value);
 
 export const getCurrencySymbol = (currencyCode = 'USD') => {
   const currencySymbolMap = {
@@ -55,12 +82,10 @@ export const getCurrencySymbol = (currencyCode = 'USD') => {
 };
 
 export const formatDisplayNumber = (value, locale = 'en-US', compact = false) => {
-  const amount = Number(value || 0);
-
-  return new Intl.NumberFormat(locale, {
+  return formatNumber(value, locale, {
     notation: compact ? 'compact' : 'standard',
     maximumFractionDigits: compact ? 1 : 0,
-  }).format(amount);
+  });
 };
 
 export const formatWalletNumber = (value, compact = false) => formatDisplayNumber(value, 'en-US', compact);
@@ -107,12 +132,22 @@ export const createStorefrontProducts = (products, { language = 'ar', userGroup 
   Array.isArray(products) ? products : []
 ).map((product) => ({
   ...product,
+  displayName: resolveProductDisplayName(product, language),
+  displayDescription: resolveProductDisplayDescription(product, language),
+  searchIndex: normalizeSearchToken([
+    product?.name,
+    product?.nameAr,
+    product?.description,
+    product?.descriptionAr,
+    product?.externalProductName,
+  ].join(' ')),
   storefrontPrice: calculateProductPrice(product, userGroup),
   storefrontStatus: getProductStatus(product, language),
-})).filter((product) => product.storefrontStatus.isVisible);
+})).filter((product) => product.storefrontStatus.isVisible)
+  .sort((left, right) => compareStorefrontProducts(left, right, language));
 
 export const filterStorefrontProducts = (products, { searchTerm = '', activeCategory = 'all', language = 'ar' } = {}) => {
-  const normalizedSearch = String(searchTerm || '').trim().toLowerCase();
+  const normalizedSearch = normalizeSearchToken(searchTerm);
 
   return (Array.isArray(products) ? products : []).filter((product) => {
     const matchesCategory = activeCategory === 'all' || String(product?.category || '').trim() === activeCategory;
@@ -120,13 +155,13 @@ export const filterStorefrontProducts = (products, { searchTerm = '', activeCate
 
     if (!normalizedSearch) return true;
 
-    const haystack = [
+    const haystack = product?.searchIndex || normalizeSearchToken([
       product?.name,
       product?.nameAr,
       product?.description,
       product?.descriptionAr,
-      getCategoryDisplayTitle({ id: product?.category }, language),
-    ].join(' ').toLowerCase();
+      product?.externalProductName,
+    ].join(' '));
 
     return haystack.includes(normalizedSearch);
   });

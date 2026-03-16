@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, Gamepad2, ShieldCheck, Smartphone, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import LanguageSwitcher from '../components/ui/LanguageSwitcher';
+import useAuthStore from '../store/useAuthStore';
+import { getDefaultRouteForRole } from '../utils/authRoles';
 import gamesChargingImage from '../assets/gamesCharging.webp';
 import buyCardsImage from '../assets/buyCards.webp';
 import chatAppsImage from '../assets/chatApps.webp';
@@ -15,6 +17,8 @@ import brandWordmarkImage from '../assets/ibra.png';
 
 const Landing = () => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuthStore();
   const [slideIndex, setSlideIndex] = useState(0);
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
 
@@ -44,6 +48,12 @@ const Landing = () => {
       description: t('home.featureSecureDesc')
     }
   ];
+
+  useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      navigate(getDefaultRouteForRole(user.role), { replace: true });
+    }
+  }, [isAuthenticated, navigate, user]);
 
   useEffect(() => {
     const timer = setInterval(() => {

@@ -279,6 +279,12 @@ const normaliseDeposit = (d) => {
   const amountRequested = d.amountRequested ?? d.requestedAmount ?? d.amount ?? 0;
   const amountApproved = d.amountApproved ?? d.actualPaidAmount ?? null;
 
+  // Resolve proof image URL — prepend server origin for relative paths (e.g. /uploads/deposits/...)
+  const rawProof = d.transferImageUrl || d.proofImage || '';
+  const proofImage = rawProof && rawProof.startsWith('/') && !rawProof.startsWith('//')
+    ? `${API_BASE.replace(/\/api\/?$/, '')}${rawProof}`
+    : rawProof;
+
   return {
     ...d,
     id,
@@ -299,7 +305,7 @@ const normaliseDeposit = (d) => {
     actualPaidAmount: amountApproved,
     creditedCoins: amountApproved || (status === 'approved' ? amountRequested : null),
     // Transfer proof
-    proofImage: d.transferImageUrl || d.proofImage || '',
+    proofImage,
     senderWalletNumber: d.transferredFromNumber || d.senderWalletNumber || '',
     // Timestamps
     createdAt: d.createdAt || d.date,
@@ -547,6 +553,11 @@ const productToBE = (fe) => {
     }
   }
 
+  // Provider product linkage (for publish-from-provider flow)
+  if (fe.providerProductId || fe.externalProductId) {
+    body.providerProductId = fe.providerProductId || fe.externalProductId;
+  }
+
   return body;
 };
 
@@ -657,7 +668,10 @@ const realApi = {
      */
     create: async (productData) => {
       const body = productToBE(productData);
-      const res = await http.post('/admin/products', body);
+      // Route to the correct endpoint based on provider linkage
+      const hasProvider = Boolean(body.providerProductId);
+      const url = hasProvider ? '/admin/products/from-provider' : '/admin/products';
+      const res = await http.post(url, body);
       return normaliseProduct(unwrap(res));
     },
 
@@ -705,16 +719,20 @@ const realApi = {
         ...pp,
         id: pp._id || pp.id,
         _id: undefined,
+        // Human-readable name for dropdowns — fallback chain
+        name: pp.translatedName || pp.rawName || pp.rawPayload?.product_name || pp.rawPayload?.product_name_translated || pp.externalProductId,
+        // Ensure rawPrice is populated even if sync stored 0
+        rawPrice: pp.rawPrice || pp.rawPayload?.product_price || 0,
       }));
     },
 
     /**
-     * GET /admin/providers/:providerId/products/:externalProductId/price
-     * Fetches live price from the provider's API for a specific product.
+     * GET /admin/provider-products/item/:providerProductId/price
+     * Fetches stored price data for a specific provider product.
      */
     getSyncedPrice: async (providerId, providerProductId) => {
       try {
-        const res = await http.get(`/admin/providers/${providerId}/products/${providerProductId}/price`);
+        const res = await http.get(`/admin/provider-products/item/${providerProductId}/price`);
         const data = unwrap(res);
         return {
           basePriceCoins: data?.rawPrice ?? 0,
@@ -1553,6 +1571,28 @@ const realApi = {
         id: l._id || l.id,
         _id: undefined,
       }));
+    },
+  },
+
+  // ── Wallet ────────────────────────────────────────────────────────────────
+  wallet: {
+    /**
+     * GET /wallet/stats — aggregated wallet stats for authenticated user.
+     * Returns: { totalDeposits, totalSpent, totalRefunds, netBalance, totalTransactions }
+     */
+    getStats: async () => {
+      const res = await http.get('/wallet/stats');
+      return unwrap(res);
+    },
+
+    /**
+     * GET /wallet/transactions — paginated transaction history for authenticated user.
+     * Returns array of { _id, type, amount, status, description, reference, createdAt, ... }
+     */
+    getTransactions: async ({ page = 1, limit = 50 } = {}) => {
+      const res = await http.get('/wallet/transactions', { params: { page, limit } });
+      const data = unwrap(res);
+      return Array.isArray(data) ? data : (data?.transactions || data?.data || []);
     },
   },
 };

@@ -76,7 +76,10 @@ const useAuthStore = create(
       // Re-fetch user profile from backend to bust persist cache
       refreshProfile: async () => {
         try {
-          const profile = await apiClient.auth.getProfile();
+          const currentUserId = get().user?.id;
+          if (!currentUserId) return;
+
+          const profile = await apiClient.auth.getProfile(currentUserId);
           // Merge new profile data with existing user state (preserve token, etc.)
           set((state) => ({
             user: { ...state.user, ...profile }

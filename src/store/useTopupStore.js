@@ -5,6 +5,7 @@ import apiClient from '../services/client';
 import useNotificationStore from './useNotificationStore';
 import useAuthStore from './useAuthStore';
 import useAdminStore from './useAdminStore';
+import { formatTime } from '../utils/intl';
 
 const useTopupStore = create(
   persist(
@@ -51,7 +52,7 @@ const useTopupStore = create(
           requestedCoins: requestedAmount,
           status: topupType === 'game_topup' ? 'approved' : 'pending', // Auto-approve game top-ups
           createdAt: new Date().toISOString(),
-          time: new Date().toLocaleTimeString(),
+          time: formatTime(new Date(), 'ar-EG'),
           method: isPayloadObject ? amountOrPayload.paymentChannel : method,
           paymentChannel: isPayloadObject ? amountOrPayload.paymentChannel : method,
           currencyCode: isPayloadObject ? amountOrPayload.currencyCode : 'USD',

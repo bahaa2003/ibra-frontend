@@ -107,8 +107,6 @@ const PaymentDetails = () => {
 
     setIsSubmitting(true);
     try {
-      console.log('UI Form Submitted', { formData, uploadedFile });
-
       const { user } = useAuthStore.getState();
       const { requestTopup } = useTopupStore.getState();
 
@@ -195,12 +193,12 @@ const PaymentDetails = () => {
           transition={{ duration: 0.5 }}
           className={isRTL ? 'text-right' : 'text-left'}
         >
-          <div className={`mb-2 flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${methodPresentation.color}`}>
+          <div className={`mb-2 flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${methodPresentation.color}`}>
               <span className="text-xs font-bold text-white">{methodPresentation.icon}</span>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{method.name}</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{method.name}</h1>
               <p className="text-gray-600 dark:text-gray-400">{methodInstructions}</p>
               {group?.name && (
                 <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-[var(--color-primary)]">
@@ -216,7 +214,7 @@ const PaymentDetails = () => {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="rounded-2xl border border-gray-200 bg-white/80 p-6 backdrop-blur-xl dark:border-gray-800 dark:bg-gray-900/70"
+            className="rounded-2xl border border-gray-200 bg-white/80 p-4 backdrop-blur-xl sm:p-6 dark:border-gray-800 dark:bg-gray-900/70"
           >
             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{t('payments.accountDetails')}</h3>
             <div className="rounded-lg border border-gray-200 bg-gray-50/90 p-4 dark:border-gray-800 dark:bg-gray-950/60">
@@ -226,12 +224,12 @@ const PaymentDetails = () => {
               <button
                 type="button"
                 onClick={handleCopyAccount}
-                className={`flex w-full items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2 font-mono text-gray-900 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-indigo-500/40 dark:hover:bg-gray-900 ${
-                  isRTL ? 'flex-row-reverse text-right' : 'text-left'
+                className={`flex w-full flex-col items-start gap-2 rounded border border-gray-200 bg-white px-3 py-2 font-mono text-gray-900 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 sm:flex-row sm:items-center sm:justify-between dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-indigo-500/40 dark:hover:bg-gray-900 ${
+                  isRTL ? 'text-right' : 'text-left'
                 }`}
               >
-                <span className="truncate">{method.accountNumber}</span>
-                <span className={`inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <span className="w-full break-all text-sm sm:w-auto sm:max-w-[70%] sm:truncate">{method.accountNumber}</span>
+                <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-300 ${isRTL ? 'flex-row-reverse self-end sm:self-auto' : ''}`}>
                   <Copy className="h-3.5 w-3.5" />
                   <span>{t('payments.copyAccount', { defaultValue: dir === 'rtl' ? 'نسخ الرقم' : 'Copy number' })}</span>
                 </span>
@@ -250,7 +248,7 @@ const PaymentDetails = () => {
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
           onSubmit={handleSubmit}
-          className="mb-8 rounded-2xl border border-gray-200 bg-white/82 p-6 backdrop-blur-xl dark:border-gray-800 dark:bg-gray-900/72"
+          className="mb-8 rounded-2xl border border-gray-200 bg-white/82 p-4 backdrop-blur-xl sm:p-6 dark:border-gray-800 dark:bg-gray-900/72"
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">{t('payments.paymentDetails')}</h3>
 

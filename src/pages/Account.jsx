@@ -364,9 +364,9 @@ const Account = () => {
   if (isInitialLoading) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
-        <div className="h-14 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
-        <div className="h-52 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
-        <div className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
+        <div className="h-14 animate-pulse rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)]" />
+        <div className="h-52 animate-pulse rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)]" />
+        <div className="h-64 animate-pulse rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)]" />
       </div>
     );
   }
@@ -378,14 +378,14 @@ const Account = () => {
       <motion.header
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-white/10 bg-gray-950/35 p-5 backdrop-blur-md"
+        className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5 shadow-[var(--shadow-subtle)] backdrop-blur-md"
       >
-        <h1 className="text-2xl font-bold text-white">{text.pageTitle}</h1>
-        <p className="mt-1 text-sm text-gray-300">{text.pageSubtitle}</p>
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">{text.pageTitle}</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{text.pageSubtitle}</p>
       </motion.header>
 
       {isDirty ? (
-        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
           {text.unsavedAlert}
         </div>
       ) : null}
@@ -394,10 +394,10 @@ const Account = () => {
         <div
           className={`rounded-xl border p-3 text-sm ${
             saveState.type === 'success'
-              ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+              ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
               : saveState.type === 'error'
-                ? 'border-rose-400/25 bg-rose-500/10 text-rose-200'
-                : 'border-white/10 bg-white/[0.04] text-gray-200'
+                ? 'border-rose-400/25 bg-rose-500/10 text-rose-800 dark:text-rose-200'
+                : 'border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.88)] text-[var(--color-text-secondary)]'
           }`}
         >
           {saveState.message}
@@ -405,10 +405,10 @@ const Account = () => {
       ) : null}
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="rounded-2xl border border-white/10 bg-gray-950/35 p-5">
+        <Card className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-white">
-              <UserCircle2 className="h-[18px] w-[18px] text-indigo-300" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--color-text)]">
+              <UserCircle2 className="h-[18px] w-[18px] text-[var(--color-primary)]" />
               {text.profileTitle}
             </h2>
             <Badge variant="success">{text.activeAccount}</Badge>
@@ -418,13 +418,13 @@ const Account = () => {
             <img
               src={displayedAvatar}
               alt={form.fullName || text.pageTitle}
-              className="h-20 w-20 rounded-full border border-white/15 object-cover"
+              className="h-20 w-20 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.88)] object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg font-semibold text-white">{form.fullName || '---'}</p>
-              <p className="truncate text-sm text-gray-300">{form.email || '---'}</p>
-              <p className="mt-2 text-xs text-gray-400">{text.imageHint}</p>
-              {errors.avatar ? <p className="mt-2 text-xs text-rose-300">{errors.avatar}</p> : null}
+              <p className="truncate text-lg font-semibold text-[var(--color-text)]">{form.fullName || '---'}</p>
+              <p className="truncate text-sm text-[var(--color-text-secondary)]">{form.email || '---'}</p>
+              <p className="mt-2 text-xs text-[var(--color-muted)]">{text.imageHint}</p>
+              {errors.avatar ? <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">{errors.avatar}</p> : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <input
@@ -450,9 +450,9 @@ const Account = () => {
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="rounded-2xl border border-white/10 bg-gray-950/35 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-white">
-            <User className="h-[18px] w-[18px] text-indigo-300" />
+        <Card className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-[var(--color-text)]">
+            <User className="h-[18px] w-[18px] text-[var(--color-primary)]" />
             {text.personalInfo}
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -475,10 +475,10 @@ const Account = () => {
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="rounded-2xl border border-white/10 bg-gray-950/35 p-5">
+        <Card className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-white">
-              <Mail className="h-[18px] w-[18px] text-indigo-300" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--color-text)]">
+              <Mail className="h-[18px] w-[18px] text-[var(--color-primary)]" />
               {text.contactInfo}
             </h2>
             <Badge variant={emailVerified ? 'success' : 'warning'}>
@@ -502,14 +502,14 @@ const Account = () => {
               placeholder={isEnglish ? '+1 555 123 4567' : '+20 100 123 4567'}
             />
           </div>
-          <p className="mt-3 text-xs text-gray-400">{text.email2faHint}</p>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">{text.email2faHint}</p>
         </Card>
       </motion.section>
 
       <motion.section ref={passwordSectionRef} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="rounded-2xl border border-white/10 bg-gray-950/35 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-white">
-            <KeyRound className="h-[18px] w-[18px] text-indigo-300" />
+        <Card className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-[var(--color-text)]">
+            <KeyRound className="h-[18px] w-[18px] text-[var(--color-primary)]" />
             {text.passwordCard}
           </h2>
 
@@ -520,14 +520,14 @@ const Account = () => {
               { key: 'confirm', label: text.confirmPassword, error: errors.confirmPassword }
             ].map((item) => (
               <div key={item.key}>
-                <label className="mb-1.5 block text-sm font-medium text-gray-300">{item.label}</label>
+                <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-secondary)]">{item.label}</label>
                 <div className="relative">
                   <input
                     type={showPassword[item.key] ? 'text' : 'password'}
                     value={passwordForm[item.key]}
                     onChange={(event) => setPasswordForm((prev) => ({ ...prev, [item.key]: event.target.value }))}
-                    className={`w-full rounded-lg border bg-white/5 px-3 py-2 text-sm text-white outline-none transition-colors focus:ring-2 focus:ring-indigo-500/40 ${
-                      item.error ? 'border-rose-400/80' : 'border-white/20 focus:border-indigo-400'
+                    className={`w-full rounded-lg border bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition-colors focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.16)] ${
+                      item.error ? 'border-rose-400/80' : 'border-[color:rgb(var(--color-border-rgb)/0.92)] focus:border-[color:rgb(var(--color-primary-rgb)/0.46)]'
                     }`}
                   />
                   <button
@@ -538,16 +538,16 @@ const Account = () => {
                         [item.key]: !prev[item.key]
                       }))
                     }
-                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-300 hover:text-white"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-muted)] hover:text-[var(--color-text)]"
                   >
                     {showPassword[item.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {item.error ? <p className="mt-1 text-xs text-rose-300">{item.error}</p> : null}
+                {item.error ? <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">{item.error}</p> : null}
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-gray-400">{text.passwordHint}</p>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">{text.passwordHint}</p>
         </Card>
       </motion.section>
 

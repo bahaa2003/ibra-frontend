@@ -145,10 +145,10 @@ const Settings = () => {
       <motion.header
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-white/10 bg-gray-950/35 p-5 backdrop-blur-md"
+        className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-5 shadow-[var(--shadow-subtle)] backdrop-blur-md"
       >
-        <h1 className="text-2xl font-bold text-white">{text.title}</h1>
-        <p className="mt-1 text-sm text-gray-300">{text.subtitle}</p>
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">{text.title}</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{text.subtitle}</p>
       </motion.header>
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -204,12 +204,12 @@ const Settings = () => {
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <SettingsSection icon={Globe} title={text.languageSection} description={text.languageSectionDescription}>
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-2">
+          <div className="overflow-hidden rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.7)] p-2">
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant={language === 'ar' ? 'primary' : 'ghost'}
-                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'ar' && 'text-gray-200 hover:bg-white/10')}
+                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'ar' && 'text-[var(--color-text-secondary)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]')}
                 onClick={() => setLanguage('ar')}
               >
                 {text.arabic}
@@ -217,7 +217,7 @@ const Settings = () => {
               <Button
                 type="button"
                 variant={language === 'en' ? 'primary' : 'ghost'}
-                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'en' && 'text-gray-200 hover:bg-white/10')}
+                className={cn('w-full motion-safe:hover:translate-y-0 active:scale-100', language !== 'en' && 'text-[var(--color-text-secondary)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]')}
                 onClick={() => setLanguage('en')}
               >
                 {text.english}
@@ -229,10 +229,10 @@ const Settings = () => {
 
       <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <SettingsSection icon={Palette} title={text.appearanceSection} description={text.appearanceSectionDescription}>
-          <div className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <div className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.7)] px-4 py-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white">{text.darkMode}</p>
-              <p className="mt-1 text-xs text-gray-300/85">{text.darkModeDescription}</p>
+              <p className="text-sm font-semibold text-[var(--color-text)]">{text.darkMode}</p>
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{text.darkModeDescription}</p>
             </div>
             <Switch checked={isDark} onChange={toggleTheme} />
           </div>
@@ -248,9 +248,9 @@ const Settings = () => {
           ].map((item) => (
             <div
               key={item.key}
-              className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+              className="flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-elevated-rgb)/0.7)] px-4 py-3"
             >
-              <p className="min-w-0 text-sm font-semibold text-white">{item.label}</p>
+              <p className="min-w-0 text-sm font-semibold text-[var(--color-text)]">{item.label}</p>
               <Switch
                 checked={Boolean(notifications[item.key])}
                 onChange={(checked) =>
