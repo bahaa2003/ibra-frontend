@@ -9,21 +9,14 @@ export const mockUsers = [
     email: 'admin@ibrastore.com',
     password: 'Password123',
     role: 'admin',
-<<<<<<< HEAD
     status: 'approved',
     signupMethod: 'email',
-=======
-    status: 'active',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     group: 'VIP',
     coins: 10000,
     country: 'US',
     currency: 'USD',
-<<<<<<< HEAD
     createdAt: '2026-01-03T09:00:00Z',
     approvedAt: '2026-01-03T09:05:00Z',
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     avatar: 'https://i.pravatar.cc/150?u=admin',
   },
   {
@@ -32,21 +25,14 @@ export const mockUsers = [
     email: 'john@example.com',
     password: 'Password123',
     role: 'customer',
-<<<<<<< HEAD
     status: 'approved',
     signupMethod: 'email',
-=======
-    status: 'active',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     group: 'Normal',
     coins: 5000,
     country: 'EG',
     currency: 'EGP',
-<<<<<<< HEAD
     createdAt: '2026-03-01T14:10:00Z',
     approvedAt: '2026-03-01T14:25:00Z',
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     avatar: 'https://i.pravatar.cc/150?u=john',
   },
   {
@@ -56,18 +42,12 @@ export const mockUsers = [
     password: 'Password123',
     role: 'customer',
     status: 'pending',
-<<<<<<< HEAD
     signupMethod: 'google',
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     group: 'Normal',
     coins: 0,
     country: 'UK',
     currency: 'GBP',
-<<<<<<< HEAD
     createdAt: '2026-03-16T11:35:00Z',
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     avatar: 'https://i.pravatar.cc/150?u=jane',
   },
   {
@@ -76,17 +56,12 @@ export const mockUsers = [
     email: 'manager@ibrastore.com',
     password: 'password123',
     role: 'manager',
-<<<<<<< HEAD
     status: 'approved',
     signupMethod: 'email',
-=======
-    status: 'active',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     group: 'Standard',
     coins: 0,
     country: 'AE',
     currency: 'USD',
-<<<<<<< HEAD
     createdAt: '2026-02-08T08:30:00Z',
     approvedAt: '2026-02-08T08:33:00Z',
     avatar: 'https://i.pravatar.cc/150?u=manager',
@@ -107,10 +82,6 @@ export const mockUsers = [
     rejectedAt: '2026-03-11T09:40:00Z',
     avatar: 'https://i.pravatar.cc/150?u=sara-google',
   },
-=======
-    avatar: 'https://i.pravatar.cc/150?u=manager',
-  },
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 ];
 
 export const mockCategories = [
@@ -358,7 +329,6 @@ export const mockOrders = [
   {
     id: 'o1',
     userId: 'u2',
-<<<<<<< HEAD
     userName: 'John Doe',
     userEmail: 'john@example.com',
     productId: 'p1',
@@ -366,12 +336,6 @@ export const mockOrders = [
     productNameAr: 'شدات ببجي موبايل',
     status: 'completed',
     createdAt: '2026-03-15T10:00:00Z',
-=======
-    productId: 'p1',
-    productName: 'PUBG Mobile UC',
-    status: 'completed',
-    createdAt: '2023-10-25T10:00:00Z',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     // Financial Snapshot - Fixed values at order time
     financialSnapshot: {
       originalCurrency: 'EGP',
@@ -402,7 +366,6 @@ export const mockOrders = [
     externalStatus: 'completed',
     supplierRequestSnapshot: { uid: '100200300', qty: 1, service: 'alpha-pubg-60' },
     supplierResponseSnapshot: { success: true, data: { orderId: 'FT-78451299', status: 'completed' } },
-<<<<<<< HEAD
     supplierLastSyncAt: '2026-03-15T10:10:00Z',
     providerReferenceMessage: 'Delivered',
     fulfillmentMode: 'auto',
@@ -525,12 +488,6 @@ export const mockOrders = [
     providerReferenceMessage: 'Provider rejected request due to invalid UID.',
     fulfillmentMode: 'auto',
   },
-=======
-    supplierLastSyncAt: '2023-10-25T10:10:00Z',
-    providerReferenceMessage: 'Delivered',
-    fulfillmentMode: 'auto',
-  },
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 ];
 
 export const mockTopups = [

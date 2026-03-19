@@ -3,7 +3,6 @@ import { persist } from 'zustand/middleware';
 import { mockGroups } from '../data/mockData';
 import apiClient from '../services/client';
 
-<<<<<<< HEAD
 const GROUPS_CACHE_TTL = 5 * 60 * 1000;
 let groupsRequest = null;
 
@@ -45,49 +44,26 @@ const useGroupStore = create(
           });
 
         return groupsRequest;
-=======
-const useGroupStore = create(
-  persist(
-    (set) => ({
-      groups: mockGroups,
-      loadGroups: async () => {
-        try {
-          const groups = await apiClient.groups.list();
-          set({ groups: Array.isArray(groups) ? groups : mockGroups });
-        } catch (_error) {
-          set({ groups: mockGroups });
-        }
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       },
       addGroup: async (group) => {
         const created = await apiClient.groups.create(group);
         set((state) => ({
-<<<<<<< HEAD
           groups: [...state.groups, created || { ...group, id: Date.now() }],
           groupsLastLoadedAt: Date.now(),
-=======
-          groups: [...state.groups, created || { ...group, id: Date.now() }]
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
       },
       updateGroup: async (id, updatedGroup) => {
         await apiClient.groups.update(id, updatedGroup);
         set((state) => ({
           groups: state.groups.map((g) => (g.id === id ? { ...g, ...updatedGroup } : g)),
-<<<<<<< HEAD
           groupsLastLoadedAt: Date.now(),
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
       },
       deleteGroup: async (id) => {
         await apiClient.groups.delete(id);
         set((state) => ({
           groups: state.groups.filter((g) => g.id !== id),
-<<<<<<< HEAD
           groupsLastLoadedAt: Date.now(),
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
       },
     }),

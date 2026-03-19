@@ -183,19 +183,12 @@ const AdminCurrencies = () => {
   };
 
   return (
-<<<<<<< HEAD
     <div className="min-w-0 space-y-6">
       <section className="admin-premium-hero">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة العملات</h1>
       </section>
 
       <Card className="admin-premium-panel p-5">
-=======
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة العملات</h1>
-
-      <Card className="p-5">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -264,11 +257,7 @@ const AdminCurrencies = () => {
         </form>
       </Card>
 
-<<<<<<< HEAD
       <Card className="admin-premium-panel p-5">
-=======
-      <Card className="p-5">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <Table>
           <TableHeader>
             <TableRow>

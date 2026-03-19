@@ -1,11 +1,5 @@
-<<<<<<< HEAD
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-=======
-import React, { useEffect, useMemo } from 'react';
-import { ArrowRight } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
@@ -29,10 +23,7 @@ const Dashboard = () => {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const language = getStorefrontLanguage(i18n);
-<<<<<<< HEAD
-=======
   const isRTL = language === 'ar';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   useEffect(() => {
     if (refreshProfile) {
@@ -95,7 +86,6 @@ const Dashboard = () => {
     [language]
   );
 
-<<<<<<< HEAD
   const handleCategorySelect = useCallback((categoryId) => {
     navigate(categoryId === 'all' ? '/products' : `/products?category=${encodeURIComponent(categoryId)}`);
   }, [navigate]);
@@ -108,15 +98,6 @@ const Dashboard = () => {
     next.set('request', product.id);
     navigate(`/products?${next.toString()}`);
   }, [navigate]);
-=======
-  const handleCategorySelect = (categoryId) => {
-    navigate(categoryId === 'all' ? '/products' : `/products?category=${encodeURIComponent(categoryId)}`);
-  };
-
-  const handleProductSelect = (product) => {
-    navigate(`/products?category=${encodeURIComponent(product.category)}&product=${encodeURIComponent(product.id)}`);
-  };
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   return (
     <div className="space-y-6 pb-4">
@@ -132,20 +113,14 @@ const Dashboard = () => {
       </section>
 
       <section id="categories" className="scroll-mt-28 space-y-4">
-<<<<<<< HEAD
         <div className="premium-card w-full max-w-[360px] p-2 sm:max-w-[460px] sm:p-2.5">
           <div className="relative z-40">
-=======
-        <div className="premium-card p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <ProductSearchBar
               products={storefrontProducts}
               language={language}
               onSelectProduct={handleProductSelect}
               placeholder={language === 'ar' ? 'ابحث عن منتج وسيظهر مباشرة أسفل البحث...' : 'Search for a product and get direct matches...'}
               noResultsLabel={language === 'ar' ? 'لا يوجد منتج مطابق' : 'No matching product found'}
-<<<<<<< HEAD
               className="w-full"
               inputClassName="h-9 rounded-xl text-xs shadow-none sm:h-10 sm:text-sm"
             />
@@ -153,22 +128,6 @@ const Dashboard = () => {
         </div>
 
         <div className="relative z-0 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-=======
-              className="flex-1"
-            />
-
-            <Link
-              to="/products"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.2)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-4 text-sm font-medium text-[var(--color-text)] transition-all hover:-translate-y-0.5 hover:border-[color:rgb(var(--color-primary-rgb)/0.36)] hover:text-[var(--color-primary-hover)]"
-            >
-              {language === 'ar' ? 'كل الكاتلوجات' : 'All catalogs'}
-              <ArrowRight className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           {visibleHomepageCategories.map((category, index) => (
             <CategoryCard
               key={category.id}
@@ -182,17 +141,10 @@ const Dashboard = () => {
       </section>
 
       <StoreFooter
-<<<<<<< HEAD
         title={language === 'ar' ? 'تجربة تسوق رقمية أوضح' : 'A clearer digital shopping experience'}
         description={language === 'ar'
           ? 'أعدنا تنظيم الصفحة الرئيسية لتمنحك تنقلًا أسرع وقراءة أوضح، مع الحفاظ على الهوية الذهبية المميزة لـ IBRA.'
           : 'The homepage is now organized for faster navigation, clearer scanning, and better mobile comfort while keeping IBRA’s signature gold identity.'}
-=======
-        title={language === 'ar' ? 'واجهة تجارة رقمية فاخرة' : 'A premium digital commerce experience'}
-        description={language === 'ar'
-          ? 'تمت إعادة ترتيب الصفحة الرئيسية لتكون أكثر أناقة، أسرع في التصفح، وأكثر راحة على الهاتف مع الحفاظ على الهوية الذهبية لـ IBRA.'
-          : 'The homepage now prioritizes cleaner hierarchy, stronger luxury presence, and better mobile ergonomics while staying aligned with IBRA\'s gold identity.'}
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         chips={[
           { label: language === 'ar' ? 'المحفظة' : 'Wallet', to: '/wallet' },
           { label: language === 'ar' ? 'المنتجات' : 'Products', to: '/products' },

@@ -7,12 +7,9 @@ import useAuthStore from './useAuthStore';
 import useAdminStore from './useAdminStore';
 import { formatTime } from '../utils/intl';
 
-<<<<<<< HEAD
 const TOPUPS_CACHE_TTL = 60 * 1000;
 let topupsRequest = null;
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const useTopupStore = create(
   persist(
     (set, get) => ({
@@ -30,7 +27,6 @@ const useTopupStore = create(
       // This prevents dynamic recalculation when exchange rates change later.
       // =====================================================================================
       topups: mockTopups,
-<<<<<<< HEAD
       topupsLastLoadedAt: 0,
 
       loadTopups: async ({ force = false } = {}) => {
@@ -66,16 +62,6 @@ const useTopupStore = create(
           });
 
         return topupsRequest;
-=======
-
-      loadTopups: async () => {
-        try {
-          const topups = await apiClient.topups.list();
-          set({ topups: Array.isArray(topups) ? topups : mockTopups });
-        } catch (_error) {
-          set({ topups: mockTopups });
-        }
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       },
 
       requestTopup: async (amountOrPayload, method, userId, userName) => {
@@ -138,12 +124,8 @@ const useTopupStore = create(
         const created = await apiClient.topups.create(newTopup);
         const finalTopup = created || newTopup;
         set(state => ({
-<<<<<<< HEAD
           topups: [finalTopup, ...state.topups],
           topupsLastLoadedAt: Date.now(),
-=======
-          topups: [finalTopup, ...state.topups]
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
 
         // Auto-credit coins for game top-ups
@@ -219,12 +201,8 @@ const useTopupStore = create(
         const finalUpdate = updated || updatedTopup;
 
         set(state => ({
-<<<<<<< HEAD
           topups: state.topups.map(t => t.id === id ? finalUpdate : t),
           topupsLastLoadedAt: Date.now(),
-=======
-          topups: state.topups.map(t => t.id === id ? finalUpdate : t)
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
 
         const requestedAmount = Number(finalUpdate?.requestedAmount ?? finalUpdate?.requestedCoins ?? target?.requestedAmount ?? target?.requestedCoins ?? 0);
@@ -251,10 +229,7 @@ const useTopupStore = create(
         const updated = await apiClient.topups.updateRequest(id, payload);
         set((state) => ({
           topups: state.topups.map((item) => (item.id === id ? { ...item, ...updated } : item)),
-<<<<<<< HEAD
           topupsLastLoadedAt: Date.now(),
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
 
         const requestedAmount = Number(updated?.requestedAmount ?? updated?.requestedCoins ?? updated?.amount ?? 0);

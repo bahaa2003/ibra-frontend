@@ -1,11 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-<<<<<<< HEAD
 import { Building2, Eye, EyeOff, ImagePlus, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { resolveImageUrl } from '../../utils/imageUrl';
 import { uploadImage } from '../../services/realApi';
-=======
-import { Building2, Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import Button from '../../components/ui/Button';
 import Input, { selectClassName, textareaClassName } from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
@@ -31,7 +27,6 @@ const defaultMethodForm = {
   name: '',
   description: '',
   type: 'mobile_wallet',
-<<<<<<< HEAD
   feePercent: '0',
   accountNumber: '',
   bankName: '',
@@ -59,14 +54,6 @@ const getMethodBadge = (method) => {
   return 'PAY';
 };
 
-=======
-  accountNumber: '',
-  bankName: '',
-  instructions: '',
-  isActive: true,
-};
-
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const AdminPaymentMethods = () => {
   const { user } = useAuthStore();
   const { paymentSettings, loadPaymentSettings, savePaymentSettings } = useSystemStore();
@@ -222,24 +209,17 @@ const AdminPaymentMethods = () => {
       name: method.name,
       description: method.description || '',
       type: method.type,
-<<<<<<< HEAD
       feePercent: String(method.feePercent ?? 0),
       accountNumber: method.accountNumber || '',
       bankName: method.bankName || '',
       instructions: method.instructions || '',
       image: method.image || '',
       imageName: method.imageName || '',
-=======
-      accountNumber: method.accountNumber || '',
-      bankName: method.bankName || '',
-      instructions: method.instructions || '',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       isActive: method.isActive !== false,
     });
     setMethodModalOpen(true);
   };
 
-<<<<<<< HEAD
   const handleMethodImageChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -278,8 +258,6 @@ const AdminPaymentMethods = () => {
     }));
   };
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const handleSaveMethod = async (event) => {
     event.preventDefault();
 
@@ -314,18 +292,12 @@ const AdminPaymentMethods = () => {
       name: methodForm.name,
       description: methodForm.description,
       type: methodForm.type,
-<<<<<<< HEAD
       feePercent: methodForm.feePercent,
       accountNumber: methodForm.accountNumber,
       bankName: methodForm.bankName,
       instructions: methodForm.instructions,
       image: methodForm.image,
       imageName: methodForm.imageName,
-=======
-      accountNumber: methodForm.accountNumber,
-      bankName: methodForm.bankName,
-      instructions: methodForm.instructions,
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       isActive: methodForm.isActive,
     });
 
@@ -383,11 +355,7 @@ const AdminPaymentMethods = () => {
 
   return (
     <div className="min-w-0 space-y-6">
-<<<<<<< HEAD
       <header className="admin-premium-hero space-y-2">
-=======
-      <header className="space-y-2">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <h1 className="text-3xl font-bold text-[var(--color-text)]">
           {tx('إدارة مجموعات وطرق الدفع', 'Payment Groups & Methods')}
         </h1>
@@ -416,11 +384,7 @@ const AdminPaymentMethods = () => {
         ].map((card) => (
           <div
             key={card.label}
-<<<<<<< HEAD
             className="admin-premium-stat p-5"
-=======
-            className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.92)] p-5 shadow-[var(--shadow-subtle)]"
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           >
             <p className="text-sm text-[var(--color-text-secondary)]">{card.label}</p>
             <p className="mt-3 text-3xl font-bold text-[var(--color-text)]">{formatNumber(card.value, isEnglish ? 'en-US' : 'ar-EG')}</p>
@@ -439,11 +403,7 @@ const AdminPaymentMethods = () => {
         {paymentGroups.map((group) => (
           <section
             key={group.id}
-<<<<<<< HEAD
             className="admin-premium-panel min-w-0 p-4 sm:p-5"
-=======
-            className="min-w-0 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-4 shadow-[var(--shadow-subtle)] sm:p-5"
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           >
             <div className={`flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between ${isRTL ? 'lg:flex-row-reverse' : ''}`}>
               <div className={`flex min-w-0 items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -496,7 +456,6 @@ const AdminPaymentMethods = () => {
                   className="min-w-0 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-surface-rgb)/0.8)] p-4"
                 >
                   <div className={`flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-<<<<<<< HEAD
                     <div className={`flex min-w-0 gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
                       {method.image ? (
                         <img
@@ -530,24 +489,6 @@ const AdminPaymentMethods = () => {
                           {getMethodTypeLabel(method.type)}
                         </p>
                       </div>
-=======
-                    <div className="min-w-0">
-                      <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                        <h3 className="truncate font-semibold text-[var(--color-text)]">{method.name}</h3>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                            method.isActive !== false
-                              ? 'bg-[color:rgb(var(--color-success-rgb)/0.12)] text-[var(--color-success)]'
-                              : 'bg-[color:rgb(var(--color-error-rgb)/0.12)] text-[var(--color-error)]'
-                          }`}
-                        >
-                          {method.isActive !== false ? tx('نشطة', 'Active') : tx('معطلة', 'Disabled')}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                        {method.description || getMethodTypeLabel(method.type)}
-                      </p>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                     </div>
 
                     <div className={`flex shrink-0 flex-wrap gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -565,21 +506,12 @@ const AdminPaymentMethods = () => {
 
                   <div className="mt-4 space-y-2 break-words text-sm text-[var(--color-text-secondary)]">
                     <p>
-<<<<<<< HEAD
                       <span className="font-medium text-[var(--color-text)]">{tx('رقم الحساب:', 'Account:')}</span>{' '}
                       <span className="break-all">{method.accountNumber || tx('غير محدد', 'Not set')}</span>
                     </p>
                     <p>
                       <span className="font-medium text-[var(--color-text)]">{tx('رسوم الطريقة:', 'Method fee:')}</span>{' '}
                       {`${formatNumber(Number(method.feePercent || 0), isEnglish ? 'en-US' : 'ar-EG')}%`}
-=======
-                      <span className="font-medium text-[var(--color-text)]">{tx('النوع:', 'Type:')}</span>{' '}
-                      {getMethodTypeLabel(method.type)}
-                    </p>
-                    <p>
-                      <span className="font-medium text-[var(--color-text)]">{tx('رقم الحساب:', 'Account:')}</span>{' '}
-                      <span className="break-all">{method.accountNumber || tx('غير محدد', 'Not set')}</span>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                     </p>
                     {method.bankName && (
                       <p>
@@ -593,15 +525,12 @@ const AdminPaymentMethods = () => {
                         {method.instructions}
                       </p>
                     )}
-<<<<<<< HEAD
                     {method.imageName && (
                       <p>
                         <span className="font-medium text-[var(--color-text)]">{tx('اسم الصورة:', 'Image name:')}</span>{' '}
                         {method.imageName}
                       </p>
                     )}
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   </div>
                 </div>
               ))}
@@ -736,7 +665,6 @@ const AdminPaymentMethods = () => {
           </div>
 
           <Input
-<<<<<<< HEAD
             label={tx('نسبة رسوم الطريقة (%)', 'Method Fee Percentage (%)')}
             value={methodForm.feePercent}
             onChange={(event) => setMethodForm((prev) => ({ ...prev, feePercent: event.target.value }))}
@@ -748,8 +676,6 @@ const AdminPaymentMethods = () => {
           />
 
           <Input
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             label={tx('رقم الحساب أو المحفظة', 'Account or Wallet Number')}
             value={methodForm.accountNumber}
             onChange={(event) => setMethodForm((prev) => ({ ...prev, accountNumber: event.target.value }))}
@@ -775,7 +701,6 @@ const AdminPaymentMethods = () => {
             />
           </div>
 
-<<<<<<< HEAD
           <div className="space-y-3 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-surface-rgb)/0.75)] p-4">
             <div className={`flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
               <div className="min-w-0">
@@ -818,8 +743,6 @@ const AdminPaymentMethods = () => {
             ) : null}
           </div>
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           <label className={`flex items-center gap-3 text-sm text-[var(--color-text)] ${isRTL ? 'flex-row-reverse' : ''}`}>
             <input
               type="checkbox"

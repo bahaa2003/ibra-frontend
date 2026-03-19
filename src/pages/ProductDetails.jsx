@@ -26,11 +26,7 @@ const ProductDetails = () => {
       if (product.category) {
         next.set('category', product.category);
       }
-<<<<<<< HEAD
       next.set('request', product.id);
-=======
-      next.set('product', product.id);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       navigate(`/products?${next.toString()}`, { replace: true });
       return;
     }

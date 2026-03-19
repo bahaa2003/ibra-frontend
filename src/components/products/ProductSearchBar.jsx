@@ -1,9 +1,5 @@
-<<<<<<< HEAD
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-=======
-import React, { useDeferredValue, useMemo, useState } from 'react';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { SearchX } from 'lucide-react';
 import SearchBar from '../ui/SearchBar';
 import { cn } from '../ui/Button';
@@ -20,20 +16,14 @@ const ProductSearchBar = ({
   maxResults = 6,
   noResultsLabel,
   inputClassName,
-<<<<<<< HEAD
   resetSignal = 0,
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 }) => {
   const isControlled = typeof value === 'string';
   const [internalValue, setInternalValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-<<<<<<< HEAD
   const [dropdownLayout, setDropdownLayout] = useState(null);
   const rootRef = useRef(null);
   const layoutFrameRef = useRef(0);
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const searchValue = isControlled ? value : internalValue;
   const deferredQuery = useDeferredValue(searchValue);
   const normalizedQuery = sanitizeStorefrontQuery(deferredQuery);
@@ -76,7 +66,6 @@ const ProductSearchBar = ({
 
   const showDropdown = isFocused && Boolean(normalizedQuery);
 
-<<<<<<< HEAD
   const syncDropdownLayout = () => {
     if (!rootRef.current) return;
 
@@ -131,10 +120,6 @@ const ProductSearchBar = ({
 
   return (
     <div ref={rootRef} className={cn('relative w-full', className)}>
-=======
-  return (
-    <div className={cn('relative w-full', className)}>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       <SearchBar
         value={searchValue}
         onChange={updateValue}
@@ -147,7 +132,6 @@ const ProductSearchBar = ({
           }
         }}
         placeholder={placeholder}
-<<<<<<< HEAD
         className={className}
         inputClassName={inputClassName}
       />
@@ -157,13 +141,6 @@ const ProductSearchBar = ({
           style={dropdownLayout || undefined}
           className="fixed z-[140] overflow-hidden rounded-[1.4rem] border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.98)] shadow-[0_30px_70px_-34px_rgba(15,23,42,0.55)] backdrop-blur-xl"
         >
-=======
-        className={inputClassName}
-      />
-
-      {showDropdown && (
-        <div className="absolute inset-x-0 bottom-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-[1.4rem] border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.98)] shadow-[0_30px_70px_-34px_rgba(15,23,42,0.55)] backdrop-blur-xl">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           {results.length > 0 ? (
             <div className="max-h-[21rem] overflow-y-auto py-2">
               {results.map((product) => (
@@ -182,10 +159,7 @@ const ProductSearchBar = ({
                       alt={product.displayName}
                       loading="lazy"
                       decoding="async"
-<<<<<<< HEAD
                       sizes="56px"
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                       className="h-full w-full object-cover"
                     />
                   </div>
@@ -205,19 +179,11 @@ const ProductSearchBar = ({
               <p>{noResultsLabel || (isArabic ? 'لا توجد منتجات مطابقة' : 'No matching products found')}</p>
             </div>
           )}
-<<<<<<< HEAD
         </div>,
         document.body
-=======
-        </div>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       )}
     </div>
   );
 };
 
-<<<<<<< HEAD
 export default React.memo(ProductSearchBar);
-=======
-export default ProductSearchBar;
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

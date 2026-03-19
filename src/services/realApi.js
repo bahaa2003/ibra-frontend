@@ -11,18 +11,12 @@
  */
 
 import axios from 'axios';
-<<<<<<< HEAD
 import { devLogger } from '../utils/devLogger';
 
 // ─── Axios instance ──────────────────────────────────────────────────────────
 
 import { resolveImageUrl } from '../utils/imageUrl';
 
-=======
-
-// ─── Axios instance ──────────────────────────────────────────────────────────
-
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const http = axios.create({
@@ -33,7 +27,6 @@ const http = axios.create({
 
 // ─── Token helpers ───────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 const AUTH_STORAGE_KEY = 'auth-storage';
 const SESSION_LOGOUT_REASON_KEY = 'auth:logout-reason';
 const SESSION_EXPIRED_REASON = 'expired';
@@ -214,26 +207,6 @@ const flushRefreshQueue = (error, token) => {
     };
     resolve(http(request));
   });
-=======
-const getStoredToken = () => {
-  try {
-    const raw = localStorage.getItem('auth-storage');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.token || null;
-  } catch {
-    return null;
-  }
-};
-
-const setStoredToken = (token) => {
-  try {
-    const raw = localStorage.getItem('auth-storage');
-    const parsed = raw ? JSON.parse(raw) : { state: {} };
-    parsed.state = { ...parsed.state, token };
-    localStorage.setItem('auth-storage', JSON.stringify(parsed));
-  } catch { /* ignore */ }
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 };
 
 // ─── Request interceptor: attach JWT ─────────────────────────────────────────
@@ -250,7 +223,6 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response,
-<<<<<<< HEAD
   async (error) => {
     const originalRequest = error?.config || {};
     const unauthorized = isTokenAuthError(error);
@@ -299,18 +271,6 @@ http.interceptors.response.use(
     }
 
     return Promise.reject(wrapHttpError(error));
-=======
-  (error) => {
-    const msg =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      'Network error';
-    const wrapped = new Error(msg);
-    wrapped.status = error.response?.status;
-    wrapped.code = error.response?.data?.code;
-    return Promise.reject(wrapped);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   }
 );
 
@@ -347,11 +307,8 @@ const normaliseUser = (u) => {
     role: (u.role || 'customer').toLowerCase(),
     // FE expects lowercase status strings
     status: (u.status || 'pending').toLowerCase(),
-<<<<<<< HEAD
     signupMethod: (u.signupMethod || u.authProvider || u.provider || u.signupProvider || 'email').toLowerCase(),
     authProvider: (u.authProvider || u.signupMethod || u.provider || 'email').toLowerCase(),
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     // FE uses "coins" for wallet balance
     coins: u.walletBalance ?? u.coins ?? 0,
     // Flattened group fields — never pass an object to React
@@ -362,16 +319,11 @@ const normaliseUser = (u) => {
     currency,
     // joinDate aliasing
     joinDate: u.joinDate || u.createdAt,
-<<<<<<< HEAD
     createdAt: u.createdAt || u.joinDate || u.registeredAt || null,
     approvedAt: u.approvedAt || u.activatedAt || null,
     rejectedAt: u.rejectedAt || u.deniedAt || null,
     // ensure avatar — resolve relative paths and fallback
     avatar: resolveImageUrl(u.avatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=random`,
-=======
-    // ensure avatar
-    avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'User')}&background=random`,
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   };
 };
 
@@ -537,13 +489,7 @@ const normaliseDeposit = (d) => {
 
   // Resolve proof image URL — prepend server origin for relative paths (e.g. /uploads/deposits/...)
   const rawProof = d.transferImageUrl || d.proofImage || '';
-<<<<<<< HEAD
   const proofImage = resolveImageUrl(rawProof);
-=======
-  const proofImage = rawProof && rawProof.startsWith('/') && !rawProof.startsWith('//')
-    ? `${API_BASE.replace(/\/api\/?$/, '')}${rawProof}`
-    : rawProof;
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   return {
     ...d,
@@ -624,12 +570,9 @@ const normaliseProvider = (p) => {
     enableAutoFulfillment: (p.supportedFeatures || []).includes('placeOrder'),
     enableStatusSync: (p.supportedFeatures || []).includes('checkOrder'),
     enableProductSync: (p.supportedFeatures || []).includes('fetchProducts'),
-<<<<<<< HEAD
     linkedProductsCount: p.linkedProductsCount ?? p.productsCount ?? p.catalogProductsCount ?? 0,
     syncedProductsCount: p.syncedProductsCount ?? p.productsCount ?? p.catalogProductsCount ?? 0,
     lastProductSyncAt: p.lastProductSyncAt || p.productsSyncedAt || p.catalogSyncedAt || null,
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     // Connection test — always 'not_tested' from BE (no endpoint)
     lastConnectionTestStatus: p.lastConnectionTestStatus || 'not_tested',
     lastConnectionTestAt: p.lastConnectionTestAt || null,
@@ -850,16 +793,10 @@ const realApi = {
       const res = await http.post('/auth/login', { email, password });
       const data = unwrap(res);
       const user = normaliseUser(data.user);
-<<<<<<< HEAD
       const token = data.token || data.accessToken || null;
       const refreshToken = data.refreshToken ?? null;
       // Persist tokens for subsequent requests
       setStoredAuthTokens(token, refreshToken);
-=======
-      const token = data.token;
-      // Persist token for subsequent requests
-      setStoredToken(token);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return { user, token };
     },
 
@@ -877,11 +814,7 @@ const realApi = {
         return new Promise(() => { });
       }
       // Token captured from callback redirect — fetch profile
-<<<<<<< HEAD
       setStoredAuthTokens(token, null);
-=======
-      setStoredToken(token);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       const res = await http.get('/users/me');
       const user = normaliseUser(unwrap(res));
       return { user, token };
@@ -921,11 +854,7 @@ const realApi = {
       const res = await http.get(endpoint);
       const data = unwrap(res);
       const products = Array.isArray(data) ? data : (data?.products || []);
-<<<<<<< HEAD
       return (Array.isArray(products) ? products : []).map(normaliseProduct);
-=======
-      return products.map(normaliseProduct);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     },
 
     /**
@@ -953,12 +882,8 @@ const realApi = {
       const hasProvider = Boolean(body.providerProductId);
       const url = hasProvider ? '/admin/products/from-provider' : '/admin/products';
       const res = await http.post(url, body);
-<<<<<<< HEAD
       const createdProduct = normaliseProduct(unwrap(res));
       return createdProduct;
-=======
-      return normaliseProduct(unwrap(res));
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     },
 
     /**
@@ -969,7 +894,6 @@ const realApi = {
     update: async (id, updates) => {
       const body = productToBE(updates);
       const res = await http.patch(`/admin/products/${id}`, body);
-<<<<<<< HEAD
       const updatedProduct = normaliseProduct(unwrap(res));
       return updatedProduct;
     },
@@ -979,17 +903,6 @@ const realApi = {
      */
     delete: async (id) => {
       await http.delete(`/admin/products/${id}`);
-=======
-      return normaliseProduct(unwrap(res));
-    },
-
-    /**
-     * "Delete" — BE uses toggle-status (no hard delete).
-     * Admin catalog: PATCH /admin/products/:id/toggle
-     */
-    delete: async (id) => {
-      await http.patch(`/admin/products/${id}/toggle`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return { success: true };
     },
 
@@ -1039,11 +952,7 @@ const realApi = {
           provider: data?.provider || '',
         };
       } catch (err) {
-<<<<<<< HEAD
         devLogger.warnUnlessBenign('[realApi] getSyncedPrice failed:', err);
-=======
-        console.warn('[realApi] getSyncedPrice failed:', err.message);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         return { basePriceCoins: 0, found: false };
       }
     },
@@ -1192,16 +1101,10 @@ const realApi = {
 
     /**
      * POST /admin/catalog/sync/:providerId → triggers product sync from provider
-<<<<<<< HEAD
      * Extended timeout (5 min) because sync can insert thousands of records.
      */
     syncProducts: async (id, _actorContext) => {
       const res = await http.post(`/admin/catalog/sync/${id}`, {}, { timeout: 300_000 });
-=======
-     */
-    syncProducts: async (id, _actorContext) => {
-      const res = await http.post(`/admin/catalog/sync/${id}`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       const data = unwrap(res);
       return Array.isArray(data) ? data : (data?.products || data?.synced || []);
     },
@@ -1216,22 +1119,15 @@ const realApi = {
 
     /**
      * GET /admin/providers/:id/products → live provider product list
-<<<<<<< HEAD
      * Extended timeout (5 min) because fetching from external APIs can be slow.
      */
     getLiveProducts: async (id) => {
       const res = await http.get(`/admin/providers/${id}/products`, { timeout: 300_000 });
-=======
-     */
-    getLiveProducts: async (id) => {
-      const res = await http.get(`/admin/providers/${id}/products`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       const data = unwrap(res);
       return Array.isArray(data) ? data : (data?.products || []);
     },
 
     /**
-<<<<<<< HEAD
      * GET /admin/providers/:id/check-order?orderId=123 → check order status via provider adapter
      */
     checkOrder: async (id, orderId) => {
@@ -1240,8 +1136,6 @@ const realApi = {
     },
 
     /**
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
      * DELETE /admin/providers/:id → soft delete (sets deletedAt + isActive=false)
      */
     delete: async (id, _actorContext) => {
@@ -1344,7 +1238,6 @@ const realApi = {
     },
 
     /**
-<<<<<<< HEAD
      * Update user's avatar via file upload.
      * Self-service: PATCH /users/me/avatar
      * Admin:        PATCH /admin/users/:id/avatar
@@ -1366,19 +1259,11 @@ const realApi = {
 
       // No file = remove avatar
       const res = await http.patch(url, {});
-=======
-     * PATCH /admin/users/:id/avatar → update user's avatar URL.
-     * BE Joi: { avatar: string (URL) | null }
-     */
-    updateAvatar: async (userId, avatar, _actorContext) => {
-      const res = await http.patch(`/admin/users/${userId}/avatar`, { avatar: avatar || null });
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return normaliseUser(unwrap(res)?.user || unwrap(res));
     },
 
     /**
      * Update user profile fields.
-<<<<<<< HEAD
      * Self-service: PATCH /users/me
      * Admin:        PATCH /admin/users/:id
      */
@@ -1396,20 +1281,6 @@ const realApi = {
       const isSelf = actorContext?.id === userId;
       const url = isSelf ? '/users/me' : `/admin/users/${userId}`;
       const res = await http.patch(url, body);
-=======
-     *
-     * BE Joi accepts: { name, email, groupId, status, verified }
-     * We only send the fields that are in the BE schema.
-     */
-    updateProfile: async (userId, updates, _actorContext) => {
-      const body = {};
-      if (updates.name !== undefined) body.name = updates.name;
-      if (updates.email !== undefined) body.email = updates.email;
-      // Only include fields the BE schema allows
-      if (updates.groupId !== undefined) body.groupId = updates.groupId;
-      if (updates.verified !== undefined) body.verified = updates.verified;
-      const res = await http.patch(`/admin/users/${userId}`, body);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return normaliseUser(unwrap(res)?.user || unwrap(res));
     },
 
@@ -1429,28 +1300,16 @@ const realApi = {
      * Generates a secure temporary password, sends to BE which bcrypt-hashes it.
      * Returns the user + temporary password for the admin to communicate to the user.
      */
-<<<<<<< HEAD
     resetPassword: async (userId, _actorContext, nextPassword = '') => {
       const explicitPassword = String(nextPassword || '').trim();
       const selectedPassword = explicitPassword || Array.from(
-=======
-    resetPassword: async (userId, _actorContext) => {
-      // Generate a temporary password (12 chars, alphanumeric)
-      const tempPassword = Array.from(
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         { length: 12 },
         () => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 54)]
       ).join('');
 
-<<<<<<< HEAD
       const res = await http.post(`/admin/users/${userId}/reset-password`, { password: selectedPassword });
       const user = normaliseUser(unwrap(res)?.user || unwrap(res));
       return { user, temporaryPassword: selectedPassword };
-=======
-      const res = await http.post(`/admin/users/${userId}/reset-password`, { password: tempPassword });
-      const user = normaliseUser(unwrap(res)?.user || unwrap(res));
-      return { user, temporaryPassword: tempPassword };
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     },
   },
 
@@ -1492,7 +1351,6 @@ const realApi = {
     },
   },
 
-<<<<<<< HEAD
   // ── Admin Dashboard Stats ────────────────────────────────────────────────
   dashboard: {
     /**
@@ -1505,8 +1363,6 @@ const realApi = {
     },
   },
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   // ── Orders ───────────────────────────────────────────────────────────────
   orders: {
     /**
@@ -1568,7 +1424,6 @@ const realApi = {
       }
 
       if (['processing', 'retry', 'pending'].includes(normalised)) {
-<<<<<<< HEAD
         // Retry action: re-submits FAILED order to provider.
         // Manual orders may not support retry, so we gracefully fall back to complete.
         try {
@@ -1576,10 +1431,6 @@ const realApi = {
         } catch (_error) {
           res = await http.post(`/admin/orders/${orderId}/complete`);
         }
-=======
-        // Retry action: re-submits FAILED order to provider
-        res = await http.post(`/admin/orders/${orderId}/retry`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         return normaliseOrder(unwrap(res)?.order || unwrap(res));
       }
 
@@ -1590,11 +1441,7 @@ const realApi = {
       }
 
       // Unknown status — fallback to retry
-<<<<<<< HEAD
       devLogger.warn(`[realApi] updateStatus: Unknown status '${status}' - attempting retry.`);
-=======
-      console.warn(`[realApi] updateStatus: Unknown status '${status}' — attempting retry.`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       res = await http.post(`/admin/orders/${orderId}/retry`);
       return normaliseOrder(unwrap(res)?.order || unwrap(res));
     },
@@ -1608,11 +1455,7 @@ const realApi = {
         const res = await http.post(`/admin/orders/${orderId}/sync-status`);
         return normaliseOrder(unwrap(res)?.order || unwrap(res));
       } catch (err) {
-<<<<<<< HEAD
         devLogger.warnUnlessBenign('[realApi] syncSupplierStatus failed:', err);
-=======
-        console.warn('[realApi] syncSupplierStatus failed:', err?.response?.data?.message || err.message);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         return null;
       }
     },
@@ -1712,11 +1555,7 @@ const realApi = {
       }
 
       // Unknown status
-<<<<<<< HEAD
       devLogger.warn(`[realApi] topups.updateStatus: Unknown status '${status}'.`);
-=======
-      console.warn(`[realApi] topups.updateStatus: Unknown status '${status}'.`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return null;
     },
 
@@ -1760,11 +1599,7 @@ const realApi = {
       }
 
       // Unknown status
-<<<<<<< HEAD
       devLogger.warn(`[realApi] topups.updateStatus: Unknown status '${status}'.`);
-=======
-      console.warn(`[realApi] topups.updateStatus: Unknown status '${status}'.`);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       return null;
     },
 
@@ -1785,11 +1620,7 @@ const realApi = {
         const data = unwrap(res);
         return data?.deposit || data;
       } catch (err) {
-<<<<<<< HEAD
         devLogger.warnUnlessBenign('[realApi] topups.updateRequest failed:', err);
-=======
-        console.warn('[realApi] topups.updateRequest failed:', err?.response?.data?.message || err.message);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         return null;
       }
     },
@@ -2025,7 +1856,6 @@ const realApi = {
   },
 };
 
-<<<<<<< HEAD
 /**
  * Upload an image file to the generic upload endpoint.
  *
@@ -2043,6 +1873,4 @@ export const uploadImage = async (category, file) => {
   return data?.path || '';
 };
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 export default realApi;

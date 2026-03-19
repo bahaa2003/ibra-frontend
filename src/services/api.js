@@ -1,9 +1,6 @@
 import axios from 'axios';
 import { mockProducts } from '../data/mockData';
-<<<<<<< HEAD
 import { devLogger } from '../utils/devLogger';
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
 
@@ -22,11 +19,7 @@ export const fetchProducts = async () => {
     const response = await api.get('/products');
     return response.data;
   } catch (error) {
-<<<<<<< HEAD
     devLogger.warnOnce('API fetch failed, using mock data:', error.message);
-=======
-    console.warn('API fetch failed, using mock data:', error.message);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 800));
     return mockProducts;

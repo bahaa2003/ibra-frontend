@@ -29,7 +29,6 @@ const getMethodPresentation = (method) => {
   return { icon: Smartphone, color: 'from-emerald-500 to-cyan-500' };
 };
 
-<<<<<<< HEAD
 const isEgyptTransferGroup = (group) => {
   const groupToken = `${group?.id || ''} ${group?.name || ''}`.toLowerCase();
   if (groupToken.includes('egypt') || groupToken.includes('masr') || groupToken.includes('misr')) {
@@ -78,8 +77,6 @@ const CompactPaymentMethodTile = ({ method, presentation, onSelect, index }) => 
   );
 };
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const AddBalance = () => {
   const { dir } = useLanguage();
   const { t } = useTranslation();
@@ -156,11 +153,8 @@ const AddBalance = () => {
         >
           <div className="mb-6">
             <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">{t('payments.chooseMethod')}</h2>
-<<<<<<< HEAD
-=======
             <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t('payments.chooseMethodNote')}</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">{t('payments.reviewWithin24')}</p>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           </div>
 
           <div className="space-y-4">
@@ -209,7 +203,6 @@ const AddBalance = () => {
                         transition={{ duration: 0.22, ease: 'easeOut' }}
                         className="overflow-hidden"
                       >
-<<<<<<< HEAD
                         <div className={`${isEgyptTransferGroup(group) ? 'grid grid-cols-3 gap-2 px-2 pb-2 pt-2 sm:gap-3' : 'grid gap-4 px-2 pb-2 pt-2 md:grid-cols-2'}`}>
                           {group.methods.map((method, methodIndex) => {
                             const presentation = getMethodPresentation(method);
@@ -232,26 +225,11 @@ const AddBalance = () => {
                                 />
                               );
                             }
-=======
-                        <div className="grid gap-4 px-2 pb-2 pt-2 md:grid-cols-2">
-                          {group.methods.map((method, methodIndex) => {
-                            const presentation = getMethodPresentation(method);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
                             return (
                               <PaymentMethodCard
                                 key={method.id}
-<<<<<<< HEAD
                                 method={mappedMethod}
-=======
-                                method={{
-                                  ...method,
-                                  icon: presentation.icon,
-                                  color: presentation.color,
-                                  available: method.isActive !== false,
-                                  instructions: method.instructions || paymentSettings.instructions || t('payments.chooseMethod'),
-                                }}
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                 onSelect={handleMethodSelect}
                                 index={methodIndex}
                               />
@@ -273,8 +251,6 @@ const AddBalance = () => {
           </div>
         </motion.div>
 
-<<<<<<< HEAD
-=======
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -295,7 +271,6 @@ const AddBalance = () => {
             ))}
           </div>
         </motion.div>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       </div>
     </div>
   );

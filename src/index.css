@@ -165,7 +165,6 @@
     backdrop-filter: blur(calc(var(--backdrop-blur) + 4px));
   }
 
-<<<<<<< HEAD
   .admin-premium-hero {
     border: 1px solid rgb(var(--color-primary-rgb) / 0.24);
     border-radius: 1.75rem;
@@ -220,8 +219,6 @@
     }
   }
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   .section-kicker {
     display: inline-flex;
     align-items: center;
@@ -435,7 +432,6 @@
     width: 1.7rem;
     height: 1.7rem;
   }
-<<<<<<< HEAD
 
   .auth-atmosphere {
     position: absolute;
@@ -729,8 +725,6 @@
       transparent
     );
   }
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 }
 
 @keyframes page-fade-in {
@@ -788,7 +782,6 @@
   }
 }
 
-<<<<<<< HEAD
 @keyframes auth-atmosphere-breathe {
   0%,
   100% {
@@ -841,8 +834,6 @@
   }
 }
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 @media (prefers-reduced-motion: reduce) {
   .marquee-track-smooth {
     animation: none;
@@ -853,7 +844,6 @@
   .animate-\[sheet-up_240ms_ease-out\] {
     animation: none !important;
   }
-<<<<<<< HEAD
 
   .auth-atmosphere__halo {
     animation: none;
@@ -881,11 +871,6 @@
 }
 
 @media (max-width: 640px) {
-=======
-}
-
-  @media (max-width: 640px) {
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   .floating-whatsapp {
     right: 0.85rem;
     bottom: 0.95rem;
@@ -899,8 +884,4 @@
   .floating-whatsapp-tooltip {
     display: none;
   }
-<<<<<<< HEAD
-=======
-
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 }

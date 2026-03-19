@@ -3,11 +3,7 @@ import { cn } from '../ui/Button';
 
 const layoutByVariant = {
   catalogs: 'grid grid-cols-2 gap-3 sm:grid-cols-3',
-<<<<<<< HEAD
   products: 'grid grid-cols-3 gap-2.5 sm:gap-3',
-=======
-  products: 'grid grid-cols-2 gap-3 sm:grid-cols-3',
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   search: 'grid grid-cols-2 gap-3 sm:grid-cols-3',
 };
 
@@ -20,11 +16,7 @@ const cardByVariant = {
   ),
   products: (
     <div className="space-y-3">
-<<<<<<< HEAD
       <div className="mx-auto aspect-square w-full max-w-[8.5rem] rounded-full bg-[color:rgb(var(--color-card-rgb)/0.92)] sm:max-w-[10rem]" />
-=======
-      <div className="aspect-[4/5] rounded-[1.5rem] bg-[color:rgb(var(--color-card-rgb)/0.92)]" />
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       <div className="h-4 w-4/5 rounded-full bg-[color:rgb(var(--color-card-rgb)/0.92)]" />
     </div>
   ),

@@ -50,15 +50,9 @@ const AdminGroups = () => {
     };
 
     return (
-<<<<<<< HEAD
         <div className="min-w-0 space-y-6">
             <section className="admin-premium-hero">
             <div className="flex items-center justify-between">
-=======
-        <div className="space-y-6">
-            
-            <div className="flex justify-between items-center">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                     {t('groupsManager')}
                 </h1>
@@ -67,14 +61,9 @@ const AdminGroups = () => {
                     {t('addGroup')}
                 </Button>
             </div>
-<<<<<<< HEAD
             </section>
 
             <div className="admin-premium-panel overflow-hidden">
-=======
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -140,8 +129,4 @@ const AdminGroups = () => {
     );
 };
 
-<<<<<<< HEAD
 export default AdminGroups;
-=======
-export default AdminGroups;
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

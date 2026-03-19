@@ -8,15 +8,10 @@ import {
   mockCurrencies,
   mockSuppliers
 } from '../data/mockData';
-<<<<<<< HEAD
 import { normalizeAccountStatus, normalizeSignupMethod } from '../utils/accountStatus';
 import { getDefaultWhatsAppNumber, normalizeWhatsAppNumber } from '../utils/whatsapp';
 import { createDefaultPaymentGroups, normalizePaymentGroups } from '../utils/paymentSettings';
 import { devLogger } from '../utils/devLogger';
-=======
-import { getDefaultWhatsAppNumber, normalizeWhatsAppNumber } from '../utils/whatsapp';
-import { createDefaultPaymentGroups, normalizePaymentGroups } from '../utils/paymentSettings';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const DELAY = 800; // Simulated network latency in ms
 
@@ -26,11 +21,7 @@ const getDB = (key, defaultData) => {
     const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : defaultData;
   } catch (error) {
-<<<<<<< HEAD
     devLogger.warnOnce(`Error reading ${key} from storage`, error);
-=======
-    console.error(`Error reading ${key} from storage`, error);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     return defaultData;
   }
 };
@@ -39,11 +30,7 @@ const saveDB = (key, data) => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (error) {
-<<<<<<< HEAD
     devLogger.warnOnce(`Error saving ${key} to storage`, error);
-=======
-    console.error(`Error saving ${key} to storage`, error);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   }
 };
 
@@ -417,21 +404,10 @@ const mockApi = {
       
       if (!user) throw new Error('Invalid email or password');
 
-<<<<<<< HEAD
       const normalizedStatus = normalizeAccountStatus(user.status);
       if (!['approved', 'pending', 'rejected'].includes(normalizedStatus)) {
         user.status = 'pending';
         saveDB('admin-storage', db);
-=======
-      // Security gate: only ACTIVE users are allowed to sign in.
-      // This also blocks typo variants like "pendding" and any unknown status values.
-      const normalizedStatus = String(user.status || '').trim().toLowerCase();
-      if (normalizedStatus !== 'active') {
-        if (['pending', 'pendding', 'requested'].includes(normalizedStatus)) {
-          throw new Error('Account pending approval');
-        }
-        throw new Error('Account access denied');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       }
       
       return { user: sanitizeUser(user), token: 'mock-jwt-token-12345' };
@@ -448,10 +424,7 @@ const mockApi = {
       let user = users.find((item) => String(item.email || '').toLowerCase() === googleEmail);
 
       if (!user) {
-<<<<<<< HEAD
         const createdAt = new Date().toISOString();
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         user = {
           id: `u${Date.now()}`,
           name: 'Google User',
@@ -461,7 +434,6 @@ const mockApi = {
           role: 'customer',
           coins: 0,
           group: getDefaultGroupName(),
-<<<<<<< HEAD
           status: 'pending',
           country: 'US',
           currency: 'USD',
@@ -471,13 +443,6 @@ const mockApi = {
           signupMethod: 'google',
           approvedAt: null,
           rejectedAt: null,
-=======
-          status: 'active',
-          country: 'US',
-          currency: 'USD',
-          phone: '+10000000000',
-          joinDate: new Date().toISOString(),
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           avatar: 'https://ui-avatars.com/api/?name=Google+User&background=ffffff&color=4285F4',
           authProvider: 'google',
         };
@@ -509,13 +474,10 @@ const mockApi = {
         group: resolveGroupName(userData.group),
         status: 'pending', // Default per requirements
         joinDate: new Date().toISOString(),
-<<<<<<< HEAD
         createdAt: new Date().toISOString(),
         signupMethod: normalizeSignupMethod(userData.signupMethod || 'email'),
         approvedAt: null,
         rejectedAt: null,
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         avatar: `https://ui-avatars.com/api/?name=${userData.name || userData.username || 'User'}&background=random`
       };
       delete newUser.password;
@@ -648,12 +610,8 @@ const mockApi = {
       const products = productsDb.state.products || [];
       return (db.state.suppliers || []).map((s) => {
         const linkedProductsCount = products.filter((p) => p.supplierId === s.id).length;
-<<<<<<< HEAD
         const syncedProductsCount = Array.isArray(s.syncedProductsSnapshot) ? s.syncedProductsSnapshot.length : 0;
         return sanitizeSupplierForUi({ ...s, linkedProductsCount, syncedProductsCount });
-=======
-        return sanitizeSupplierForUi({ ...s, linkedProductsCount });
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       });
     },
 
@@ -677,11 +635,8 @@ const mockApi = {
         lastConnectionTestAt: null,
         lastConnectionTestStatus: 'not_tested',
         lastConnectionTestMessage: 'Not tested',
-<<<<<<< HEAD
         lastProductSyncAt: null,
         syncedProductsSnapshot: [],
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       };
       db.state.suppliers = [record, ...(db.state.suppliers || [])];
       saveDB('suppliers-storage', db);
@@ -774,7 +729,6 @@ const mockApi = {
       if (!supplier) throw new Error('Supplier not found');
       const provider = mockProviderCatalog.find((p) => String(p.id || '').toLowerCase().includes(String(supplier.supplierCode || '').toLowerCase())) || mockProviderCatalog[0];
       const items = provider?.products || [];
-<<<<<<< HEAD
       const snapshot = items.map((p) => ({
         externalProductId: p.id,
         externalProductName: p.name,
@@ -783,8 +737,6 @@ const mockApi = {
       supplier.lastProductSyncAt = new Date().toISOString();
       supplier.syncedProductsSnapshot = snapshot;
       saveDB('suppliers-storage', db);
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       writeAuditLog({
         actorId: actorContext?.id || 'system',
         action: 'supplier_products_synced',
@@ -792,7 +744,6 @@ const mockApi = {
         targetType: 'supplier',
         newSummary: { count: items.length },
       });
-<<<<<<< HEAD
       return snapshot;
     },
 
@@ -808,9 +759,6 @@ const mockApi = {
 
       const provider = mockProviderCatalog.find((p) => String(p.id || '').toLowerCase().includes(String(supplier.supplierCode || '').toLowerCase())) || mockProviderCatalog[0];
       return (provider?.products || []).map((p) => ({
-=======
-      return items.map((p) => ({
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         externalProductId: p.id,
         externalProductName: p.name,
         supplierPrice: p.priceCoins,
@@ -965,7 +913,6 @@ const mockApi = {
        const order = db.state.orders.find(o => o.id === orderId);
        
        if (order) {
-<<<<<<< HEAD
            const previousStatus = String(order.status || '').toLowerCase();
            const nextStatus = String(status || '').toLowerCase();
            const refundStatuses = ['failed', 'rejected', 'denied', 'cancelled', 'canceled', 'refunded'];
@@ -995,9 +942,6 @@ const mockApi = {
              order.refundedAt = order.updatedAt;
            }
 
-=======
-           order.status = status;
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
            saveDB('order-storage', db);
        }
        return order;
@@ -1084,7 +1028,6 @@ const mockApi = {
           if (!user) return null;
           ensureCanManageUser(actor, user, 'update status of');
           if (user) {
-<<<<<<< HEAD
               const normalizedStatus = normalizeAccountStatus(status);
               user.status = normalizedStatus;
               if (normalizedStatus === 'approved') {
@@ -1097,9 +1040,6 @@ const mockApi = {
                 user.approvedAt = null;
                 user.rejectedAt = null;
               }
-=======
-              user.status = status;
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               saveDB('admin-storage', db);
           }
             return sanitizeUser(user);
@@ -1273,11 +1213,7 @@ const mockApi = {
           return sanitizeUser(user);
       },
 
-<<<<<<< HEAD
       resetPassword: async (userId, actorContext, nextPassword = '') => {
-=======
-      resetPassword: async (userId, actorContext) => {
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           await new Promise(resolve => setTimeout(resolve, DELAY));
           const db = getDB('admin-storage', { state: { users: mockUsers } });
           const migrated = await secureUsersInDb(db);
@@ -1291,15 +1227,11 @@ const mockApi = {
             ensureCanManageUser(actor, user, 'reset password for');
           }
 
-<<<<<<< HEAD
           const explicitPassword = String(nextPassword || '').trim();
           const temporaryPassword = explicitPassword || randomTempPassword(10);
           if (temporaryPassword.length < 8) {
             throw new Error('Password must be at least 8 characters');
           }
-=======
-          const temporaryPassword = randomTempPassword(10);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           user.passwordHash = await hashPassword(temporaryPassword);
           saveDB('admin-storage', db);
 

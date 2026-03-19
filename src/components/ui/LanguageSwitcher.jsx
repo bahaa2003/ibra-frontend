@@ -1,8 +1,5 @@
 import React from 'react';
-<<<<<<< HEAD
 import { Globe } from 'lucide-react';
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { useTranslation } from 'react-i18next';
 import { cn } from './Button';
 
@@ -12,11 +9,7 @@ const styleByVariant = {
   glass: 'bg-[color:rgb(var(--color-card-rgb)/0.72)] text-[var(--color-text)]'
 };
 
-<<<<<<< HEAD
 const LanguageSwitcher = ({ variant = 'topbar', className, showIcon = false }) => {
-=======
-const LanguageSwitcher = ({ variant = 'topbar', className }) => {
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const { i18n, t } = useTranslation();
   const isArabic = String(i18n.resolvedLanguage || i18n.language || '').toLowerCase().startsWith('ar');
 
@@ -38,10 +31,7 @@ const LanguageSwitcher = ({ variant = 'topbar', className }) => {
         className
       )}
     >
-<<<<<<< HEAD
       {showIcon && <Globe className="h-3.5 w-3.5 shrink-0 opacity-75" />}
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       <span className={isArabic ? 'opacity-100' : 'opacity-65'}>AR</span>
       <span className="opacity-45">|</span>
       <span className={!isArabic ? 'opacity-100' : 'opacity-65'}>EN</span>

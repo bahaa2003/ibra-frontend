@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers3, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -7,22 +6,10 @@ import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
 import useSystemStore from '../store/useSystemStore';
 import ProductSearchBar from '../components/products/ProductSearchBar';
-=======
-import React, { Suspense, lazy, startTransition, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Layers3, Search } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import useAuthStore from '../store/useAuthStore';
-import useMediaStore from '../store/useMediaStore';
-import ProductSearchBar from '../components/products/ProductSearchBar';
-import Button from '../components/ui/Button';
-import Badge from '../components/ui/Badge';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import CatalogCard from '../components/products/CatalogCard';
 import ProductCardSimple from '../components/products/ProductCardSimple';
 import LoadingSkeleton from '../components/products/LoadingSkeleton';
 import EmptyState from '../components/products/EmptyState';
-<<<<<<< HEAD
 import {
   createStorefrontCategories,
   createStorefrontProducts,
@@ -30,17 +17,6 @@ import {
 } from '../utils/storefront';
 
 const ProductPurchaseSheet = lazy(() => import('../components/products/ProductPurchaseSheet'));
-=======
-import Loader from '../components/ui/Loader';
-import {
-  createStorefrontCategories,
-  createStorefrontProducts,
-  formatDisplayNumber,
-  getStorefrontLanguage,
-} from '../utils/storefront';
-
-const ProductDetailsSheet = lazy(() => import('../components/products/ProductDetailsSheet'));
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const getProductsPageCopy = (language = 'ar') => (
   language === 'ar'
@@ -86,33 +62,22 @@ const Products = () => {
   const categories = useMediaStore((state) => state.categories);
   const isLoading = useMediaStore((state) => state.isLoading);
   const loadProducts = useMediaStore((state) => state.loadProducts);
-<<<<<<< HEAD
   const loadCurrencies = useSystemStore((state) => state.loadCurrencies);
   const { i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchResetSignal, setSearchResetSignal] = useState(0);
-=======
-  const { i18n } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [searchInput, setSearchInput] = useState('');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
   const copy = useMemo(() => getProductsPageCopy(language), [language]);
 
   const activeCategoryParam = searchParams.get('category') || '';
-<<<<<<< HEAD
   const activeRequestId = searchParams.get('request') || '';
-=======
-  const activeProductId = searchParams.get('product') || '';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
-<<<<<<< HEAD
   useEffect(() => {
     let cancelled = false;
 
@@ -137,8 +102,6 @@ const Products = () => {
     };
   }, [loadCurrencies]);
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const storefrontProducts = useMemo(
     () => createStorefrontProducts(products, { language, userGroup: user?.group || 'Normal' }),
     [language, products, user?.group]
@@ -151,7 +114,6 @@ const Products = () => {
   );
 
   const selectedProduct = useMemo(
-<<<<<<< HEAD
     () => storefrontProducts.find((product) => product.id === activeRequestId) || null,
     [activeRequestId, storefrontProducts]
   );
@@ -160,23 +122,6 @@ const Products = () => {
     if (!activeCategoryParam) return null;
     return storefrontCategories.find((category) => category.id === activeCategoryParam) || null;
   }, [activeCategoryParam, storefrontCategories]);
-=======
-    () => storefrontProducts.find((product) => product.id === activeProductId) || null,
-    [activeProductId, storefrontProducts]
-  );
-
-  const currentCatalog = useMemo(() => {
-    if (activeCategoryParam) {
-      return storefrontCategories.find((category) => category.id === activeCategoryParam) || null;
-    }
-
-    if (selectedProduct) {
-      return storefrontCategories.find((category) => category.id === selectedProduct.category) || null;
-    }
-
-    return null;
-  }, [activeCategoryParam, selectedProduct, storefrontCategories]);
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const catalogProducts = useMemo(
     () => (
@@ -198,13 +143,8 @@ const Products = () => {
       shouldReplace = true;
     }
 
-<<<<<<< HEAD
     if (activeRequestId && !selectedProduct) {
       next.delete('request');
-=======
-    if (activeProductId && !selectedProduct) {
-      next.delete('product');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       shouldReplace = true;
     }
 
@@ -215,11 +155,7 @@ const Products = () => {
     }
   }, [
     activeCategoryParam,
-<<<<<<< HEAD
     activeRequestId,
-=======
-    activeProductId,
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     isLoading,
     searchParams,
     selectedProduct,
@@ -227,24 +163,15 @@ const Products = () => {
     storefrontCategories,
   ]);
 
-<<<<<<< HEAD
   const openCatalog = useCallback((catalogId) => {
     const next = new URLSearchParams(searchParams);
     next.set('category', catalogId);
     next.delete('request');
     setSearchResetSignal((value) => value + 1);
-=======
-  const openCatalog = (catalogId) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('category', catalogId);
-    next.delete('product');
-    setSearchInput('');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
     startTransition(() => {
       setSearchParams(next);
     });
-<<<<<<< HEAD
   }, [searchParams, setSearchParams]);
 
   const resetToCatalogs = useCallback(() => {
@@ -252,56 +179,28 @@ const Products = () => {
     next.delete('category');
     next.delete('request');
     setSearchResetSignal((value) => value + 1);
-=======
-  };
-
-  const resetToCatalogs = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('category');
-    next.delete('product');
-    setSearchInput('');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
     startTransition(() => {
       setSearchParams(next);
     });
-<<<<<<< HEAD
   }, [searchParams, setSearchParams]);
 
   const openProduct = useCallback((product) => {
     const next = new URLSearchParams(searchParams);
     next.set('request', product.id);
-=======
-  };
-
-  const openProduct = (product) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('category', product.category);
-    next.set('product', product.id);
-    setSearchInput('');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
     startTransition(() => {
       setSearchParams(next);
     });
-<<<<<<< HEAD
   }, [searchParams, setSearchParams]);
 
   const closeProduct = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete('request');
-=======
-  };
-
-  const closeProduct = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('product');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
     startTransition(() => {
       setSearchParams(next);
     });
-<<<<<<< HEAD
   }, [searchParams, setSearchParams]);
 
   const showInitialLoading = isLoading && storefrontProducts.length === 0 && storefrontCategories.length === 0;
@@ -320,60 +219,6 @@ const Products = () => {
             className="w-full max-w-[360px] sm:max-w-[460px]"
             inputClassName="h-9 rounded-xl text-xs shadow-none sm:h-10 sm:text-sm"
           />
-=======
-  };
-
-  const showInitialLoading = isLoading && storefrontProducts.length === 0 && storefrontCategories.length === 0;
-  const heroTitle = currentCatalog ? currentCatalog.title : copy.catalogsTitle;
-  const heroDescription = currentCatalog ? copy.categoryDescription : copy.catalogsDescription;
-  const metricValue = currentCatalog ? catalogProducts.length : storefrontCategories.length;
-  const metricLabel = currentCatalog ? copy.productsBadge : copy.catalogsBadge;
-
-  return (
-    <div className="space-y-6 pb-4">
-      <section className="premium-card-premium p-5 sm:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <span className="section-kicker">{copy.pageKicker}</span>
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="page-heading text-[clamp(2rem,4vw,3.3rem)]">{heroTitle}</h1>
-                <Badge variant="premium">
-                  {formatDisplayNumber(metricValue, language === 'ar' ? 'ar-EG' : 'en-US')} {metricLabel}
-                </Badge>
-              </div>
-              <p className="page-subtitle max-w-3xl">{heroDescription}</p>
-            </div>
-          </div>
-
-          <Link
-            to="/dashboard"
-            className="inline-flex h-11 items-center gap-2 self-start rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.2)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-4 text-sm font-medium text-[var(--color-text)] transition-all hover:-translate-y-0.5 hover:border-[color:rgb(var(--color-primary-rgb)/0.36)] hover:text-[var(--color-primary-hover)]"
-          >
-            {copy.backHome}
-            <ArrowRight className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`} />
-          </Link>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          <ProductSearchBar
-            products={storefrontProducts}
-            language={language}
-            value={searchInput}
-            onChange={setSearchInput}
-            onSelectProduct={openProduct}
-            placeholder={copy.searchPlaceholder}
-            noResultsLabel={copy.noResults}
-          />
-
-          {currentCatalog && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" variant="secondary" onClick={resetToCatalogs}>
-                {copy.backToCatalogs}
-              </Button>
-            </div>
-          )}
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         </div>
       </section>
 
@@ -383,61 +228,10 @@ const Products = () => {
 
       {!showInitialLoading && currentCatalog && (
         <>
-<<<<<<< HEAD
           {catalogProducts.length > 0 ? (
             <section className="grid grid-cols-3 gap-x-1.5 gap-y-6 sm:gap-x-3 sm:gap-y-8 lg:gap-x-5 lg:gap-y-10">
               {catalogProducts.map((product) => (
                 <ProductCardSimple key={product.id} product={product} onOpen={openProduct} />
-=======
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr),minmax(260px,0.9fr)]">
-            <div className="premium-card p-5 sm:p-6">
-              <div className="flex h-full flex-col justify-between gap-5">
-                <div className="space-y-3">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-[var(--color-primary)]">
-                    <Layers3 className="h-3.5 w-3.5" />
-                    {copy.categoryProductsTitle}
-                  </span>
-                  <div className="space-y-2">
-                    <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[var(--color-text)]">
-                      {currentCatalog.title}
-                    </h2>
-                    <p className="text-sm leading-7 text-[var(--color-text-secondary)]">
-                      {currentCatalog.subtitle || copy.categoryDescription}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="premium">
-                    {formatDisplayNumber(catalogProducts.length, language === 'ar' ? 'ar-EG' : 'en-US')} {copy.productsBadge}
-                  </Badge>
-                  <Button type="button" size="sm" variant="outline" onClick={resetToCatalogs}>
-                    {copy.backToCatalogs}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-[1.9rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.95)]">
-              <img
-                src={currentCatalog.image}
-                alt={currentCatalog.title}
-                loading="lazy"
-                decoding="async"
-                className="h-full min-h-[220px] w-full object-cover"
-              />
-            </div>
-          </section>
-
-          {catalogProducts.length > 0 ? (
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {catalogProducts.map((product) => (
-                <ProductCardSimple
-                  key={product.id}
-                  product={product}
-                  onOpen={openProduct}
-                />
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               ))}
             </section>
           ) : (
@@ -473,33 +267,15 @@ const Products = () => {
         )
       )}
 
-<<<<<<< HEAD
       {selectedProduct ? (
         <Suspense fallback={<div className="fixed inset-0 z-[75] bg-black/18" />}>
           <ProductPurchaseSheet
-=======
-      {selectedProduct && (
-        <Suspense
-          fallback={(
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/72">
-              <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-[#0d0d10] p-6">
-                <Loader />
-              </div>
-            </div>
-          )}
-        >
-          <ProductDetailsSheet
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             product={selectedProduct}
             isOpen={Boolean(selectedProduct)}
             onClose={closeProduct}
           />
         </Suspense>
-<<<<<<< HEAD
       ) : null}
-=======
-      )}
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     </div>
   );
 };

@@ -79,7 +79,6 @@ const AdminTopups = () => {
 
   return (
     <div className="min-w-0 space-y-6">
-<<<<<<< HEAD
       <section className="admin-premium-hero">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('topupRequests')}</h1>
       </section>
@@ -87,16 +86,6 @@ const AdminTopups = () => {
       <div className="space-y-3 md:hidden">
         {topups.map((topup) => (
           <article key={topup.id} className="admin-premium-panel p-4">
-=======
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('topupRequests')}</h1>
-
-      <div className="space-y-3 md:hidden">
-        {topups.map((topup) => (
-          <article
-            key={topup.id}
-            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-          >
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 dark:text-white">{topup.userName}</p>
@@ -162,22 +151,14 @@ const AdminTopups = () => {
         ))}
       </div>
 
-<<<<<<< HEAD
       <div className="admin-premium-panel hidden overflow-hidden md:block">
-=======
-      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:block dark:border-gray-700 dark:bg-gray-800">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t('date')}</TableHead>
               <TableHead className="text-center">{t('users')}</TableHead>
               <TableHead className="text-center">{t('amount')}</TableHead>
-<<<<<<< HEAD
               <TableHead className="text-center">{t('common.status', { defaultValue: 'الحالة' })}</TableHead>
-=======
-              <TableHead className="text-center">{t('status')}</TableHead>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               <TableHead className="text-end">{t('actions') || 'الإجراءات'}</TableHead>
             </TableRow>
           </TableHeader>
@@ -301,11 +282,7 @@ const AdminTopups = () => {
                 )}
               </div>
               <div>
-<<<<<<< HEAD
                 <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('common.status', { defaultValue: 'الحالة' })}</h3>
-=======
-                <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">{t('status')}</h3>
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 <Badge variant={getStatusVariant(detailsTopup.status)}>
                   {t(`status_${detailsTopup.status}`) || detailsTopup.status}
                 </Badge>

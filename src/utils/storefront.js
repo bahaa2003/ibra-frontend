@@ -1,11 +1,7 @@
 import buyCardsImage from '../assets/buyCards.webp';
 import chatAppsImage from '../assets/chatApps.webp';
 import gamesChargingImage from '../assets/gamesCharging.webp';
-<<<<<<< HEAD
 import brandIconImage from '../assets/logo.png';
-=======
-import brandIconImage from '../assets/box_.png';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { calculateProductPrice } from './pricing';
 import { formatNumber } from './intl';
 import { getProductStatus } from './productStatus';
@@ -138,11 +134,7 @@ export const createStorefrontProducts = (products, { language = 'ar', userGroup 
   ...product,
   displayName: resolveProductDisplayName(product, language),
   displayDescription: resolveProductDisplayDescription(product, language),
-<<<<<<< HEAD
   searchIndex: product?.searchIndex || normalizeSearchToken([
-=======
-  searchIndex: normalizeSearchToken([
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     product?.name,
     product?.nameAr,
     product?.description,
@@ -178,15 +170,12 @@ export const filterStorefrontProducts = (products, { searchTerm = '', activeCate
 export const createStorefrontCategories = (categories, products, language = 'ar') => {
   const safeProducts = Array.isArray(products) ? products : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
-<<<<<<< HEAD
   const countsByCategory = safeProducts.reduce((map, product) => {
     const categoryId = String(product?.category || '').trim();
     if (!categoryId) return map;
     map.set(categoryId, (map.get(categoryId) || 0) + 1);
     return map;
   }, new Map());
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const overview = [
     {
@@ -202,11 +191,7 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
       image: getCategoryDisplayImage(category),
       title: getCategoryDisplayTitle(category, language),
       subtitle: getCategoryDisplaySubtitle(category, language),
-<<<<<<< HEAD
       count: countsByCategory.get(String(category?.id || '').trim()) || 0,
-=======
-      count: safeProducts.filter((product) => String(product?.category || '').trim() === String(category?.id || '').trim()).length,
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       tone: getCategoryDisplayKey(category),
     })),
   ];

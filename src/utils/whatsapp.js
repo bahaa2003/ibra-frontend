@@ -1,12 +1,8 @@
-<<<<<<< HEAD
 const FALLBACK_WHATSAPP_NUMBER = '201010243175';
 const ENV_ADMIN_WHATSAPP_NUMBER =
   import.meta.env.VITE_ADMIN_WHATSAPP_NUMBER
   || import.meta.env.ADMIN_WHATSAPP_NUMBER
   || '';
-=======
-const FALLBACK_WHATSAPP_NUMBER = '201000000000';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 export const normalizeWhatsAppNumber = (value) => {
   const digits = String(value || '').replace(/\D/g, '');
@@ -28,8 +24,4 @@ export const buildWhatsAppLink = ({ number, message = '' }) => {
 };
 
 export const getDefaultWhatsAppNumber = () => FALLBACK_WHATSAPP_NUMBER;
-<<<<<<< HEAD
 export const getAdminWhatsAppNumber = () => normalizeWhatsAppNumber(ENV_ADMIN_WHATSAPP_NUMBER || FALLBACK_WHATSAPP_NUMBER);
-=======
-
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

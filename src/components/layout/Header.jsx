@@ -6,11 +6,7 @@ import useAuthStore from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import ThemeToggle from '../ui/ThemeToggle';
 import LanguageSwitcher from '../ui/LanguageSwitcher';
-<<<<<<< HEAD
 import brandIconImage from '../../assets/logo.png';
-=======
-import brandIconImage from '../../assets/box_.png';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import brandWordmarkImage from '../../assets/ibra.png';
 import { formatWalletAmount } from '../../utils/storefront';
 import { getDefaultRouteForRole } from '../../utils/authRoles';
@@ -25,7 +21,6 @@ const Header = ({ toggleSidebar }) => {
   const walletDisplayValue = formatWalletAmount(walletValue, user?.currency || 'USD');
 
   return (
-<<<<<<< HEAD
     <header
       dir={isRTL ? 'rtl' : 'ltr'}
       className="w-full border-b border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] backdrop-blur-2xl"
@@ -57,32 +52,6 @@ const Header = ({ toggleSidebar }) => {
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-=======
-    <header className="border-b border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] backdrop-blur-2xl">
-      <div className="mx-auto flex max-w-[var(--shell-max-width)] items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3 md:px-6 lg:px-8">
-        <button
-          type="button"
-          onClick={() => navigate(getDefaultRouteForRole(user?.role))}
-          className="flex min-w-0 max-w-[calc(100vw-11rem)] items-center gap-1.5 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-1.5 py-1.5 shadow-[var(--shadow-subtle)] transition-all hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:-translate-y-0.5 sm:max-w-none sm:gap-3 sm:px-2.5 sm:py-2"
-        >
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] sm:h-11 sm:w-11">
-            <img src={brandIconImage} alt="IBRA Store" className="h-full w-full object-cover" />
-          </div>
-
-          <div className="min-w-0 text-start">
-            <img
-              src={brandWordmarkImage}
-              alt="IBRA"
-              className="h-4 w-auto max-w-[5.5rem] object-contain sm:h-6 sm:max-w-none"
-            />
-            <p className="hidden truncate text-[11px] uppercase tracking-[0.18em] text-[var(--color-primary-soft)] sm:block">
-              {isRTL ? 'هوية تجارة رقمية فاخرة' : 'Luxury Digital Store'}
-            </p>
-          </div>
-        </button>
-
-        <div className="flex items-center gap-1 sm:gap-2">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           {user?.role === 'customer' && (
             <button
               type="button"

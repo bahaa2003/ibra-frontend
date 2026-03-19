@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
@@ -14,10 +13,6 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react';
-=======
-﻿import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Power, Pencil, PlugZap, RefreshCw } from 'lucide-react';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import apiClient from '../../services/client';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -68,7 +63,6 @@ const defaultForm = {
   notes: '',
 };
 
-<<<<<<< HEAD
 const glowInputClass = 'focus:ring-[color:rgb(var(--color-primary-rgb)/0.3)] focus:ring-offset-[color:rgb(var(--color-surface-rgb)/1)]';
 const glowSelectClass = 'h-10 rounded-lg border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.95)] px-3 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.3)] focus:ring-offset-2 focus:ring-offset-[color:rgb(var(--color-surface-rgb)/1)]';
 const compactActionBtnClass = 'h-8 rounded-lg px-2.5 text-[11px] gap-1';
@@ -80,8 +74,6 @@ const summaryCards = [
   { key: 'syncedProducts', label: 'منتجات متزامنة', hint: 'آخر نتائج مزامنة محفوظة', icon: Boxes },
 ];
 
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const parseHeaders = (text) => String(text || '')
   .split('\n')
   .map((line) => line.trim())
@@ -97,7 +89,6 @@ const parseMappings = (text) => String(text || '')
   .map((line) => line.trim())
   .filter(Boolean)
   .map((line) => {
-<<<<<<< HEAD
     const [internalField, externalField] = line.split(':').map((value) => String(value || '').trim());
     return { internalField, externalField };
   })
@@ -165,30 +156,17 @@ const normalizeSupplierProducts = (rawInput = []) => {
     };
   });
 };
-=======
-    const [internalField, externalField] = line.split(':').map((v) => String(v || '').trim());
-    return { internalField, externalField };
-  })
-  .filter((m) => m.internalField && m.externalField);
-
-const glowInputClass = 'focus:ring-violet-500 focus:ring-offset-yellow-200 dark:focus:ring-offset-yellow-500/30';
-const glowSelectClass = 'h-11 rounded-lg border px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-yellow-200 dark:bg-gray-900 dark:border-gray-700 dark:focus:ring-offset-yellow-500/30';
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const AdminSuppliers = () => {
   const { addToast } = useToast();
   const { user } = useAuthStore();
   const [suppliers, setSuppliers] = useState([]);
-<<<<<<< HEAD
   const [runtimeSupplierState, setRuntimeSupplierState] = useState({});
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(defaultForm);
-<<<<<<< HEAD
   const [isProductsOpen, setIsProductsOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [supplierProducts, setSupplierProducts] = useState([]);
@@ -209,8 +187,6 @@ const AdminSuppliers = () => {
       [supplierId]: { ...(current[supplierId] || {}), ...patch },
     }));
   };
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const load = async () => {
     try {
@@ -225,7 +201,6 @@ const AdminSuppliers = () => {
     load();
   }, []);
 
-<<<<<<< HEAD
   const filteredSuppliers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (suppliers || []).filter((supplier) => {
@@ -253,22 +228,6 @@ const AdminSuppliers = () => {
     };
   }, [suppliers, runtimeSupplierState]);
 
-=======
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return (suppliers || []).filter((s) => {
-      const byTerm = !term
-        || String(s.supplierName || '').toLowerCase().includes(term)
-        || String(s.supplierCode || '').toLowerCase().includes(term)
-        || String(s.baseUrl || '').toLowerCase().includes(term);
-      const byStatus = statusFilter === 'all'
-        ? true
-        : (statusFilter === 'active' ? s.isActive : !s.isActive);
-      return byTerm && byStatus;
-    });
-  }, [suppliers, search, statusFilter]);
-
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const openCreate = () => {
     setEditing(null);
     setForm(defaultForm);
@@ -280,18 +239,12 @@ const AdminSuppliers = () => {
     setForm({
       ...defaultForm,
       ...row,
-<<<<<<< HEAD
       customHeadersText: (row.customHeaders || []).map((header) => `${header.key}:${header.value}`).join('\n'),
       supplierFieldMappingsText: (row.supplierFieldMappings || []).map((mapping) => `${mapping.internalField}:${mapping.externalField}`).join('\n'),
-=======
-      customHeadersText: (row.customHeaders || []).map((h) => `${h.key}:${h.value}`).join('\n'),
-      supplierFieldMappingsText: (row.supplierFieldMappings || []).map((m) => `${m.internalField}:${m.externalField}`).join('\n'),
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     });
     setIsOpen(true);
   };
 
-<<<<<<< HEAD
   const submit = async (event) => {
     event.preventDefault();
     const {
@@ -310,15 +263,6 @@ const AdminSuppliers = () => {
       customHeaders: parseHeaders(editableForm.customHeadersText),
       supplierFieldMappings: parseMappings(editableForm.supplierFieldMappingsText),
       timeoutMs: Number(editableForm.timeoutMs || 8000),
-=======
-  const submit = async (e) => {
-    e.preventDefault();
-    const payload = {
-      ...form,
-      customHeaders: parseHeaders(form.customHeadersText),
-      supplierFieldMappings: parseMappings(form.supplierFieldMappingsText),
-      timeoutMs: Number(form.timeoutMs || 8000),
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     };
 
     try {
@@ -347,7 +291,6 @@ const AdminSuppliers = () => {
   };
 
   const testConnection = async (row) => {
-<<<<<<< HEAD
     setTestingSupplierId(row.id);
     try {
       const result = await apiClient.suppliers.testConnection(row.id, user);
@@ -406,19 +349,10 @@ const AdminSuppliers = () => {
       addToast(error?.message || (mode === 'sync' ? 'فشل مزامنة المنتجات' : 'فشل تحميل منتجات المورد'), 'error');
     } finally {
       setProductsLoading(false);
-=======
-    try {
-      const result = await apiClient.suppliers.testConnection(row.id, user);
-      addToast(`نتيجة الاختبار: ${result.lastConnectionTestStatus}`, result.lastConnectionTestStatus === 'connected' ? 'success' : 'warning');
-      await load();
-    } catch (error) {
-      addToast(error?.message || 'فشل اختبار الاتصال', 'error');
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     }
   };
 
   const syncProducts = async (row) => {
-<<<<<<< HEAD
     setSyncingSupplierId(row.id);
     try {
       await openProductsCatalog(row, 'sync');
@@ -601,87 +535,10 @@ const AdminSuppliers = () => {
       </div>
 
       <div className="hidden overflow-hidden rounded-[1.25rem] border border-gray-200 bg-white shadow-sm md:block dark:border-gray-700 dark:bg-gray-800">
-=======
-    try {
-      const items = await apiClient.suppliers.syncProducts(row.id, user);
-      addToast(`تم جلب ${items.length} منتج من المورد`, 'success');
-    } catch (error) {
-      addToast(error?.message || 'فشل مزامنة المنتجات', 'error');
-    }
-  };
-
-  return (
-    <div className="min-w-0 space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة الموردين</h1>
-        <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> إضافة مورد جديد</Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث باسم المورد أو الكود أو الرابط..." variant="search" />
-        <select
-          className="h-11 rounded-lg border border-gray-300 bg-white dark:bg-gray-900 dark:border-gray-700 px-3"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="all">الكل</option>
-          <option value="active">نشط</option>
-          <option value="inactive">غير نشط</option>
-        </select>
-      </div>
-
-      <div className="space-y-3 md:hidden">
-        {filtered.map((row) => (
-          <article
-            key={row.id}
-            className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-gray-900 dark:text-white">{row.supplierName}</p>
-                <p className="mt-1 text-xs text-gray-500">{row.supplierCode}</p>
-              </div>
-              <Badge variant={row.isActive ? 'success' : 'secondary'}>{row.isActive ? 'نشط' : 'غير نشط'}</Badge>
-            </div>
-
-            <div className="mt-4 space-y-2 text-sm">
-              <p className="break-all text-gray-700 dark:text-gray-300">
-                <span className="font-medium text-gray-900 dark:text-white">الرابط:</span> {row.baseUrl || '-'}
-              </p>
-              <p className="text-gray-700 dark:text-gray-300">
-                <span className="font-medium text-gray-900 dark:text-white">نوع الربط:</span> {row.supplierType}
-              </p>
-              <p className="text-gray-700 dark:text-gray-300">
-                <span className="font-medium text-gray-900 dark:text-white">الاتصال:</span>{' '}
-                {row.lastConnectionTestStatus || 'لم يتم الاختبار'}
-              </p>
-              <p className="text-gray-700 dark:text-gray-300">
-                <span className="font-medium text-gray-900 dark:text-white">آخر اختبار:</span>{' '}
-                {row.lastConnectionTestAt ? formatDateTime(row.lastConnectionTestAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'}
-              </p>
-              <p className="text-gray-700 dark:text-gray-300">
-                <span className="font-medium text-gray-900 dark:text-white">منتجات مرتبطة:</span>{' '}
-                {formatNumber(row.linkedProductsCount || 0, 'ar-EG')}
-              </p>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => testConnection(row)}><PlugZap className="w-4 h-4" /></Button>
-              <Button size="sm" variant="outline" onClick={() => syncProducts(row)}><RefreshCw className="w-4 h-4" /></Button>
-              <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil className="w-4 h-4" /></Button>
-              <Button size="sm" variant="danger" onClick={() => deactivate(row)}><Power className="w-4 h-4" /></Button>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <div className="hidden overflow-hidden rounded-xl border border-gray-200 bg-white md:block dark:border-gray-700 dark:bg-gray-800">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>المورد</TableHead>
-<<<<<<< HEAD
               <TableHead className="text-end">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
@@ -742,51 +599,10 @@ const AdminSuppliers = () => {
                 </TableCell>
               </TableRow>
             )}
-=======
-              <TableHead>نوع الربط</TableHead>
-              <TableHead>الرابط الأساسي</TableHead>
-              <TableHead>الحالة</TableHead>
-              <TableHead>الاتصال</TableHead>
-              <TableHead>آخر اختبار</TableHead>
-              <TableHead>منتجات مرتبطة</TableHead>
-              <TableHead className="text-end">إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <div className="font-semibold">{row.supplierName}</div>
-                  <div className="text-xs text-gray-500">{row.supplierCode}</div>
-                </TableCell>
-                <TableCell>{row.supplierType}</TableCell>
-                <TableCell className="max-w-[220px] truncate">{row.baseUrl}</TableCell>
-                <TableCell>
-                  <Badge variant={row.isActive ? 'success' : 'secondary'}>{row.isActive ? 'نشط' : 'غير نشط'}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={row.lastConnectionTestStatus === 'connected' ? 'success' : row.lastConnectionTestStatus === 'failed' ? 'danger' : 'warning'}>
-                    {row.lastConnectionTestStatus || 'لم يتم الاختبار'}
-                  </Badge>
-                </TableCell>
-                <TableCell>{row.lastConnectionTestAt ? formatDateTime(row.lastConnectionTestAt, 'ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'}</TableCell>
-                <TableCell>{formatNumber(row.linkedProductsCount || 0, 'ar-EG')}</TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => testConnection(row)}><PlugZap className="w-4 h-4" /></Button>
-                    <Button size="sm" variant="outline" onClick={() => syncProducts(row)}><RefreshCw className="w-4 h-4" /></Button>
-                    <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil className="w-4 h-4" /></Button>
-                    <Button size="sm" variant="danger" onClick={() => deactivate(row)}><Power className="w-4 h-4" /></Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           </TableBody>
         </Table>
       </div>
 
-<<<<<<< HEAD
       <Modal isOpen={isProductsOpen} onClose={() => setIsProductsOpen(false)} title={selectedSupplier ? `منتجات المورد ${selectedSupplier.supplierName}` : 'منتجات المورد'} size="xl" footer={productsModalFooter}>
         {selectedSupplier ? (
           <div className="space-y-4">
@@ -860,57 +676,11 @@ const AdminSuppliers = () => {
 
           <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
             <select className={glowSelectClass} value={form.supplierType} onChange={(event) => setForm({ ...form, supplierType: event.target.value })}>
-=======
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={editing ? 'تعديل مورد' : 'إضافة مورد جديد'} size="xl">
-        <form onSubmit={submit} className="space-y-5 max-h-[75vh] overflow-y-auto pr-1">
-          <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2 text-sm text-violet-900 dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-200">
-            تم ترك الحقول الضرورية فقط لإضافة مورد بسرعة. يمكنك تعديل باقي الإعدادات لاحقًا من شاشة التعديل.
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input
-              label="اسم المورد"
-              value={form.supplierName}
-              onChange={(e) => setForm({ ...form, supplierName: e.target.value })}
-              className={glowInputClass}
-              required
-            />
-            <Input
-              label="كود المورد"
-              value={form.supplierCode}
-              onChange={(e) => setForm({ ...form, supplierCode: e.target.value })}
-              className={glowInputClass}
-              required
-            />
-            <Input
-              label="رابط الـ API الأساسي"
-              value={form.baseUrl}
-              onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-              className={`md:col-span-2 ${glowInputClass}`}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select
-              className={glowSelectClass}
-              value={form.supplierType}
-              onChange={(e) => setForm({ ...form, supplierType: e.target.value })}
-            >
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               <option value="api">API (واجهة برمجة)</option>
               <option value="manual">يدوي</option>
               <option value="hybrid">مختلط</option>
             </select>
-<<<<<<< HEAD
             <select className={glowSelectClass} value={form.authType} onChange={(event) => setForm({ ...form, authType: event.target.value })}>
-=======
-            <select
-              className={glowSelectClass}
-              value={form.authType}
-              onChange={(e) => setForm({ ...form, authType: e.target.value })}
-            >
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               <option value="none">بدون توثيق</option>
               <option value="api_key">مفتاح API</option>
               <option value="bearer_token">توكن Bearer</option>
@@ -918,7 +688,6 @@ const AdminSuppliers = () => {
             </select>
           </div>
 
-<<<<<<< HEAD
           {form.authType === 'api_key' ? <Input label="مفتاح API" value={form.apiKey} onChange={(event) => setForm({ ...form, apiKey: event.target.value })} className={glowInputClass} /> : null}
           {form.authType === 'bearer_token' ? <Input label="توكن Bearer" type="password" value={form.bearerToken} onChange={(event) => setForm({ ...form, bearerToken: event.target.value })} className={glowInputClass} /> : null}
 
@@ -936,82 +705,20 @@ const AdminSuppliers = () => {
             </label>
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={Boolean(form.enableAutoFulfillment)} onChange={(event) => setForm({ ...form, enableAutoFulfillment: event.target.checked })} />
-=======
-          {form.authType === 'api_key' && (
-            <Input
-              label="مفتاح API"
-              value={form.apiKey}
-              onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-              className={glowInputClass}
-            />
-          )}
-
-          {form.authType === 'bearer_token' && (
-            <Input
-              label="توكن Bearer"
-              type="password"
-              value={form.bearerToken}
-              onChange={(e) => setForm({ ...form, bearerToken: e.target.value })}
-              className={glowInputClass}
-            />
-          )}
-
-          {form.authType === 'basic_auth' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input
-                label="اسم المستخدم"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                className={glowInputClass}
-              />
-              <Input
-                label="كلمة المرور"
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className={glowInputClass}
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={Boolean(form.isActive)} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-              المورد نشط
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={Boolean(form.enableAutoFulfillment)} onChange={(e) => setForm({ ...form, enableAutoFulfillment: e.target.checked })} />
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               تفعيل التنفيذ التلقائي
             </label>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-<<<<<<< HEAD
             <Button type="button" size="sm" variant="ghost" onClick={() => setIsOpen(false)}>
               إلغاء
             </Button>
             <Button type="submit" size="sm">
-=======
-            <Button
-              type="button"
-              variant="ghost"
-              className="focus:ring-violet-500 focus:ring-offset-yellow-200"
-              onClick={() => setIsOpen(false)}
-            >
-              إلغاء
-            </Button>
-            <Button
-              type="submit"
-              className="bg-gradient-to-r from-violet-600 to-yellow-400 text-black hover:from-violet-700 hover:to-yellow-500 focus:ring-violet-500 focus:ring-offset-yellow-200 shadow-[0_0_18px_rgba(168,85,247,0.45)]"
-            >
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               حفظ المورد
             </Button>
           </div>
         </form>
       </Modal>
-<<<<<<< HEAD
 
       {/* ── Debug / Testing Modal ──────────────────────────────────────────── */}
       <Modal isOpen={isDebugOpen} onClose={() => setIsDebugOpen(false)} title={debugSupplier ? `أدوات الفحص — ${debugSupplier.supplierName}` : 'أدوات الفحص'} size="lg">
@@ -1163,8 +870,6 @@ const AdminSuppliers = () => {
           </div>
         ) : null}
       </Modal>
-=======
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     </div>
   );
 };

@@ -21,13 +21,8 @@ const HeroSlider = ({ slides }) => {
   const slide = slides[currentSlide];
 
   return (
-<<<<<<< HEAD
     <section className="relative overflow-hidden rounded-[1.5rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-card-rgb)/0.9)] shadow-[var(--shadow-medium)]">
       <div className="relative h-[8.5rem] sm:h-[10rem] lg:h-[11.5rem]">
-=======
-    <section className="relative overflow-hidden rounded-[1.75rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-card-rgb)/0.9)] shadow-[var(--shadow-medium)]">
-      <div className="relative h-[12.5rem] sm:h-[14.5rem] lg:h-[16.5rem]">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <AnimatePresence mode="wait">
           <motion.div
             key={slide.id}
@@ -37,7 +32,6 @@ const HeroSlider = ({ slides }) => {
             transition={{ duration: 0.45, ease: 'easeOut' }}
             className="absolute inset-0"
           >
-<<<<<<< HEAD
             <img
               src={slide.image}
               alt={slide.alt || ''}
@@ -47,20 +41,13 @@ const HeroSlider = ({ slides }) => {
               sizes="100vw"
               className="h-full w-full object-cover"
             />
-=======
-            <img src={slide.image} alt={slide.alt || ''} className="h-full w-full object-cover" />
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,11,11,0.04)_0%,rgba(11,11,11,0.1)_100%)]" />
           </motion.div>
         </AnimatePresence>
       </div>
 
       {hasMultipleSlides && (
-<<<<<<< HEAD
         <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-2 px-4 pb-2.5">
-=======
-        <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-2 px-4 pb-3">
->>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           {slides.map((item, index) => (
             <button
               key={item.id}
