@@ -86,14 +86,14 @@ const Auth = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
-  const countryOptions = useMemo(() => {
+const countryOptions = useMemo(() => {
     const source = countries.length ? countries : fallbackCountries;
-    return [...source].sort((left, right) => (left?.name?.common || '').localeCompare(right?.name?.common || ''));
+    return [...source].sort((a, b) => (a?.name?.common || '').localeCompare(b?.name?.common || ''));
   }, [countries, fallbackCountries]);
 
   const selectedCountry = useMemo(
     () => countryOptions.find((item) => item.cca2 === country) || countryOptions[0],
-    [country, countryOptions]
+    [countryOptions, country]
   );
 
   const getDialCodes = (countryItem) => {
@@ -103,16 +103,6 @@ const Auth = () => {
     if (!suffixes.length) return [root];
     return suffixes.map((suffix) => `${root}${suffix}`);
   };
-
-  const countryOptions = useMemo(() => {
-    const source = countries.length ? countries : fallbackCountries;
-    return [...source].sort((a, b) => (a?.name?.common || '').localeCompare(b?.name?.common || ''));
-  }, [countries, fallbackCountries]);
-
-  const selectedCountry = useMemo(
-    () => countryOptions.find((item) => item.cca2 === country) || countryOptions[0],
-    [countryOptions, country]
-  );
 
   const dialCodeOptions = useMemo(() => {
     const map = new Map();
