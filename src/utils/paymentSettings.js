@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 ﻿const PAYMENT_METHOD_FIELDS = {
   mobile_wallet: ['amount'],
   bank_transfer: ['amount'],
   credit_card: ['amount', 'cardNumber', 'expiryDate', 'cvv'],
   paypal: ['amount'],
+=======
+const PAYMENT_METHOD_FIELDS = {
+  mobile_wallet: ['amount', 'senderNumber', 'transactionId'],
+  bank_transfer: ['amount', 'senderNumber', 'transactionId'],
+  credit_card: ['amount', 'cardNumber', 'expiryDate', 'cvv'],
+  paypal: ['amount', 'transactionId'],
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 };
 
 const ALLOWED_METHOD_TYPES = Object.keys(PAYMENT_METHOD_FIELDS);
@@ -20,6 +28,7 @@ export const createPaymentEntityId = (prefix = 'item', value = '') => {
   return token ? `${prefix}-${token}-${unique}` : `${prefix}-${Date.now()}-${unique}`;
 };
 
+<<<<<<< HEAD
 const normalizeFeePercent = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -27,6 +36,8 @@ const normalizeFeePercent = (value) => {
   return Number(clamped.toFixed(2));
 };
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 export const getPaymentFieldsForType = (type = 'mobile_wallet') =>
   PAYMENT_METHOD_FIELDS[type] || PAYMENT_METHOD_FIELDS.mobile_wallet;
 
@@ -43,8 +54,12 @@ export const createDefaultPaymentGroups = () => [
         description: 'الدفع من خلال فودافون كاش',
         type: 'mobile_wallet',
         accountNumber: '01012345678',
+<<<<<<< HEAD
         feePercent: 0,
         instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال',
+=======
+        instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال ورقم العملية.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         isActive: true,
       },
       {
@@ -53,8 +68,12 @@ export const createDefaultPaymentGroups = () => [
         description: 'الدفع من خلال اتصالات كاش',
         type: 'mobile_wallet',
         accountNumber: '01112345678',
+<<<<<<< HEAD
         feePercent: 0,
         instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال',
+=======
+        instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال ورقم العملية.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         isActive: true,
       },
       {
@@ -63,8 +82,12 @@ export const createDefaultPaymentGroups = () => [
         description: 'الدفع من خلال أورنج كاش',
         type: 'mobile_wallet',
         accountNumber: '01212345678',
+<<<<<<< HEAD
         feePercent: 0,
         instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال',
+=======
+        instructions: 'حوّل المبلغ ثم ارفع صورة الإيصال ورقم العملية.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         isActive: true,
       },
       {
@@ -74,7 +97,10 @@ export const createDefaultPaymentGroups = () => [
         type: 'bank_transfer',
         accountNumber: 'EG123456789012345678901234567890',
         bankName: 'National Bank of Egypt',
+<<<<<<< HEAD
         feePercent: 0,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         instructions: 'حوّل المبلغ للحساب البنكي ثم ارفع صورة الإيصال.',
         isActive: true,
       },
@@ -97,10 +123,14 @@ export const normalizePaymentMethod = (method = {}, index = 0) => {
     type,
     accountNumber: String(method?.accountNumber || '').trim(),
     bankName: String(method?.bankName || '').trim(),
+<<<<<<< HEAD
     feePercent: normalizeFeePercent(method?.feePercent),
     instructions: String(method?.instructions || '').trim(),
     image: String(method?.image || method?.imageUrl || method?.logo || '').trim(),
     imageName: String(method?.imageName || '').trim(),
+=======
+    instructions: String(method?.instructions || '').trim(),
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     isActive: method?.isActive !== false,
     fields,
   };
@@ -153,4 +183,7 @@ export const findPaymentMethodById = (settings, methodId) => {
 
   return null;
 };
+<<<<<<< HEAD
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

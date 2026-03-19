@@ -9,6 +9,7 @@ import StatusBadge from './StatusBadge';
 
 const isPendingLike = (status) => ['pending', 'requested', 'under_review', 'processing'].includes(String(status || '').trim().toLowerCase());
 
+<<<<<<< HEAD
 const getTopupEmail = (topup, isArabic) => (
   topup?.userEmail
   || topup?.email
@@ -22,6 +23,8 @@ const getTopupName = (topup, isArabic) => (
   || (isArabic ? 'مستخدم غير معروف' : 'Unknown user')
 );
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const ManualTopupsSection = ({
   topups,
   pendingCount,
@@ -77,10 +80,17 @@ const ManualTopupsSection = ({
                   <div className={cn('flex items-start justify-between gap-3', isArabic && 'flex-row-reverse text-right')}>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+<<<<<<< HEAD
                         {getTopupName(topup, isArabic)}
                       </p>
                       <p className="mt-1 truncate text-xs text-[var(--color-muted)]">
                         {getTopupEmail(topup, isArabic)}
+=======
+                        {topup.userName || topup.userId || (isArabic ? 'مستخدم غير معروف' : 'Unknown user')}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">
+                        #{topup.id}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                       </p>
                     </div>
                     <StatusBadge status={topup.status} isArabic={isArabic} />
@@ -117,7 +127,11 @@ const ManualTopupsSection = ({
             <Table>
               <TableHeader>
                 <TableRow>
+<<<<<<< HEAD
                   <TableHead>{isArabic ? 'البريد الإلكتروني' : 'Email'}</TableHead>
+=======
+                  <TableHead>{isArabic ? 'المعرف' : 'ID'}</TableHead>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   <TableHead>{isArabic ? 'المستخدم' : 'User'}</TableHead>
                   <TableHead>{isArabic ? 'المبلغ' : 'Amount'}</TableHead>
                   <TableHead>{isArabic ? 'وسيلة الدفع' : 'Payment method'}</TableHead>
@@ -134,8 +148,13 @@ const ManualTopupsSection = ({
 
                   return (
                     <TableRow key={topup.id} className={rowClassName}>
+<<<<<<< HEAD
                       <TableCell className="font-medium text-[var(--color-text)]">{getTopupEmail(topup, isArabic)}</TableCell>
                       <TableCell>{getTopupName(topup, isArabic)}</TableCell>
+=======
+                      <TableCell className="font-medium text-[var(--color-text)]">#{topup.id}</TableCell>
+                      <TableCell>{topup.userName || topup.userId || '-'}</TableCell>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                       <TableCell>{formatMoney(amount, topup.currencyCode)}</TableCell>
                       <TableCell>{topup.paymentChannel || topup.method || '-'}</TableCell>
                       <TableCell>

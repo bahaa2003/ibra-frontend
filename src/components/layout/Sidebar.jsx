@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React from 'react';
+=======
+import React, { useEffect } from 'react';
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -14,7 +18,10 @@ import {
   Package,
   Settings,
   ShieldCheck,
+<<<<<<< HEAD
   ShoppingCart,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   User,
   UserCog,
   Users,
@@ -23,20 +30,41 @@ import {
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/useAuthStore';
+<<<<<<< HEAD
 import { cn } from '../ui/Button';
 import { useLanguage } from '../../context/LanguageContext';
 import LanguageSwitcher from '../ui/LanguageSwitcher';
 import brandIconImage from '../../assets/logo.png';
 import brandWordmarkImage from '../../assets/ibra.png';
 import { buildWhatsAppLink, getAdminWhatsAppNumber } from '../../utils/whatsapp';
+=======
+import useSystemStore from '../../store/useSystemStore';
+import { cn } from '../ui/Button';
+import { useLanguage } from '../../context/LanguageContext';
+import LanguageSwitcher from '../ui/LanguageSwitcher';
+import brandIconImage from '../../assets/box_.png';
+import brandWordmarkImage from '../../assets/ibra.png';
+import { buildWhatsAppLink } from '../../utils/whatsapp';
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { getDefaultRouteForRole, hasRequiredRole } from '../../utils/authRoles';
 
 const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const { user, logout } = useAuthStore();
+<<<<<<< HEAD
+=======
+  const { paymentSettings, loadPaymentSettings } = useSystemStore();
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const navigate = useNavigate();
   const { dir } = useLanguage();
   const { t } = useTranslation();
 
+<<<<<<< HEAD
+=======
+  useEffect(() => {
+    loadPaymentSettings();
+  }, [loadPaymentSettings]);
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const closeSidebarOnMobile = () => {
     if (isMobile) {
       setIsOpen(false);
@@ -54,7 +82,11 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
       ? 'مرحباً، أحتاج مساعدة من فريق IBRA Store'
       : 'Hello, I need help from the IBRA Store team';
     const href = buildWhatsAppLink({
+<<<<<<< HEAD
       number: getAdminWhatsAppNumber(),
+=======
+      number: paymentSettings?.whatsappNumber,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       message,
     });
 
@@ -73,6 +105,7 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     },
     { icon: User, label: t('sidebar.myAccount', { defaultValue: 'حسابي' }), path: '/account', roles: ['admin', 'customer', 'manager'] },
     { icon: ShieldCheck, label: t('sidebar.accountProtection', { defaultValue: 'حماية الحساب' }), path: '/account-security', roles: ['admin', 'customer', 'manager'] },
+<<<<<<< HEAD
     {
       icon: Gamepad2,
       label: user?.role === 'admin'
@@ -90,6 +123,10 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
       path: user?.role === 'customer' ? '/orders' : '/admin/orders',
       roles: ['admin', 'customer']
     },
+=======
+    { icon: Gamepad2, label: t('sidebar.browseStore'), path: '/products', roles: ['admin', 'customer'] },
+    { icon: Wallet, label: t('sidebar.wallet'), path: '/wallet', roles: ['customer'] },
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     { icon: Code2, label: t('sidebar.apiSandbox'), path: '/api-sandbox', roles: ['admin'] },
     { icon: Users, label: t('sidebar.users'), path: '/admin/users', roles: ['admin'] },
     { icon: UserCog, label: t('sidebar.supervisors'), path: '/admin/supervisors', roles: ['admin'] },
@@ -139,10 +176,17 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
             {(isOpen || isMobile) ? (
               <div className="flex min-w-0 items-center gap-3">
                 <div className="h-11 w-11 overflow-hidden rounded-[var(--radius-md)]">
+<<<<<<< HEAD
                   <img src={brandIconImage} alt="IBRA Store" loading="eager" decoding="async" className="h-full w-full object-cover" />
                 </div>
                 <div className="min-w-0">
                   <img src={brandWordmarkImage} alt="IBRA" loading="eager" decoding="async" className="h-5 w-auto object-contain sm:h-6" />
+=======
+                  <img src={brandIconImage} alt="IBRA Store" className="h-full w-full object-cover" />
+                </div>
+                <div className="min-w-0">
+                  <img src={brandWordmarkImage} alt="IBRA" className="h-5 w-auto object-contain sm:h-6" />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   <p className="mt-1 truncate text-[11px] uppercase tracking-[0.18em] text-[var(--color-primary)]">
                     {dir === 'rtl' ? 'هوية فاخرة' : 'Luxury Identity'}
                   </p>
@@ -150,7 +194,11 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
               </div>
             ) : (
               <div className="mx-auto h-11 w-11 overflow-hidden rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-card-rgb)/0.84)]">
+<<<<<<< HEAD
                 <img src={brandIconImage} alt="IBRA Store" loading="eager" decoding="async" className="h-full w-full object-cover" />
+=======
+                <img src={brandIconImage} alt="IBRA Store" className="h-full w-full object-cover" />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               </div>
             )}
 

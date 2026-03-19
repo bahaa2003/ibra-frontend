@@ -4,7 +4,11 @@ import { cn } from './Button';
 import { Search } from 'lucide-react';
 import { searchInputClassName } from './Input';
 
+<<<<<<< HEAD
 const SearchBar = ({ value, onChange, placeholder, className, inputClassName, ...props }) => {
+=======
+const SearchBar = ({ value, onChange, placeholder, className, ...props }) => {
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const { dir } = useLanguage();
   const isRTL = dir === 'rtl';
 
@@ -26,7 +30,10 @@ const SearchBar = ({ value, onChange, placeholder, className, inputClassName, ..
           type="search"
           className={cn(
             searchInputClassName,
+<<<<<<< HEAD
             inputClassName,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             isRTL ? 'pr-12 pl-4 text-right' : 'pl-12 pr-4 text-left'
           )}
           placeholder={placeholder || ''}

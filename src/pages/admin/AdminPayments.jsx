@@ -147,14 +147,22 @@ const AdminPayments = () => {
 
   return (
     <div className="min-w-0 space-y-6">
+<<<<<<< HEAD
       <header className="admin-premium-hero space-y-2">
+=======
+      <header className="space-y-2">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عمليات الشحن</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           مراجعة طلبات الشحن اليدوي وإدارة بيانات الاستلام وطرق الدفع من مكان واحد.
         </p>
       </header>
 
+<<<<<<< HEAD
       <Card className="admin-premium-panel min-w-0 p-4 sm:p-5">
+=======
+      <Card className="min-w-0 p-4 sm:p-5">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">طلبات الشحن</h2>
 
         <div className="space-y-3 lg:hidden">
@@ -363,7 +371,11 @@ const AdminPayments = () => {
                 <img
                   src={selectedRequest.proofImage}
                   alt="Payment proof"
+<<<<<<< HEAD
                   className="mx-auto max-h-40 w-auto max-w-full rounded-lg object-contain bg-gray-50 dark:bg-gray-900"
+=======
+                  className="max-h-64 w-full rounded-lg object-contain bg-gray-50 dark:bg-gray-900"
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 />
                 <a
                   href={selectedRequest.proofImage}
@@ -431,7 +443,11 @@ const AdminPayments = () => {
           <img
             src={receiptPreviewUrl}
             alt="Payment receipt"
+<<<<<<< HEAD
             className="mx-auto max-h-[56vh] w-auto max-w-full rounded-lg object-contain bg-gray-50 dark:bg-gray-900"
+=======
+            className="max-h-[70vh] w-full rounded-lg object-contain bg-gray-50 dark:bg-gray-900"
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           />
         ) : (
           <p className="text-sm text-gray-500">لا توجد صورة إيصال.</p>
@@ -442,3 +458,7 @@ const AdminPayments = () => {
 };
 
 export default AdminPayments;
+<<<<<<< HEAD
+=======
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

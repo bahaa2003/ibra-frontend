@@ -1,14 +1,37 @@
+<<<<<<< HEAD
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/useAuthStore';
 import { isAdminRole } from '../../utils/authRoles';
 import { buildWhatsAppLink, getAdminWhatsAppNumber } from '../../utils/whatsapp';
+=======
+import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import useSystemStore from '../../store/useSystemStore';
+import useAuthStore from '../../store/useAuthStore';
+import { isAdminRole } from '../../utils/authRoles';
+import { buildWhatsAppLink } from '../../utils/whatsapp';
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const FloatingWhatsApp = () => {
   const { i18n } = useTranslation();
   const { user } = useAuthStore();
+<<<<<<< HEAD
   const shouldHideForRole = isAdminRole(user?.role);
 
+=======
+  const { paymentSettings, loadPaymentSettings } = useSystemStore();
+  const shouldHideForRole = isAdminRole(user?.role);
+
+  useEffect(() => {
+    if (shouldHideForRole) {
+      return;
+    }
+
+    loadPaymentSettings();
+  }, [loadPaymentSettings, shouldHideForRole]);
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   if (shouldHideForRole) {
     return null;
   }
@@ -21,7 +44,11 @@ const FloatingWhatsApp = () => {
     ? 'مرحباً، أحتاج مساعدة من فريق IBRA Store'
     : 'Hello, I need help from the IBRA Store team';
   const href = buildWhatsAppLink({
+<<<<<<< HEAD
     number: getAdminWhatsAppNumber(),
+=======
+    number: paymentSettings?.whatsappNumber,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     message,
   });
   const tooltipText = isArabic ? 'تواصل معنا' : 'Chat with us';
@@ -31,7 +58,10 @@ const FloatingWhatsApp = () => {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+<<<<<<< HEAD
       referrerPolicy="no-referrer"
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       aria-label={isArabic ? 'واتساب الدعم' : 'WhatsApp Support'}
       className="floating-whatsapp"
     >

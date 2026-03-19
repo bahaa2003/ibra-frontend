@@ -15,7 +15,10 @@ const CatalogCard = React.memo(({ catalog, isRTL, onOpen }) => (
           alt={catalog.title}
           loading="lazy"
           decoding="async"
+<<<<<<< HEAD
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 360px"
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,8,10,0.08)_0%,rgba(8,8,10,0.16)_42%,rgba(8,8,10,0.84)_100%)]" />

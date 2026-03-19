@@ -6,10 +6,13 @@ import useNotificationStore from './useNotificationStore';
 import useAuthStore from './useAuthStore';
 import useAdminStore from './useAdminStore';
 
+<<<<<<< HEAD
 const ORDERS_CACHE_TTL = 60 * 1000;
 let ordersRequest = null;
 let ordersRequestScope = '';
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const useOrderStore = create(
   persist(
     (set, get) => ({
@@ -26,6 +29,7 @@ const useOrderStore = create(
       // exchange rates change after order creation.
       // =====================================================================================
       orders: mockOrders,
+<<<<<<< HEAD
       ordersLastLoadedAt: 0,
       ordersLastLoadedScope: '',
 
@@ -77,6 +81,16 @@ const useOrderStore = create(
           });
 
         return ordersRequest;
+=======
+
+      loadOrders: async (userId) => {
+        try {
+          const orders = await apiClient.orders.list(userId);
+          set({ orders: Array.isArray(orders) ? orders : mockOrders });
+        } catch (_error) {
+          set({ orders: mockOrders });
+        }
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       },
       
       addOrder: async (order) => {
@@ -132,9 +146,13 @@ const useOrderStore = create(
         const created = await apiClient.orders.create(orderWithSnapshot);
         const nextOrder = created?.order || created || orderWithSnapshot;
         set(state => ({
+<<<<<<< HEAD
           orders: [nextOrder, ...state.orders],
           ordersLastLoadedAt: Date.now(),
           ordersLastLoadedScope: state.ordersLastLoadedScope || `user:${nextOrder.userId}`,
+=======
+          orders: [nextOrder, ...state.orders]
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
 
         useNotificationStore.getState().addNotification({
@@ -150,6 +168,7 @@ const useOrderStore = create(
         const target = (get().orders || []).find((o) => o.id === id);
         if (!target) return;
 
+<<<<<<< HEAD
         const updated = await apiClient.orders.updateStatus(id, status);
         const nextOrder = updated || { ...target, status };
         set(state => ({
@@ -159,6 +178,11 @@ const useOrderStore = create(
               : o
           )),
           ordersLastLoadedAt: Date.now(),
+=======
+        await apiClient.orders.updateStatus(id, status);
+        set(state => ({
+          orders: state.orders.map(o => o.id === id ? { ...o, status } : o)
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
 
         // Deduct balance when order is completed
@@ -172,11 +196,15 @@ const useOrderStore = create(
             const newBalance = Math.max(0, currentCoins - orderAmount); // Prevent negative balance
             
             // Update user in admin store
+<<<<<<< HEAD
             useAdminStore.setState((state) => ({
               users: (state.users || []).map((user) => (
                 user.id === targetUser.id ? { ...user, coins: newBalance } : user
               )),
             }));
+=======
+            useAdminStore.getState().updateUser(targetUser.id, { coins: newBalance });
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             
             // Update current session if it's the logged-in user
             const { user: currentUser } = useAuthStore.getState();
@@ -186,6 +214,7 @@ const useOrderStore = create(
           }
         }
 
+<<<<<<< HEAD
         if (useAdminStore.getState().loadUsers) {
           await useAdminStore.getState().loadUsers();
         }
@@ -194,6 +223,8 @@ const useOrderStore = create(
           await useAuthStore.getState().refreshProfile();
         }
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         if (status === 'approved' || status === 'completed') {
           useNotificationStore.getState().addNotification({
             title: 'قبول طلب',
@@ -207,8 +238,11 @@ const useOrderStore = create(
             type: 'warning',
           });
         }
+<<<<<<< HEAD
 
         return nextOrder;
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       },
 
       syncOrderSupplierStatus: async (id, actor) => {
@@ -216,7 +250,10 @@ const useOrderStore = create(
         if (!synced) return null;
         set((state) => ({
           orders: (state.orders || []).map((o) => (o.id === id ? { ...o, ...synced } : o)),
+<<<<<<< HEAD
           ordersLastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
         return synced;
       }

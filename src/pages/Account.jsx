@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+<<<<<<< HEAD
 import { resolveImageUrl } from '../utils/imageUrl';
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { motion } from 'framer-motion';
 import { Camera, Eye, EyeOff, KeyRound, Mail, Phone, Save, ShieldCheck, User, UserCircle2, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
@@ -144,7 +147,10 @@ const Account = () => {
   const [form, setForm] = useState(() => ({
     ...getProfileFromUser(user),
     avatarPreview: String(user?.avatar || '').trim(),
+<<<<<<< HEAD
     avatarFile: null,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     avatarAction: 'keep'
   }));
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
@@ -156,7 +162,10 @@ const Account = () => {
     setForm({
       ...initialProfile,
       avatarPreview: initialProfile.avatar,
+<<<<<<< HEAD
       avatarFile: null,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       avatarAction: 'keep'
     });
     setPasswordForm({ current: '', next: '', confirm: '' });
@@ -183,7 +192,11 @@ const Account = () => {
   const displayedAvatar =
     form.avatarAction === 'remove'
       ? generatedAvatar
+<<<<<<< HEAD
       : form.avatarPreview || resolveImageUrl(savedProfile.avatar) || generatedAvatar;
+=======
+      : form.avatarPreview || savedProfile.avatar || generatedAvatar;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const hasAvatarChanges = form.avatarAction !== 'keep';
   const hasProfileChanges =
@@ -209,6 +222,7 @@ const Account = () => {
       return;
     }
 
+<<<<<<< HEAD
     const nextPreview = URL.createObjectURL(file);
     setForm((prev) => ({ ...prev, avatarPreview: nextPreview, avatarFile: file, avatarAction: 'update' }));
     setErrors((prev) => ({ ...prev, avatar: '' }));
@@ -216,6 +230,19 @@ const Account = () => {
 
   const handleRemoveAvatar = () => {
     setForm((prev) => ({ ...prev, avatarPreview: '', avatarFile: null, avatarAction: 'remove' }));
+=======
+    const reader = new FileReader();
+    reader.onload = () => {
+      const nextPreview = String(reader.result || '');
+      setForm((prev) => ({ ...prev, avatarPreview: nextPreview, avatarAction: 'update' }));
+      setErrors((prev) => ({ ...prev, avatar: '' }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setForm((prev) => ({ ...prev, avatarPreview: '', avatarAction: 'remove' }));
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     setErrors((prev) => ({ ...prev, avatar: '' }));
   };
 
@@ -223,7 +250,10 @@ const Account = () => {
     setForm({
       ...savedProfile,
       avatarPreview: savedProfile.avatar,
+<<<<<<< HEAD
       avatarFile: null,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       avatarAction: 'keep'
     });
     setPasswordForm({ current: '', next: '', confirm: '' });
@@ -303,9 +333,14 @@ const Account = () => {
       }
 
       if (hasAvatarChanges) {
+<<<<<<< HEAD
         // Send File object for upload, or null for removal
         const avatarPayload = form.avatarAction === 'remove' ? null : form.avatarFile;
         await updateUserAvatar(user.id, avatarPayload, user);
+=======
+        const nextAvatar = form.avatarAction === 'remove' ? '' : form.avatarPreview;
+        await updateUserAvatar(user.id, nextAvatar, user);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       }
 
       await updateUserProfile(user.id, profilePayload, user);
@@ -336,7 +371,10 @@ const Account = () => {
       setForm({
         ...nextSaved,
         avatarPreview: nextSaved.avatar,
+<<<<<<< HEAD
         avatarFile: null,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         avatarAction: 'keep'
       });
       setPasswordForm({ current: '', next: '', confirm: '' });

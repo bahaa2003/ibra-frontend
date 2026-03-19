@@ -79,6 +79,7 @@ const TransactionCard = ({ transaction, index }) => {
       initial={{ x: isRTL ? 50 : -50, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
+<<<<<<< HEAD
       className="cursor-pointer rounded-lg border border-gray-200/70 bg-white/80 p-3 backdrop-blur-xl transition-colors hover:bg-white dark:border-white/10 dark:bg-black/40 dark:hover:bg-black/50 sm:rounded-xl sm:p-4"
     >
       <div className={`flex items-center gap-3 sm:gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
@@ -99,6 +100,26 @@ const TransactionCard = ({ transaction, index }) => {
 
           <div className={`flex flex-col gap-1 ${isRTL ? 'items-end text-right' : 'items-start text-left'} sm:flex-row sm:items-center sm:justify-between`}>
             <div className="text-[11px] text-gray-600 dark:text-gray-400 sm:text-xs">
+=======
+      className="bg-white/80 dark:bg-black/40 backdrop-blur-xl border border-gray-200/70 dark:border-white/10 rounded-xl p-4 hover:bg-white dark:hover:bg-black/50 transition-colors cursor-pointer"
+    >
+      <div className={`flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getTransactionColor(transaction.type)} flex items-center justify-center flex-shrink-0`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+
+        <div className={`flex-1 ${isRTL ? 'text-right' : 'text-left'}`}>
+          <div className={`flex items-center justify-between mb-1 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <h4 className="text-gray-900 dark:text-white font-semibold text-sm">{transactionDescription}</h4>
+            <div className={`flex items-center gap-1 ${getStatusColor(transaction.status)}`}>
+              <StatusIcon className="w-4 h-4" />
+              <span className="text-xs">{t(statusLabelKey, { defaultValue: transaction.status })}</span>
+            </div>
+          </div>
+
+          <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <div className="text-gray-600 dark:text-gray-400 text-xs">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               {formatDateTime(transaction.date, locale, {
                 year: 'numeric',
                 month: 'short',
@@ -107,13 +128,21 @@ const TransactionCard = ({ transaction, index }) => {
                 minute: '2-digit'
               })}
             </div>
+<<<<<<< HEAD
             <div className={`whitespace-nowrap text-sm font-bold [direction:ltr] sm:text-base ${transaction.amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+=======
+            <div className={`font-bold ${transaction.amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               {formatWalletAmount(transaction.amount, transaction.currency, { signed: true })}
             </div>
           </div>
 
           {transaction.reference && (
+<<<<<<< HEAD
             <div className={`mt-1 text-[10px] text-gray-500 sm:text-xs ${isRTL ? 'text-right' : 'text-left'}`}>
+=======
+            <div className="text-gray-500 text-xs mt-1">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               {t('wallet.reference')}: {transaction.reference}
             </div>
           )}

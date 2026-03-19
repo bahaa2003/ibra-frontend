@@ -3,9 +3,12 @@ import { persist } from 'zustand/middleware';
 import { mockProducts, mockCategories } from '../data/mockData';
 import apiClient from '../services/client';
 
+<<<<<<< HEAD
 const PRODUCTS_CACHE_TTL = 5 * 60 * 1000;
 let productsRequest = null;
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const asNumber = (value, fallback) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -19,6 +22,7 @@ const resolveCategoryId = (value, categories) => {
   return matched?.id || raw || categories?.[0]?.id || '';
 };
 
+<<<<<<< HEAD
 const buildProductSearchIndex = (product = {}) => String([
   product?.name,
   product?.nameAr,
@@ -31,6 +35,8 @@ const buildProductSearchIndex = (product = {}) => String([
   .trim()
   .toLowerCase();
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const normalizeProductRecord = (product = {}, categories = mockCategories) => {
   const minimumOrderQty = asNumber(product.minimumOrderQty ?? product.minQty, 1);
   const maximumOrderQtyRaw = asNumber(product.maximumOrderQty ?? product.maxQty, 999);
@@ -70,7 +76,10 @@ const normalizeProductRecord = (product = {}, categories = mockCategories) => {
     supplierMarginType: product.supplierMarginType || 'fixed',
     supplierMarginValue: asNumber(product.supplierMarginValue, 0),
     supplierNotes: product.supplierNotes || '',
+<<<<<<< HEAD
     searchIndex: product.searchIndex || buildProductSearchIndex(product),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   };
 
   normalized.minQty = normalized.minimumOrderQty;
@@ -101,7 +110,11 @@ const normalizeProductRecord = (product = {}, categories = mockCategories) => {
 };
 
 const normalizeProducts = (products, categories = mockCategories) => {
+<<<<<<< HEAD
   if (!Array.isArray(products)) {
+=======
+  if (!Array.isArray(products) || products.length === 0) {
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     return mockProducts.map((p) => normalizeProductRecord(p, categories));
   }
   return products.map((p) => normalizeProductRecord(p, categories));
@@ -114,11 +127,15 @@ const useMediaStore = create(
       categories: mockCategories,
       isLoading: false,
       error: null,
+<<<<<<< HEAD
       lastLoadedAt: 0,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
       resetProducts: () => {
         set({
           products: normalizeProducts(mockProducts, mockCategories),
+<<<<<<< HEAD
           categories: mockCategories,
           lastLoadedAt: 0,
         });
@@ -144,6 +161,15 @@ const useMediaStore = create(
         set({ isLoading: true, error: null });
 
         productsRequest = Promise.all([apiClient.products.list(), apiClient.categories.list()])
+=======
+          categories: mockCategories
+        });
+      },
+
+      loadProducts: () => {
+        set({ isLoading: true, error: null });
+        return Promise.all([apiClient.products.list(), apiClient.categories.list()])
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           .then(([products, categories]) => {
             const safeCategories = Array.isArray(categories) && categories.length
               ? categories
@@ -154,12 +180,19 @@ const useMediaStore = create(
               categories: safeCategories,
               isLoading: false,
               error: null,
+<<<<<<< HEAD
               lastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             });
           })
           .catch((error) => {
             const { products, categories } = get();
+<<<<<<< HEAD
             if (!Array.isArray(products)) {
+=======
+            if (!Array.isArray(products) || products.length === 0) {
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               set({ products: normalizeProducts(mockProducts, categories || mockCategories) });
             }
             if (!Array.isArray(categories) || categories.length === 0) {
@@ -170,12 +203,16 @@ const useMediaStore = create(
               isLoading: false,
               error: error?.message || null,
             });
+<<<<<<< HEAD
           })
           .finally(() => {
             productsRequest = null;
           });
 
         return productsRequest;
+=======
+          });
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       },
 
       addProduct: async (product) => {
@@ -187,8 +224,12 @@ const useMediaStore = create(
 
         const created = await apiClient.products.create(newProduct);
         set((state) => ({
+<<<<<<< HEAD
           products: [...state.products, normalizeProductRecord(created || newProduct, state.categories)],
           lastLoadedAt: Date.now(),
+=======
+          products: [...state.products, normalizeProductRecord(created || newProduct, state.categories)]
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
         return created || newProduct;
       },
@@ -207,8 +248,12 @@ const useMediaStore = create(
             p.id === id
               ? normalizeProductRecord(updated || safeUpdates, state.categories)
               : p
+<<<<<<< HEAD
           )),
           lastLoadedAt: Date.now(),
+=======
+          ))
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }));
         return updated || safeUpdates;
       },
@@ -216,8 +261,12 @@ const useMediaStore = create(
       deleteProduct: (id) => {
         apiClient.products.delete(id).then(() => {
           set((state) => ({
+<<<<<<< HEAD
             products: state.products.filter((p) => p.id !== id),
             lastLoadedAt: Date.now(),
+=======
+            products: state.products.filter((p) => p.id !== id)
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           }));
         });
       },
@@ -230,8 +279,12 @@ const useMediaStore = create(
         };
         apiClient.categories.create(newCategory).then((created) => {
           set((state) => ({
+<<<<<<< HEAD
             categories: [...state.categories, created || newCategory],
             lastLoadedAt: Date.now(),
+=======
+            categories: [...state.categories, created || newCategory]
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           }));
         });
       },
@@ -249,13 +302,29 @@ const useMediaStore = create(
             return {
               categories: state.categories.filter((c) => c.id !== id),
               products: state.products.filter((p) => !shouldDeleteProduct(p)),
+<<<<<<< HEAD
               lastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             };
           });
         });
       },
 
+<<<<<<< HEAD
       fetchProducts: async () => get().loadProducts({ force: true })
+=======
+      fetchProducts: async () => {
+        set({ isLoading: true });
+        try {
+          const data = await apiClient.products.list();
+          const categories = get().categories || mockCategories;
+          set({ products: normalizeProducts(data, categories), isLoading: false });
+        } catch (error) {
+          set({ error: error.message, isLoading: false });
+        }
+      }
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     }),
     {
       name: 'products-storage',

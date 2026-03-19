@@ -3,6 +3,7 @@ import apiClient from '../services/client';
 import { getDefaultWhatsAppNumber } from '../utils/whatsapp';
 import { createDefaultPaymentGroups, normalizePaymentGroups } from '../utils/paymentSettings';
 
+<<<<<<< HEAD
 const CURRENCIES_CACHE_TTL = 10 * 60 * 1000;
 const PAYMENT_SETTINGS_CACHE_TTL = 5 * 60 * 1000;
 
@@ -13,12 +14,18 @@ const useSystemStore = create((set, get) => ({
   currencies: [],
   isLoadingCurrencies: false,
   currenciesLastLoadedAt: 0,
+=======
+const useSystemStore = create((set, get) => ({
+  currencies: [],
+  isLoadingCurrencies: false,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   paymentSettings: {
     countryAccounts: [],
     instructions: '',
     whatsappNumber: getDefaultWhatsAppNumber(),
     paymentGroups: createDefaultPaymentGroups(),
   },
+<<<<<<< HEAD
   paymentSettingsLastLoadedAt: 0,
 
   loadCurrencies: async ({ force = false } = {}) => {
@@ -55,14 +62,29 @@ const useSystemStore = create((set, get) => ({
       });
 
     return currenciesRequest;
+=======
+
+  loadCurrencies: async () => {
+    set({ isLoadingCurrencies: true });
+    try {
+      const items = await apiClient.system.currencies();
+      set({ currencies: Array.isArray(items) ? items : [], isLoadingCurrencies: false });
+    } catch (_error) {
+      set({ isLoadingCurrencies: false });
+    }
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   },
 
   addCurrency: async (payload, actor) => {
     const created = await apiClient.system.addCurrency(payload, actor);
+<<<<<<< HEAD
     set((state) => ({
       currencies: [...state.currencies, created],
       currenciesLastLoadedAt: Date.now(),
     }));
+=======
+    set((state) => ({ currencies: [...state.currencies, created] }));
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     return created;
   },
 
@@ -70,7 +92,10 @@ const useSystemStore = create((set, get) => ({
     const updated = await apiClient.system.updateCurrency(code, updates, actor);
     set((state) => ({
       currencies: state.currencies.map((item) => (item.code === code ? updated : item)),
+<<<<<<< HEAD
       currenciesLastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     }));
     return updated;
   },
@@ -79,13 +104,17 @@ const useSystemStore = create((set, get) => ({
     await apiClient.system.deleteCurrency(code, actor);
     set((state) => ({
       currencies: state.currencies.filter((item) => item.code !== code),
+<<<<<<< HEAD
       currenciesLastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     }));
   },
 
   ensureDefaultCurrency: () => {
     const list = get().currencies || [];
     if (!list.length) {
+<<<<<<< HEAD
       set({
         currencies: [{ code: 'USD', name: 'US Dollar', symbol: '$', rate: 1 }],
         currenciesLastLoadedAt: Date.now(),
@@ -109,10 +138,22 @@ const useSystemStore = create((set, get) => ({
     paymentSettingsRequest = apiClient.system.paymentSettings()
       .then((settings) => {
         const nextPaymentSettings = {
+=======
+      set({ currencies: [{ code: 'USD', name: 'US Dollar', symbol: '$', rate: 1 }] });
+    }
+  },
+
+  loadPaymentSettings: async () => {
+    try {
+      const settings = await apiClient.system.paymentSettings();
+      set({
+        paymentSettings: {
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           countryAccounts: Array.isArray(settings?.countryAccounts) ? settings.countryAccounts : [],
           instructions: settings?.instructions || '',
           whatsappNumber: settings?.whatsappNumber || getDefaultWhatsAppNumber(),
           paymentGroups: normalizePaymentGroups(settings?.paymentGroups),
+<<<<<<< HEAD
         };
 
         set({
@@ -128,6 +169,20 @@ const useSystemStore = create((set, get) => ({
       });
 
     return paymentSettingsRequest;
+=======
+        },
+      });
+    } catch (_error) {
+      set({
+        paymentSettings: {
+          countryAccounts: [],
+          instructions: '',
+          whatsappNumber: getDefaultWhatsAppNumber(),
+          paymentGroups: createDefaultPaymentGroups(),
+        },
+      });
+    }
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   },
 
   savePaymentSettings: async (payload, actor) => {
@@ -139,7 +194,10 @@ const useSystemStore = create((set, get) => ({
         whatsappNumber: saved?.whatsappNumber || getDefaultWhatsAppNumber(),
         paymentGroups: normalizePaymentGroups(saved?.paymentGroups),
       },
+<<<<<<< HEAD
       paymentSettingsLastLoadedAt: Date.now(),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     });
     return saved;
   },

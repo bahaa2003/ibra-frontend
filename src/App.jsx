@@ -3,7 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import FloatingWhatsApp from './components/ui/FloatingWhatsApp';
 import Loader from './components/ui/Loader';
+<<<<<<< HEAD
 import RouteWarmup from './components/app/RouteWarmup';
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
@@ -11,12 +14,18 @@ import { ADMIN_ROLES } from './utils/authRoles';
 
 const Layout = lazy(() => import('./components/layout/Layout'));
 const Auth = lazy(() => import('./pages/Auth'));
+<<<<<<< HEAD
 const AccountPending = lazy(() => import('./pages/AccountPending'));
 const AccountRejected = lazy(() => import('./pages/AccountRejected'));
 const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Orders = lazy(() => import('./pages/Orders'));
+=======
+const Landing = lazy(() => import('./pages/Landing'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const Products = lazy(() => import('./pages/Products'));
 const ProductDetails = lazy(() => import('./pages/ProductDetails'));
 const Wallet = lazy(() => import('./pages/Wallet'));
@@ -33,8 +42,11 @@ const AdminPayments = lazy(() => import('./pages/admin/AdminPayments'));
 const AdminPaymentMethods = lazy(() => import('./pages/admin/AdminPaymentMethods'));
 const AdminSupervisors = lazy(() => import('./pages/admin/AdminSupervisors'));
 const AdminSuppliers = lazy(() => import('./pages/admin/AdminSuppliers'));
+<<<<<<< HEAD
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders'));
 const AdminUserTransactions = lazy(() => import('./pages/admin/AdminUserTransactions'));
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 const AddBalance = lazy(() => import('./pages/AddBalance'));
 const PaymentDetails = lazy(() => import('./pages/PaymentDetails'));
 
@@ -55,14 +67,20 @@ function App() {
     <ThemeProvider>
       <LanguageProvider>
         <ToastProvider>
+<<<<<<< HEAD
           <RouteWarmup />
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           <BrowserRouter>
             <Routes>
               <Route path="/" element={renderSuspended(<Landing />)} />
               <Route path="/auth" element={renderSuspended(<Auth />)} />
+<<<<<<< HEAD
               <Route path="/login" element={renderSuspended(<Auth />)} />
               <Route path="/account-pending" element={renderSuspended(<AccountPending />)} />
               <Route path="/account-rejected" element={renderSuspended(<AccountRejected />)} />
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
               <Route element={renderSuspended(<Layout />)}>
                 <Route
@@ -76,7 +94,11 @@ function App() {
                 <Route
                   path="/products"
                   element={(
+<<<<<<< HEAD
                     <ProtectedRoute roles={['customer', 'admin']}>
+=======
+                    <ProtectedRoute roles={['customer']}>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                       {renderSuspended(<Products />)}
                     </ProtectedRoute>
                   )}
@@ -84,7 +106,11 @@ function App() {
                 <Route
                   path="/products/:id"
                   element={(
+<<<<<<< HEAD
                     <ProtectedRoute roles={['customer', 'admin']}>
+=======
+                    <ProtectedRoute roles={['customer']}>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                       {renderSuspended(<ProductDetails />)}
                     </ProtectedRoute>
                   )}
@@ -98,6 +124,7 @@ function App() {
                   )}
                 />
                 <Route
+<<<<<<< HEAD
                   path="/orders"
                   element={(
                     <ProtectedRoute roles={['customer']}>
@@ -106,6 +133,8 @@ function App() {
                   )}
                 />
                 <Route
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   path="/wallet/add-balance"
                   element={(
                     <ProtectedRoute roles={['customer']}>
@@ -186,6 +215,7 @@ function App() {
                   )}
                 />
                 <Route
+<<<<<<< HEAD
                   path="/admin/users/:userId/transactions"
                   element={(
                     <ProtectedRoute roles={ADMIN_ROLES}>
@@ -194,6 +224,8 @@ function App() {
                   )}
                 />
                 <Route
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   path="/admin/supervisors"
                   element={(
                     <ProtectedRoute roles={ADMIN_ROLES}>
@@ -218,6 +250,7 @@ function App() {
                   )}
                 />
                 <Route
+<<<<<<< HEAD
                   path="/admin/orders"
                   element={(
                     <ProtectedRoute roles={ADMIN_ROLES}>
@@ -226,6 +259,8 @@ function App() {
                   )}
                 />
                 <Route
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                   path="/admin/topups"
                   element={(
                     <ProtectedRoute roles={ADMIN_ROLES}>

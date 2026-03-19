@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import useAdminStore from './useAdminStore';
 import apiClient from '../services/client';
+<<<<<<< HEAD
 import {
   getAccountAccessRoute,
   inferBlockedStatusFromError,
@@ -34,6 +35,8 @@ const buildBlockedOutcome = (status, user = null, error = null) => ({
   redirectTo: getAccountAccessRoute(status),
   canAccessApp: false,
 });
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const useAuthStore = create(
   persist(
@@ -43,6 +46,7 @@ const useAuthStore = create(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+<<<<<<< HEAD
       blockedStatus: null,
       blockedUser: null,
       profileLastLoadedAt: 0,
@@ -59,18 +63,24 @@ const useAuthStore = create(
       clearBlockedAccess: () => {
         set({ blockedStatus: null, blockedUser: null });
       },
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
       login: async (email, password) => {
         set({ isLoading: true, error: null });
         try {
           const response = await apiClient.auth.login(email, password);
+<<<<<<< HEAD
           const outcome = buildAuthOutcome(response.user);
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           set({
             user: response.user,
             token: response.token || null,
             isAuthenticated: true,
             isLoading: false,
+<<<<<<< HEAD
             blockedStatus: outcome.canAccessApp ? null : outcome.status,
             blockedUser: outcome.canAccessApp ? null : response.user,
             profileLastLoadedAt: Date.now(),
@@ -102,6 +112,13 @@ const useAuthStore = create(
             isAuthenticated: false,
           });
           return { ok: false, error: formattedError };
+=======
+          });
+          return true;
+        } catch (err) {
+          set({ error: err.message, isLoading: false });
+          return false;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }
       },
 
@@ -109,13 +126,17 @@ const useAuthStore = create(
         set({ isLoading: true, error: null });
         try {
           const response = await apiClient.auth.loginWithGoogle();
+<<<<<<< HEAD
           const outcome = buildAuthOutcome(response.user);
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           set({
             user: response.user,
             token: response.token || null,
             isAuthenticated: true,
             isLoading: false,
+<<<<<<< HEAD
             blockedStatus: outcome.canAccessApp ? null : outcome.status,
             blockedUser: outcome.canAccessApp ? null : response.user,
             profileLastLoadedAt: Date.now(),
@@ -147,12 +168,21 @@ const useAuthStore = create(
             isAuthenticated: false,
           });
           return { ok: false, error: formattedError };
+=======
+          });
+          await useAdminStore.getState().loadUsers();
+          return true;
+        } catch (err) {
+          set({ error: err.message, isLoading: false });
+          return false;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }
       },
 
       signup: async (userData) => {
         set({ isLoading: true, error: null });
         try {
+<<<<<<< HEAD
           const response = await apiClient.auth.register(userData);
           const status = normalizeAccountStatus(response?.user?.status);
 
@@ -181,10 +211,21 @@ const useAuthStore = create(
           const formattedError = formatAuthErrorMessage(err, { action: 'register' });
           set({ error: formattedError, isLoading: false });
           return { ok: false, error: formattedError };
+=======
+          await apiClient.auth.register(userData);
+          await useAdminStore.getState().loadUsers();
+
+          set({ isLoading: false });
+          return true;
+        } catch (err) {
+          set({ error: err.message, isLoading: false });
+          return false;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         }
       },
 
       logout: () => {
+<<<<<<< HEAD
         set({
           user: null,
           token: null,
@@ -258,6 +299,34 @@ const useAuthStore = create(
           return null;
         }
       },
+=======
+        set({ user: null, token: null, isAuthenticated: false });
+      },
+
+      // Helper to update local session if user data changes (e.g. coins)
+      updateUserSession: (updates) => {
+        const { user } = get();
+        if (user) {
+          set({ user: { ...user, ...updates } });
+        }
+      },
+
+      // Re-fetch user profile from backend to bust persist cache
+      refreshProfile: async () => {
+        try {
+          const currentUserId = get().user?.id;
+          if (!currentUserId) return;
+
+          const profile = await apiClient.auth.getProfile(currentUserId);
+          // Merge new profile data with existing user state (preserve token, etc.)
+          set((state) => ({
+            user: { ...state.user, ...profile }
+          }));
+        } catch (err) {
+          console.error('[AuthStore] refreshProfile failed:', err?.response?.data || err.message);
+        }
+      }
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     }),
     {
       name: 'auth-storage',
@@ -265,9 +334,12 @@ const useAuthStore = create(
         user: state.user,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
+<<<<<<< HEAD
         blockedStatus: state.blockedStatus,
         blockedUser: state.blockedUser,
         profileLastLoadedAt: state.profileLastLoadedAt,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       }),
     }
   )

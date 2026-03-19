@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, AlertCircle, Info, Search, Check, Package } from 'lucide-react';
+<<<<<<< HEAD
 import { resolveImageUrl } from '../../utils/imageUrl';
 import { uploadImage } from '../../services/realApi';
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import useMediaStore from '../../store/useMediaStore';
 import apiClient from '../../services/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
@@ -69,7 +72,11 @@ const AdminProducts = () => {
         fallbackSupplierId: '',
         supplierNotes: '',
         supplierFieldMappingsText: 'playerId:uid\nquantity:qty',
+<<<<<<< HEAD
         syncPriceWithProvider: false,
+=======
+        syncPriceWithProvider: true,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         enableManualPrice: false,
         manualPriceAdjustment: '',
         basePriceCoins: '',
@@ -86,6 +93,10 @@ const AdminProducts = () => {
         showWhenUnavailable: false,
         pauseSales: false,
         pauseReason: '',
+<<<<<<< HEAD
+=======
+        internalNotes: '',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         // =====================================================
         // جدولة الظهور - Schedule
         // =====================================================
@@ -162,7 +173,10 @@ const AdminProducts = () => {
 
     const selectedSupplierId = productForm.supplierId || productForm.providerId;
     const selectedProviderProductId = productForm.externalProductId || productForm.providerProductId;
+<<<<<<< HEAD
     const canSyncWithProvider = Boolean(productForm.syncPriceWithProvider && selectedSupplierId && selectedProviderProductId);
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     const selectedProviderProduct = useMemo(
         () => providerProducts.find((product) => product.id === selectedProviderProductId) || null,
         [providerProducts, selectedProviderProductId]
@@ -231,6 +245,7 @@ const AdminProducts = () => {
         }
     };
 
+<<<<<<< HEAD
     const handleImageUpload = async (e, setForm, uploadCategory = 'products') => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -244,6 +259,18 @@ const AdminProducts = () => {
         } catch {
             addToast('فشل رفع الصورة', 'error');
         }
+=======
+    const handleImageUpload = (e, setForm) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 500000) {
+            addToast('يجب أن يكون حجم الصورة أقل من 500 كيلوبايت', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => setForm((prev) => ({ ...prev, image: reader.result }));
+        reader.readAsDataURL(file);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     };
 
     const openProductModal = (product = null) => {
@@ -282,6 +309,10 @@ const AdminProducts = () => {
                 showWhenUnavailable: product.showWhenUnavailable || false,
                 pauseSales: product.pauseSales || false,
                 pauseReason: product.pauseReason || '',
+<<<<<<< HEAD
+=======
+                internalNotes: product.internalNotes || '',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 enableSchedule: product.enableSchedule || false,
                 scheduledStartAt: product.scheduledStartAt || '',
                 scheduledEndAt: product.scheduledEndAt || '',
@@ -315,7 +346,11 @@ const AdminProducts = () => {
                 fallbackSupplierId: '',
                 supplierNotes: '',
                 supplierFieldMappingsText: 'playerId:uid\nquantity:qty',
+<<<<<<< HEAD
                 syncPriceWithProvider: false,
+=======
+                syncPriceWithProvider: true,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 enableManualPrice: false,
                 manualPriceAdjustment: '',
                 basePriceCoins: '',
@@ -329,6 +364,10 @@ const AdminProducts = () => {
                 showWhenUnavailable: false,
                 pauseSales: false,
                 pauseReason: '',
+<<<<<<< HEAD
+=======
+                internalNotes: '',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                 enableSchedule: false,
                 scheduledStartAt: '',
                 scheduledEndAt: '',
@@ -350,12 +389,17 @@ const AdminProducts = () => {
         e.preventDefault();
 
         // validation شامل
+<<<<<<< HEAD
         const validationErrors = validateProductForm(productForm, { requireImage: !editingProduct });
+=======
+        const validationErrors = validateProductForm(productForm);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         if (validationErrors.length > 0) {
             validationErrors.forEach(error => addToast(error, 'error'));
             return;
         }
 
+<<<<<<< HEAD
         const selectedSupplierId = String(productForm.supplierId || productForm.providerId || '').trim();
         const selectedExternalProductId = String(productForm.externalProductId || productForm.providerProductId || '').trim();
         const hasProviderLink = Boolean(selectedSupplierId && selectedExternalProductId);
@@ -368,6 +412,21 @@ const AdminProducts = () => {
         const minQty = Number(productForm.minimumOrderQty === '' || productForm.minimumOrderQty == null ? 1 : productForm.minimumOrderQty);
         const maxQty = Number(productForm.maximumOrderQty === '' || productForm.maximumOrderQty == null ? 999 : productForm.maximumOrderQty);
         const stepQty = Number(productForm.stepQty === '' || productForm.stepQty == null ? 1 : productForm.stepQty);
+=======
+        const shouldSyncWithProvider = Boolean(productForm.syncPriceWithProvider);
+        const selectedSupplierId = String(productForm.supplierId || productForm.providerId || '').trim();
+        const selectedExternalProductId = String(productForm.externalProductId || productForm.providerProductId || '').trim();
+
+        // Validation إضافي للمورد (فقط عند تفعيل مزامنة السعر)
+        if (shouldSyncWithProvider && (!selectedSupplierId || !selectedExternalProductId)) {
+            addToast('المزود ومنتج المزود حقول مطلوبة', 'error');
+            return;
+        }
+
+        const minQty = Number(productForm.minimumOrderQty || 1);
+        const maxQty = Number(productForm.maximumOrderQty || 999);
+        const stepQty = Number(productForm.stepQty || 1);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
         let basePriceCoins = Number(productForm.basePriceCoins || 0);
         let syncedProviderBasePrice = null;
@@ -389,12 +448,21 @@ const AdminProducts = () => {
 
         const payload = {
             // معلومات أساسية
+<<<<<<< HEAD
             name: fallbackName,
             nameAr: fallbackNameAr,
             description: productForm.description,
             descriptionAr: productForm.descriptionAr,
             category: fallbackCategory,
             image: productImage,
+=======
+            name: productForm.name,
+            nameAr: productForm.nameAr,
+            description: productForm.description,
+            descriptionAr: productForm.descriptionAr,
+            category: String(productForm.category || '').trim(),
+            image: productForm.image || 'https://via.placeholder.com/300x200',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             status: productForm.status,
             displayOrder: Number(productForm.displayOrder || 0),
             
@@ -405,10 +473,18 @@ const AdminProducts = () => {
             externalProductId: selectedExternalProductId,
             externalProductName: String(productForm.externalProductName || '').trim(),
             autoFulfillmentEnabled: Boolean(productForm.autoFulfillmentEnabled),
+<<<<<<< HEAD
+=======
+            fallbackSupplierId: String(productForm.fallbackSupplierId || '').trim(),
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             supplierFieldMappings: parseSupplierMappings(productForm.supplierFieldMappingsText),
             externalPricingMode: String(productForm.externalPricingMode || 'use_local_price'),
             supplierMarginType: String(productForm.supplierMarginType || 'fixed'),
             supplierMarginValue: Number(productForm.supplierMarginValue || 0),
+<<<<<<< HEAD
+=======
+            supplierNotes: String(productForm.supplierNotes || '').trim(),
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             syncPriceWithProvider: shouldSyncWithProvider,
             enableManualPrice: productForm.enableManualPrice,
             manualPriceAdjustment,
@@ -429,6 +505,10 @@ const AdminProducts = () => {
             showWhenUnavailable: productForm.showWhenUnavailable,
             pauseSales: productForm.pauseSales,
             pauseReason: productForm.pauseReason,
+<<<<<<< HEAD
+=======
+            internalNotes: productForm.internalNotes,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             
             // الجدولة
             enableSchedule: productForm.enableSchedule,
@@ -500,8 +580,12 @@ const AdminProducts = () => {
     };
 
     return (
+<<<<<<< HEAD
         <div className="min-w-0 space-y-6">
             <section className="admin-premium-hero">
+=======
+        <div className="space-y-6">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('productsManager')}</h1>
@@ -523,7 +607,10 @@ const AdminProducts = () => {
                     </Button>
                 </div>
             </div>
+<<<<<<< HEAD
             </section>
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
             {activeTab === 'products' ? (
                 <>
@@ -533,7 +620,11 @@ const AdminProducts = () => {
                         </Button>
                     </div>
 
+<<<<<<< HEAD
                     <div className="admin-premium-panel overflow-hidden">
+=======
+                    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -541,7 +632,11 @@ const AdminProducts = () => {
                                     <TableHead className="text-center">المزود</TableHead>
                                     <TableHead className="text-center">{t('category') || 'القسم'}</TableHead>
                                     <TableHead className="text-center">{t('basePrice')}</TableHead>
+<<<<<<< HEAD
                                     <TableHead className="text-center">{t('common.status', { defaultValue: 'الحالة' })}</TableHead>
+=======
+                                    <TableHead className="text-center">{t('status') || 'الحالة'}</TableHead>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                     <TableHead className="text-end">{t('actions') || 'الإجراءات'}</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -551,7 +646,11 @@ const AdminProducts = () => {
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100">
+<<<<<<< HEAD
                                                     <img src={resolveImageUrl(product.image)} alt={product.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+=======
+                                                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                                 </div>
                                                 <div>
                                                     <div className="font-medium text-gray-900 dark:text-white">{product.name}</div>
@@ -600,9 +699,15 @@ const AdminProducts = () => {
 
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         {(categories || []).map((cat) => (
+<<<<<<< HEAD
                             <div key={cat.id} className="group admin-premium-panel relative overflow-hidden">
                                 <div className="aspect-video bg-gray-100">
                                     <img src={resolveImageUrl(cat.image)} alt={cat.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+=======
+                            <div key={cat.id} className="group relative overflow-hidden rounded-xl border border-gray-200 shadow-sm dark:border-gray-700">
+                                <div className="aspect-video bg-gray-100">
+                                    <img src={cat.image} alt={cat.name} className="h-full w-full object-cover" />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                 </div>
                                 <div className="bg-white p-4 dark:bg-gray-800">
                                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">{cat.nameAr || cat.name}</h3>
@@ -630,8 +735,13 @@ const AdminProducts = () => {
                         </h3>
                         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
                             <div className="grid grid-cols-2 gap-4">
+<<<<<<< HEAD
                                 <Input label="English Name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
                                 <Input label="Arabic Name" value={productForm.nameAr} onChange={(e) => setProductForm({ ...productForm, nameAr: e.target.value })} />
+=======
+                                <Input label="English Name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} required />
+                                <Input label="Arabic Name" value={productForm.nameAr} onChange={(e) => setProductForm({ ...productForm, nameAr: e.target.value })} required />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                             </div>
 
                             <Input label="Description" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
@@ -653,9 +763,15 @@ const AdminProducts = () => {
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة المنتج (رفع)</label>
                                 <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800/50">
+<<<<<<< HEAD
                                     <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" />
                                     <label htmlFor="product-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
                                         {productForm.image ? <img src={resolveImageUrl(productForm.image)} alt="معاينة" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
+=======
+                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" />
+                                    <label htmlFor="product-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
+                                        {productForm.image ? <img src={productForm.image} alt="معاينة" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                     </label>
                                 </div>
                             </div>
@@ -675,6 +791,7 @@ const AdminProducts = () => {
                                     <select
                                         className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                         value={productForm.supplierId || productForm.providerId}
+<<<<<<< HEAD
                                         onChange={(e) => {
                                             const value = e.target.value;
                                             setProductForm((prev) => ({
@@ -686,6 +803,9 @@ const AdminProducts = () => {
                                                 syncPriceWithProvider: value ? prev.syncPriceWithProvider : false,
                                             }));
                                         }}
+=======
+                                        onChange={(e) => setProductForm({ ...productForm, supplierId: e.target.value, providerId: e.target.value, externalProductId: '', providerProductId: '' })}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                     >
                                         <option value="" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">اختر المزود</option>
                                         {providers.map((provider) => (
@@ -794,6 +914,19 @@ const AdminProducts = () => {
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <Input
+<<<<<<< HEAD
+=======
+                                    label="External Product Name"
+                                    value={productForm.externalProductName}
+                                    onChange={(e) => setProductForm({ ...productForm, externalProductName: e.target.value })}
+                                />
+                                <Input
+                                    label="Fallback Supplier ID"
+                                    value={productForm.fallbackSupplierId}
+                                    onChange={(e) => setProductForm({ ...productForm, fallbackSupplierId: e.target.value })}
+                                />
+                                <Input
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                     label="supplierMarginValue"
                                     type="number"
                                     value={productForm.supplierMarginValue}
@@ -842,6 +975,15 @@ const AdminProducts = () => {
                                 />
                             </div>
 
+<<<<<<< HEAD
+=======
+                            <Input
+                                label="supplierNotes"
+                                value={productForm.supplierNotes}
+                                onChange={(e) => setProductForm({ ...productForm, supplierNotes: e.target.value })}
+                            />
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                             <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                                 <div className="flex flex-wrap items-center gap-4">
                                     <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -913,12 +1055,20 @@ const AdminProducts = () => {
                                     type="number"
                                     value={productForm.minimumOrderQty}
                                     onChange={(e) => setProductForm({ ...productForm, minimumOrderQty: e.target.value })}
+<<<<<<< HEAD
+=======
+                                    required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                 />
                                 <Input
                                     label="الحد الأقصى للطلب (Qty)"
                                     type="number"
                                     value={productForm.maximumOrderQty}
                                     onChange={(e) => setProductForm({ ...productForm, maximumOrderQty: e.target.value })}
+<<<<<<< HEAD
+=======
+                                    required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                 />
                                 <div className="w-full">
                                     <Input
@@ -926,8 +1076,13 @@ const AdminProducts = () => {
                                         type="number"
                                         value={productForm.basePriceCoins}
                                         onChange={(e) => setProductForm({ ...productForm, basePriceCoins: e.target.value })}
+<<<<<<< HEAD
                                         readOnly={Boolean(canSyncWithProvider)}
                                         disabled={Boolean(canSyncWithProvider)}
+=======
+                                        readOnly={Boolean(productForm.syncPriceWithProvider)}
+                                        disabled={Boolean(productForm.syncPriceWithProvider)}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                         required
                                         suffix={(
                                             <span className="text-xs font-semibold text-[var(--color-muted)]">
@@ -936,11 +1091,17 @@ const AdminProducts = () => {
                                         )}
                                     />
                                     <p className="mt-1 text-xs text-[var(--color-muted)]">
+<<<<<<< HEAD
                                         {canSyncWithProvider
                                             ? (isEnglish ? 'This final price is synced automatically from the pricing settings above.' : 'هذا السعر النهائي يتم تحديثه تلقائيًا من إعدادات التسعير الموجودة بالأعلى.')
                                             : productForm.syncPriceWithProvider
                                                 ? (isEnglish ? 'Sync is enabled, but supplier/product is not selected yet. You can still enter a local final price.' : 'المزامنة مفعلة، لكن لم يتم اختيار المورد/منتج المورد بعد. يمكنك إدخال السعر النهائي يدويًا.')
                                                 : (isEnglish ? 'Enter the final price here when the product is not linked to a supplier.' : 'أدخل السعر النهائي هنا عندما لا يكون المنتج مربوطًا بمورد.')}
+=======
+                                        {productForm.syncPriceWithProvider
+                                            ? (isEnglish ? 'This final price is synced automatically from the pricing settings above.' : 'هذا السعر النهائي يتم تحديثه تلقائيًا من إعدادات التسعير الموجودة بالأعلى.')
+                                            : (isEnglish ? 'Enter the final price here when the product is not linked to a supplier.' : 'أدخل السعر النهائي هنا عندما لا يكون المنتج مربوطًا بمورد.')}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                     </p>
                                 </div>
                             </div>
@@ -1016,12 +1177,20 @@ const AdminProducts = () => {
                                 />
                             )}
 
+<<<<<<< HEAD
                             {false && <Input
+=======
+                            <Input
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                 label="ملاحظات الإدارة (لا يراها العميل)"
                                 placeholder="ملاحظات داخلية..."
                                 value={productForm.internalNotes}
                                 onChange={(e) => setProductForm({ ...productForm, internalNotes: e.target.value })}
+<<<<<<< HEAD
                             />}
+=======
+                            />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                         </div>
                     </div>
 
@@ -1049,12 +1218,20 @@ const AdminProducts = () => {
                                             type="datetime-local"
                                             value={productForm.scheduledStartAt}
                                             onChange={(e) => setProductForm({ ...productForm, scheduledStartAt: e.target.value })}
+<<<<<<< HEAD
+=======
+                                            required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                         />
                                         <Input
                                             label="وقت النهاية"
                                             type="datetime-local"
                                             value={productForm.scheduledEndAt}
                                             onChange={(e) => setProductForm({ ...productForm, scheduledEndAt: e.target.value })}
+<<<<<<< HEAD
+=======
+                                            required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                         />
                                     </div>
 
@@ -1106,12 +1283,20 @@ const AdminProducts = () => {
                                             type="number"
                                             value={productForm.stockQuantity}
                                             onChange={(e) => setProductForm({ ...productForm, stockQuantity: e.target.value })}
+<<<<<<< HEAD
+=======
+                                            required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                         />
                                         <Input
                                             label="حد المخزون المنخفض"
                                             type="number"
                                             value={productForm.lowStockThreshold}
                                             onChange={(e) => setProductForm({ ...productForm, lowStockThreshold: e.target.value })}
+<<<<<<< HEAD
+=======
+                                            required
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                                         />
                                     </div>
 
@@ -1180,9 +1365,15 @@ const AdminProducts = () => {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة القسم (رفع)</label>
                         <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800/50">
+<<<<<<< HEAD
                             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setCategoryForm, 'categories')} className="hidden" id="category-image-upload" />
                             <label htmlFor="category-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
                                 {categoryForm.image ? <img src={resolveImageUrl(categoryForm.image)} alt="معاينة" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
+=======
+                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setCategoryForm)} className="hidden" id="category-image-upload" />
+                            <label htmlFor="category-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
+                                {categoryForm.image ? <img src={categoryForm.image} alt="معاينة" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                             </label>
                         </div>
                     </div>

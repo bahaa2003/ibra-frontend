@@ -12,7 +12,10 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
   const isRTL = dir === 'rtl';
 
   const IconComponent = method.icon;
+<<<<<<< HEAD
   const hasImage = Boolean(method.image);
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const handleCopyAccount = async (event) => {
     event.stopPropagation();
@@ -49,6 +52,7 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
       >
         <div className={`mb-4 flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
           <div className={`flex min-w-0 items-center gap-3 sm:gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+<<<<<<< HEAD
             {hasImage ? (
               <img
                 src={method.image}
@@ -60,6 +64,11 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
                 <IconComponent className="h-6 w-6 text-white" />
               </div>
             )}
+=======
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${method.color} transition-transform group-hover:scale-110 sm:h-12 sm:w-12`}>
+              <IconComponent className="h-6 w-6 text-white" />
+            </div>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="min-w-0">
               <h3 className="truncate text-base font-semibold text-gray-900 sm:text-lg dark:text-white">{method.name}</h3>
               {method.description && (

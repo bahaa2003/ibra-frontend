@@ -10,7 +10,10 @@ import useTopupStore from '../store/useTopupStore';
 import useAuthStore from '../store/useAuthStore';
 import { useToast } from '../components/ui/Toast';
 import { findPaymentMethodById } from '../utils/paymentSettings';
+<<<<<<< HEAD
 import { devLogger } from '../utils/devLogger';
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const getMethodPresentation = (method) => {
   const token = `${method?.id || ''} ${method?.name || ''}`.toLowerCase();
@@ -30,16 +33,28 @@ const PaymentDetails = () => {
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const navigate = useNavigate();
+<<<<<<< HEAD
   const { user } = useAuthStore();
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const { paymentSettings, loadPaymentSettings } = useSystemStore();
   const { addToast } = useToast();
   const isRTL = dir === 'rtl';
 
   const [formData, setFormData] = useState({
     amount: '',
+<<<<<<< HEAD
     cardNumber: '',
     expiryDate: '',
     cvv: '',
+=======
+    senderNumber: '',
+    transactionId: '',
+    cardNumber: '',
+    expiryDate: '',
+    cvv: '',
+    notes: '',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   });
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,6 +77,7 @@ const PaymentDetails = () => {
     [method]
   );
 
+<<<<<<< HEAD
   const methodFields = method?.fields || ['amount'];
   const visibleMethodFields = useMemo(
     () => methodFields.filter((field) => field !== 'senderNumber'),
@@ -97,6 +113,11 @@ const PaymentDetails = () => {
       return `${safeValue.toFixed(2)} ${currencyCode}`;
     }
   };
+=======
+  const methodFields = method?.fields || ['amount', 'senderNumber', 'transactionId'];
+  const methodInstructions = method?.instructions || paymentSettings?.instructions || t('payments.chooseMethod');
+  const requiresReceipt = Boolean(method?.accountNumber);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -121,8 +142,14 @@ const PaymentDetails = () => {
   };
 
   const validate = () => {
+<<<<<<< HEAD
     const amountValue = Number(formData.amount);
     if (!Number.isFinite(amountValue) || amountValue <= 0) return t('payments.validationAmount');
+=======
+    if (!formData.amount || parseFloat(formData.amount) <= 0) return t('payments.validationAmount');
+    if (methodFields.includes('senderNumber') && !formData.senderNumber) return t('payments.validationSenderNumber');
+    if (methodFields.includes('transactionId') && !formData.transactionId) return t('payments.validationTransactionId');
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     if (requiresReceipt && !uploadedFile) return t('payments.validationReceipt');
     return '';
   };
@@ -137,6 +164,7 @@ const PaymentDetails = () => {
 
     setIsSubmitting(true);
     try {
+<<<<<<< HEAD
       const { requestTopup } = useTopupStore.getState();
 
       await requestTopup({
@@ -148,6 +176,16 @@ const PaymentDetails = () => {
         amountWithFee: payableAmount,
         senderWalletNumber: '',
         transferredFromNumber: '',
+=======
+      const { user } = useAuthStore.getState();
+      const { requestTopup } = useTopupStore.getState();
+
+      await requestTopup({
+        requestedAmount: parseFloat(formData.amount),
+        amount: parseFloat(formData.amount),
+        senderWalletNumber: formData.senderNumber || '',
+        transferredFromNumber: formData.senderNumber || '',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         proofImage: uploadedFile || null,
         paymentChannel: method?.name || methodId || '',
         currencyCode: user?.currency || 'USD',
@@ -159,7 +197,11 @@ const PaymentDetails = () => {
       setSubmitStatus('success');
       setTimeout(() => navigate('/wallet'), 3000);
     } catch (error) {
+<<<<<<< HEAD
       devLogger.warnUnlessBenign('Topup submission failed:', error);
+=======
+      console.error('Topup submission failed:', error);
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -173,6 +215,19 @@ const PaymentDetails = () => {
       type: 'number',
       min: '1',
     },
+<<<<<<< HEAD
+=======
+    senderNumber: {
+      label: t('payments.fields.senderNumber'),
+      placeholder: t('payments.fields.senderNumberPlaceholder'),
+      type: 'tel',
+    },
+    transactionId: {
+      label: t('payments.fields.transactionId'),
+      placeholder: t('payments.fields.transactionIdPlaceholder'),
+      type: 'text',
+    },
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     cardNumber: {
       label: t('payments.fields.cardNumber'),
       placeholder: t('payments.fields.cardNumberPlaceholder'),
@@ -217,6 +272,7 @@ const PaymentDetails = () => {
           className={isRTL ? 'text-right' : 'text-left'}
         >
           <div className={`mb-2 flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+<<<<<<< HEAD
             {method.image ? (
               <img
                 src={method.image}
@@ -231,6 +287,11 @@ const PaymentDetails = () => {
                 <span className="text-xs font-bold text-white">{methodPresentation.icon}</span>
               </div>
             )}
+=======
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${methodPresentation.color}`}>
+              <span className="text-xs font-bold text-white">{methodPresentation.icon}</span>
+            </div>
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{method.name}</h1>
               <p className="text-gray-600 dark:text-gray-400">{methodInstructions}</p>
@@ -251,6 +312,7 @@ const PaymentDetails = () => {
             className="rounded-2xl border border-gray-200 bg-white/80 p-4 backdrop-blur-xl sm:p-6 dark:border-gray-800 dark:bg-gray-900/70"
           >
             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{t('payments.accountDetails')}</h3>
+<<<<<<< HEAD
             {method.image ? (
               <div className={`mb-4 flex ${isRTL ? 'justify-end' : 'justify-start'}`}>
                 <img
@@ -263,6 +325,8 @@ const PaymentDetails = () => {
                 />
               </div>
             ) : null}
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             <div className="rounded-lg border border-gray-200 bg-gray-50/90 p-4 dark:border-gray-800 dark:bg-gray-950/60">
               <div className={`mb-2 text-sm text-gray-600 dark:text-gray-300 ${isRTL ? 'text-right' : 'text-left'}`}>
                 {methodInstructions}
@@ -298,7 +362,11 @@ const PaymentDetails = () => {
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">{t('payments.paymentDetails')}</h3>
 
+<<<<<<< HEAD
           {visibleMethodFields.map((field) => {
+=======
+          {methodFields.map((field) => {
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
             const config = fieldConfigs[field];
             if (!config) return null;
 
@@ -322,6 +390,25 @@ const PaymentDetails = () => {
             );
           })}
 
+<<<<<<< HEAD
+=======
+          <div className="mb-6">
+            <label className={`mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300 ${isRTL ? 'text-right' : 'text-left'}`}>
+              {t('payments.notesOptional')}
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => handleInputChange('notes', e.target.value)}
+              placeholder={t('payments.notesPlaceholder')}
+              rows={3}
+              className={`w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-400 transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 ${
+                isRTL ? 'text-right' : 'text-left'
+              }`}
+              disabled={isSubmitting}
+            />
+          </div>
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           {requiresReceipt && (
             <div className="mb-6">
               <label className={`mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300 ${isRTL ? 'text-right' : 'text-left'}`}>
@@ -331,6 +418,7 @@ const PaymentDetails = () => {
             </div>
           )}
 
+<<<<<<< HEAD
           <div className="mb-6 rounded-xl border border-amber-200/70 bg-amber-50/70 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
             <div className={`flex items-center justify-between gap-3 text-sm ${isRTL ? 'flex-row-reverse' : ''}`}>
               <span className="text-gray-700 dark:text-gray-300">
@@ -363,6 +451,8 @@ const PaymentDetails = () => {
             </div>
           </div>
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           <button
             type="submit"
             disabled={isSubmitting}
@@ -411,4 +501,7 @@ const PaymentDetails = () => {
 };
 
 export default PaymentDetails;
+<<<<<<< HEAD
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

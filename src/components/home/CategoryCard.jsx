@@ -21,9 +21,12 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
       <img
         src={category.image}
         alt={category.title}
+<<<<<<< HEAD
         loading="lazy"
         decoding="async"
         sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         className={cn(
           'h-full w-full object-cover transition-transform duration-500',
           category.id === 'all' ? 'scale-[0.72] object-contain p-6' : 'group-hover:scale-105'
@@ -51,4 +54,8 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
   </motion.button>
 );
 
+<<<<<<< HEAD
 export default React.memo(CategoryCard);
+=======
+export default CategoryCard;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

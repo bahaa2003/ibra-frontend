@@ -4,8 +4,11 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+<<<<<<< HEAD
   DollarSign,
   Gamepad2,
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   Package,
   ShieldCheck,
   ShoppingCart,
@@ -21,16 +24,24 @@ import useAdminStore from '../store/useAdminStore';
 import useOrderStore from '../store/useOrderStore';
 import useTopupStore from '../store/useTopupStore';
 import useMediaStore from '../store/useMediaStore';
+<<<<<<< HEAD
 import apiClient from '../services/client';
 import DashboardHeader from '../components/admin-dashboard/DashboardHeader';
 import StatsGrid from '../components/admin-dashboard/StatsGrid';
 import PendingApprovalsSection from '../components/admin-dashboard/PendingApprovalsSection';
+=======
+import DashboardHeader from '../components/admin-dashboard/DashboardHeader';
+import StatsGrid from '../components/admin-dashboard/StatsGrid';
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import RecentOrdersSection from '../components/admin-dashboard/RecentOrdersSection';
 import ManualTopupsSection from '../components/admin-dashboard/ManualTopupsSection';
 import QuickActionsSection from '../components/admin-dashboard/QuickActionsSection';
 import ActivityFeedSection from '../components/admin-dashboard/ActivityFeedSection';
 import { formatDateTime, formatNumber, getNumericLocale } from '../utils/intl';
+<<<<<<< HEAD
 import { getUserRegistrationDate, isApprovedAccountStatus, isPendingAccountStatus } from '../utils/accountStatus';
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
 const PENDING_STATUSES = ['pending', 'requested', 'under_review', 'processing'];
 const COMPLETED_STATUSES = ['completed', 'approved', 'success'];
@@ -64,7 +75,10 @@ const AdminDashboard = () => {
   const { products, loadProducts } = useMediaStore();
   const { i18n } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
+<<<<<<< HEAD
   const [serverStats, setServerStats] = useState(null);
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
@@ -80,9 +94,12 @@ const AdminDashboard = () => {
         Promise.resolve(loadOrders()),
         Promise.resolve(loadTopups()),
         Promise.resolve(loadProducts()),
+<<<<<<< HEAD
         apiClient.dashboard?.getDashboardStats().then((stats) => {
           if (isMounted && stats) setServerStats(stats);
         }).catch(() => {}),
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       ]);
 
       if (isMounted) {
@@ -103,6 +120,7 @@ const AdminDashboard = () => {
   );
 
   const activeUsers = useMemo(
+<<<<<<< HEAD
     () => customerUsers.filter((entry) => isApprovedAccountStatus(entry?.status)),
     [customerUsers]
   );
@@ -111,6 +129,9 @@ const AdminDashboard = () => {
     () => [...customerUsers]
       .filter((entry) => isPendingAccountStatus(entry?.status))
       .sort((left, right) => new Date(getUserRegistrationDate(right) || 0) - new Date(getUserRegistrationDate(left) || 0)),
+=======
+    () => customerUsers.filter((entry) => String(entry?.status || '').trim().toLowerCase() === 'active'),
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
     [customerUsers]
   );
 
@@ -202,6 +223,7 @@ const AdminDashboard = () => {
   const quickActions = useMemo(
     () => [
       {
+<<<<<<< HEAD
         label: isArabic ? 'المتجر' : 'Store',
         description: isArabic
           ? 'فتح واجهة المتجر كما يراها العميل لمراجعة تجربة التصفح والشراء.'
@@ -214,46 +236,71 @@ const AdminDashboard = () => {
         description: isArabic
           ? 'إنشاء منتج جديد وربطه بالمورد أو التسعير الداخلي.'
           : 'Create a new product and connect it to supplier or local pricing.',
+=======
+        label: isArabic ? 'إضافة منتج جديد' : 'Add Product',
+        description: isArabic ? 'إنشاء منتج جديد وربطه بالمورد أو التسعير الداخلي.' : 'Create a new product and connect it to supplier or local pricing.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         to: '/admin/products',
         icon: Package,
       },
       {
         label: isArabic ? 'إضافة وسيلة دفع' : 'Add Payment Method',
+<<<<<<< HEAD
         description: isArabic
           ? 'تحديث قنوات الدفع لتسهيل استقبال طلبات الشحن.'
           : 'Update payment channels for smoother topup collection.',
+=======
+        description: isArabic ? 'تحديث قنوات الدفع لتسهيل استقبال طلبات الشحن.' : 'Update payment channels for smoother topup collection.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         to: '/admin/payment-methods',
         icon: CreditCard,
       },
       {
         label: isArabic ? 'إدارة الطلبات' : 'Manage Orders',
+<<<<<<< HEAD
         description: isArabic
           ? 'مراجعة الطلبات الأخيرة ومتابعة حالتها التشغيلية.'
           : 'Review recent purchases and follow their operational status.',
         to: '/admin/orders',
+=======
+        description: isArabic ? 'مراجعة الطلبات الأخيرة ومتابعة حالتها التشغيلية.' : 'Review recent purchases and follow their operational status.',
+        to: '/admin/payments',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         icon: ShoppingCart,
       },
       {
         label: isArabic ? 'إدارة المستخدمين' : 'Manage Users',
+<<<<<<< HEAD
         description: isArabic
           ? 'مراجعة الحسابات والحالات والصلاحيات من مكان واحد.'
           : 'Review accounts, statuses, and permissions from one place.',
+=======
+        description: isArabic ? 'مراجعة الحسابات، الحالات، والصلاحيات من مكان واحد.' : 'Review accounts, statuses, and permissions from one place.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         to: '/admin/users',
         icon: Users,
       },
       {
         label: isArabic ? 'إدارة الموردين' : 'Manage Suppliers',
+<<<<<<< HEAD
         description: isArabic
           ? 'تنظيم ربط الموردين ومتابعة التكاملات الخارجية.'
           : 'Organize suppliers and monitor external integrations.',
+=======
+        description: isArabic ? 'تنظيم ربط الموردين ومتابعة التكاملات الخارجية.' : 'Organize suppliers and monitor external integrations.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         to: '/admin/suppliers',
         icon: Building2,
       },
       {
         label: isArabic ? 'مراجعة طلبات الشحن' : 'Review Topups',
+<<<<<<< HEAD
         description: isArabic
           ? 'الوصول السريع إلى طلبات الشحن اليدوي المعلقة.'
           : 'Jump straight into pending manual topup reviews.',
+=======
+        description: isArabic ? 'الوصول السريع إلى طلبات الشحن اليدوي المعلقة.' : 'Jump straight into pending manual topup reviews.',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         to: '/admin/payments',
         icon: ArrowLeftRight,
       },
@@ -264,6 +311,7 @@ const AdminDashboard = () => {
   const stats = useMemo(
     () => [
       {
+<<<<<<< HEAD
         title: isArabic ? 'صافي الأرباح (USD)' : 'Net Profit (USD)',
         value: formatMoney(serverStats?.financials?.totalProfitUsd ?? 0, 'USD'),
         note: isArabic ? 'الأرباح من هامش السعر على الطلبات المكتملة' : 'Markup earnings from completed orders',
@@ -272,6 +320,10 @@ const AdminDashboard = () => {
       {
         title: isArabic ? 'إجمالي الإيرادات (USD)' : 'Total Revenue (USD)',
         value: formatMoney(serverStats?.financials?.totalRevenueUsd ?? totalRevenue, 'USD'),
+=======
+        title: isArabic ? 'إجمالي الأرباح' : 'Total Revenue',
+        value: formatDollars(totalRevenue),
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         note: isArabic ? 'محسوبة من الطلبات المكتملة فقط' : 'Calculated from completed orders only',
         icon: TrendingUp,
       },
@@ -288,12 +340,15 @@ const AdminDashboard = () => {
         icon: Users,
       },
       {
+<<<<<<< HEAD
         title: isArabic ? 'حسابات بانتظار التفعيل' : 'Pending account approvals',
         value: formatCount(pendingApprovalUsers.length),
         note: isArabic ? 'تحتاج مراجعة واعتماد من الإدارة' : 'Waiting for admin review and approval',
         icon: UserCog,
       },
       {
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         title: isArabic ? 'إجمالي المنتجات' : 'Total Products',
         value: formatCount((products || []).length),
         note: isArabic ? 'كل المنتجات المتاحة للإدارة والربط' : 'All products available for management and syncing',
@@ -328,6 +383,7 @@ const AdminDashboard = () => {
       activeUsers.length,
       completedOrders.length,
       formatCount,
+<<<<<<< HEAD
       formatDollars,
       formatMoney,
       isArabic,
@@ -337,6 +393,13 @@ const AdminDashboard = () => {
       pendingOrders.length,
       products,
       serverStats,
+=======
+      isArabic,
+      orders,
+      pendingManualTopups.length,
+      pendingOrders.length,
+      products,
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       totalRevenue,
       totalWalletBalance,
       users,
@@ -397,7 +460,11 @@ const AdminDashboard = () => {
         id: `product-snapshot-${newestProduct.id}`,
         icon: Package,
         tone: 'info',
+<<<<<<< HEAD
         title: isArabic ? 'حالة الكاتالوج الحالية' : 'Current catalog snapshot',
+=======
+        title: isArabic ? 'حالة الكاتلوج الحالية' : 'Current catalog snapshot',
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
         description: isArabic
           ? `إجمالي ${formatCount((products || []).length)} منتج داخل النظام. آخر منتج ظاهر: ${formatRelativeProductName(newestProduct, true)}.`
           : `${formatCount((products || []).length)} products are currently in the system. Latest visible item: ${formatRelativeProductName(newestProduct, false)}.`,
@@ -432,7 +499,11 @@ const AdminDashboard = () => {
   ]);
 
   return (
+<<<<<<< HEAD
     <div className="min-w-0 space-y-4 pb-3 md:space-y-8 md:pb-4">
+=======
+    <div className="min-w-0 space-y-6 pb-4 md:space-y-8">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       <DashboardHeader
         isArabic={isArabic}
         userName={user?.name}
@@ -441,6 +512,7 @@ const AdminDashboard = () => {
 
       <StatsGrid stats={stats} isLoading={isLoading} />
 
+<<<<<<< HEAD
       <div className="grid place-items-center gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:place-items-stretch xl:gap-6">
         <div className="w-full space-y-4 md:space-y-6">
           <PendingApprovalsSection
@@ -448,6 +520,10 @@ const AdminDashboard = () => {
             isArabic={isArabic}
             formatDate={formatDate}
           />
+=======
+      <div className="grid place-items-center gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:place-items-stretch">
+        <div className="w-full space-y-6">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           <RecentOrdersSection
             orders={recentOrders}
             isArabic={isArabic}
@@ -463,7 +539,11 @@ const AdminDashboard = () => {
           />
         </div>
 
+<<<<<<< HEAD
         <div className="w-full space-y-4 md:space-y-6">
+=======
+        <div className="w-full space-y-6">
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
           <QuickActionsSection actions={quickActions} isArabic={isArabic} />
           <ActivityFeedSection items={activityItems} isArabic={isArabic} formatDate={formatDate} />
         </div>

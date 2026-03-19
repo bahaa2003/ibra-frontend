@@ -193,6 +193,7 @@ export function getProductStatus(product, language = 'ar') {
   };
 }
 
+<<<<<<< HEAD
 export function validateProductForm(inputProductForm, options = {}) {
   const errors = [];
   const { requireImage = false } = options;
@@ -213,12 +214,19 @@ export function validateProductForm(inputProductForm, options = {}) {
   };
 
   if (requireImage && !rawImage) errors.push('Product image is required');
+=======
+export function validateProductForm(productForm) {
+  const errors = [];
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 
   if (!productForm.name || !productForm.name.trim()) errors.push('اسم المنتج مطلوب');
   if (!productForm.category || !productForm.category.trim()) errors.push('التصنيف مطلوب');
 
+<<<<<<< HEAD
   if (requireImage && !productForm.image) errors.push('ØµÙˆØ±Ø© Ø§Ù„Ù…Ù†ØªØ¬ Ù…Ø·Ù„ÙˆØ¨Ø©');
 
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
   const minQty = Number(productForm.minimumOrderQty || 1);
   const maxQty = Number(productForm.maximumOrderQty || 999);
   const stepQty = Number(productForm.stepQty || 1);

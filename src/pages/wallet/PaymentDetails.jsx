@@ -101,6 +101,18 @@ const PaymentDetails = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
+<<<<<<< HEAD
+=======
+      // In real app, this would send the data to backend
+      console.log('Submitting payment request:', {
+        method: selectedMethod,
+        amount: formData.amount,
+        currency: formData.currency,
+        notes: formData.notes,
+        receipt: selectedFile
+      });
+
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
       setSubmitStatus('success');
     } catch (error) {
       setSubmitStatus('error');
@@ -322,4 +334,8 @@ const PaymentDetails = () => {
   );
 };
 
+<<<<<<< HEAD
 export default PaymentDetails;
+=======
+export default PaymentDetails;
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41

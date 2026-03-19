@@ -12,7 +12,11 @@ import { getDefaultRouteForRole } from '../utils/authRoles';
 import gamesChargingImage from '../assets/gamesCharging.webp';
 import buyCardsImage from '../assets/buyCards.webp';
 import chatAppsImage from '../assets/chatApps.webp';
+<<<<<<< HEAD
 import brandIconImage from '../assets/logo.png';
+=======
+import brandIconImage from '../assets/box_.png';
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
 import brandWordmarkImage from '../assets/ibra.png';
 
 const Landing = () => {
@@ -67,6 +71,7 @@ const Landing = () => {
     <div className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[var(--shell-max-width)] space-y-8">
         <div className="premium-card flex items-center justify-between rounded-[var(--radius-2xl)] px-4 py-3 sm:px-5">
+<<<<<<< HEAD
           <div className="flex items-center gap-3 text-right">
             <div className="h-12 w-12 overflow-hidden rounded-[var(--radius-md)]">
               <img
@@ -80,6 +85,14 @@ const Landing = () => {
             </div>
             <div>
               <img src={brandWordmarkImage} alt="IBRA" loading="eager" decoding="async" className="h-6 w-auto object-contain" />
+=======
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 overflow-hidden rounded-[var(--radius-md)]">
+              <img src={brandIconImage} alt="IBRA Store" className="h-full w-full object-cover" />
+            </div>
+            <div>
+              <img src={brandWordmarkImage} alt="IBRA" className="h-6 w-auto object-contain" />
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
               <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--color-primary)]">
                 {isArabic ? 'تجارة رقمية مميزة' : 'Premium Digital Commerce'}
               </p>
@@ -156,10 +169,13 @@ const Landing = () => {
                       <img
                         src={heroSlides[slideIndex].image}
                         alt={heroSlides[slideIndex].title}
+<<<<<<< HEAD
                         loading="eager"
                         decoding="async"
                         fetchPriority="high"
                         sizes="(max-width: 1024px) 100vw, 45vw"
+=======
+>>>>>>> f0ed41c908b4d360ea4c89ff1cbbc1863d025b41
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
