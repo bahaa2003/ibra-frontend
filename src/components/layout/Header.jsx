@@ -52,7 +52,7 @@ const Header = ({ toggleSidebar }) => {
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          {user?.role === 'customer' && (
+          {String(user?.role || '').toLowerCase() === 'customer' && (
             <button
               type="button"
               onClick={() => navigate('/wallet')}

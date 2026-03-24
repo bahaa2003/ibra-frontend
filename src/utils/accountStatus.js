@@ -3,6 +3,11 @@ const STATUS_ALIASES = {
   approved: 'approved',
   complete: 'approved',
   completed: 'approved',
+  verification_required: 'verification_required',
+  email_verification_required: 'verification_required',
+  verify_email: 'verification_required',
+  verification: 'verification_required',
+  unverified: 'verification_required',
   pending: 'pending',
   requested: 'pending',
   under_review: 'pending',
@@ -22,24 +27,31 @@ const SIGNUP_METHOD_ALIASES = {
   manual: 'manual',
 };
 
+export const ACCOUNT_PENDING_ROUTE = '/auth/account-pending';
+export const ACCOUNT_REJECTED_ROUTE = '/auth/account-rejected';
+export const ACCOUNT_VERIFICATION_ROUTE = '/auth/verify-email';
+
 export const normalizeAccountStatus = (status) => {
   const value = String(status || '').trim().toLowerCase();
-  return STATUS_ALIASES[value] || value || 'pending';
+  return STATUS_ALIASES[value] || value || '';
 };
 
 export const isApprovedAccountStatus = (status) => normalizeAccountStatus(status) === 'approved';
+export const isVerificationRequiredStatus = (status) => normalizeAccountStatus(status) === 'verification_required';
 export const isPendingAccountStatus = (status) => normalizeAccountStatus(status) === 'pending';
 export const isRejectedAccountStatus = (status) => normalizeAccountStatus(status) === 'rejected';
 
 export const getAccountAccessRoute = (status) => {
-  if (isPendingAccountStatus(status)) return '/account-pending';
-  if (isRejectedAccountStatus(status)) return '/account-rejected';
+  if (isVerificationRequiredStatus(status)) return ACCOUNT_VERIFICATION_ROUTE;
+  if (isPendingAccountStatus(status)) return ACCOUNT_PENDING_ROUTE;
+  if (isRejectedAccountStatus(status)) return ACCOUNT_REJECTED_ROUTE;
   return null;
 };
 
 export const getAccountStatusBadgeVariant = (status) => {
   const normalized = normalizeAccountStatus(status);
   if (normalized === 'approved') return 'success';
+  if (normalized === 'verification_required') return 'info';
   if (normalized === 'rejected') return 'danger';
   return 'warning';
 };
@@ -48,6 +60,7 @@ export const getAccountStatusLabel = (status, isArabic = true) => {
   const normalized = normalizeAccountStatus(status);
   const labels = {
     approved: { ar: 'مفعّل', en: 'Approved' },
+    verification_required: { ar: 'تأكيد البريد مطلوب', en: 'Email Verification Required' },
     pending: { ar: 'بانتظار التفعيل', en: 'Pending Approval' },
     rejected: { ar: 'مرفوض', en: 'Rejected' },
   };
@@ -82,6 +95,16 @@ export const getUserRegistrationDate = (user) => (
 export const inferBlockedStatusFromError = (error) => {
   const message = String(error?.message || error || '').toLowerCase();
   if (!message) return null;
+
+  if (
+    message.includes('verify your email')
+    || message.includes('verify your email address')
+    || message.includes('please verify your email')
+    || message.includes('confirm your email')
+    || message.includes('verification email')
+  ) {
+    return 'verification_required';
+  }
 
   if (message.includes('pending') || message.includes('approval') || message.includes('await')) {
     return 'pending';

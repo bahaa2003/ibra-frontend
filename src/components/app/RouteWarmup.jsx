@@ -17,7 +17,15 @@ const warmupByRole = {
   guest: [loadAuth, loadLayout],
   customer: [loadLayout, loadDashboard, loadProducts, loadOrders, loadWallet],
   manager: [loadLayout, loadManagerDashboard, loadSettings],
-  admin: [loadLayout, loadAdminDashboard, loadAdminOrders, loadAdminProducts, loadSettings],
+  admin: [
+    loadLayout,
+    loadDashboard,
+    loadProducts,
+    loadAdminDashboard,
+    loadAdminOrders,
+    loadAdminProducts,
+    loadSettings,
+  ],
 };
 
 const scheduleIdle = (callback) => {
@@ -57,7 +65,11 @@ const RouteWarmup = () => {
   useEffect(() => {
     if (!canWarmRoutes()) return undefined;
 
-    const normalizedRole = ['customer', 'manager', 'admin'].includes(role) ? role : 'guest';
+    const normalizedRole = ['customer', 'manager', 'admin'].includes(role)
+      ? role
+      : role === 'super_admin'
+        ? 'admin'
+        : 'guest';
     const handle = scheduleIdle(() => {
       preloadLoaders(warmupByRole[normalizedRole]);
     });

@@ -9,9 +9,16 @@ import {
   mockSuppliers
 } from '../data/mockData';
 import { normalizeAccountStatus, normalizeSignupMethod } from '../utils/accountStatus';
+import { normalizeMoneyAmount } from '../utils/money';
 import { getDefaultWhatsAppNumber, normalizeWhatsAppNumber } from '../utils/whatsapp';
 import { createDefaultPaymentGroups, normalizePaymentGroups } from '../utils/paymentSettings';
 import { devLogger } from '../utils/devLogger';
+import {
+  resolveOrderExecutionCurrency,
+  resolveTopupExecutionCurrency,
+  resolveWalletTransactionExecutionCurrency,
+  resolveWalletTransactionOriginalCurrency,
+} from '../utils/transactionCurrency';
 
 const DELAY = 800; // Simulated network latency in ms
 
@@ -69,18 +76,29 @@ const getDefaultGroupName = () => {
   return groups[0]?.name || 'Standard';
 };
 
+const findGroupRecord = (groupInput, groups = null) => {
+  const source = Array.isArray(groups) ? groups : (getGroupsDb()?.state?.groups || mockGroups);
+  const raw = typeof groupInput === 'object' && groupInput !== null
+    ? (groupInput.id || groupInput._id || groupInput.groupId || groupInput.name || groupInput.groupName || '')
+    : groupInput;
+  const normalizedRaw = String(raw || '').trim();
+  const normalized = normalizedRaw.toLowerCase();
+
+  if (!normalizedRaw) return null;
+
+  return source.find((group) => {
+    const idMatch = String(group?.id || '').trim() === normalizedRaw;
+    const objectIdMatch = String(group?._id || '').trim() === normalizedRaw;
+    const nameMatch = String(group?.name || '').trim().toLowerCase() === normalized;
+    const nameArMatch = String(group?.nameAr || '').trim().toLowerCase() === normalized;
+    return idMatch || objectIdMatch || nameMatch || nameArMatch;
+  }) || null;
+};
+
 const resolveGroupName = (groupInput) => {
-  const raw = String(groupInput || '').trim();
   const groupDb = getGroupsDb();
   const groups = groupDb?.state?.groups || mockGroups;
-  const normalized = raw.toLowerCase();
-
-  const matched = groups.find((g) => {
-    const idMatch = String(g.id) === raw;
-    const nameMatch = String(g.name || '').toLowerCase() === normalized;
-    const nameArMatch = String(g.nameAr || '').toLowerCase() === normalized;
-    return idMatch || nameMatch || nameArMatch;
-  });
+  const matched = findGroupRecord(groupInput, groups);
 
   return matched?.name || getDefaultGroupName();
 };
@@ -110,7 +128,10 @@ const hashPassword = async (plainText) => {
 const sanitizeUser = (user) => {
   if (!user) return null;
   const { password, passwordHash, ...safeUser } = user;
-  return safeUser;
+  return {
+    ...safeUser,
+    creditLimit: normalizeCreditLimitValue(safeUser.creditLimit),
+  };
 };
 
 const secureUsersInDb = async (db) => {
@@ -155,32 +176,184 @@ const randomTempPassword = (length = 10) => {
   return out;
 };
 
+const getUsersDb = () => getDB('admin-storage', { state: { users: mockUsers } });
+const getOrdersDb = () => getDB('order-storage', { state: { orders: mockOrders } });
+const getTopupsDb = () => getDB('topup-storage', { state: { topups: mockTopups } });
+const getWalletTransactionsDb = () => getDB('wallet-transactions-storage', { state: { transactions: [] } });
+const saveWalletTransactionsDb = (db) => saveDB('wallet-transactions-storage', db);
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeCreditLimitValue = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return normalizeMoneyAmount(parsed);
+};
+
+const normalizeMockWalletType = (value) => {
+  const token = String(value || '').trim().toLowerCase();
+  if (['credit', 'deposit', 'topup', 'top_up'].includes(token)) return 'credit';
+  if (['debit', 'purchase', 'charge', 'deduct', 'deduction'].includes(token)) return 'debit';
+  if (['refund', 'reversal'].includes(token)) return 'refund';
+  return token || 'credit';
+};
+
+const buildMockWalletTransactionsForUser = (userId) => {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) return [];
+
+  const usersDb = getUsersDb();
+  const ordersDb = getOrdersDb();
+  const topupsDb = getTopupsDb();
+  const walletTransactionsDb = getWalletTransactionsDb();
+
+  const user = (usersDb?.state?.users || mockUsers).find((entry) => String(entry.id) === normalizedUserId) || null;
+  const manualTransactions = (walletTransactionsDb?.state?.transactions || [])
+    .filter((entry) => String(entry.userId) === normalizedUserId)
+    .map((entry) => ({
+      ...entry,
+      type: normalizeMockWalletType(entry.type),
+      amount: Math.abs(toFiniteNumber(entry.amount)),
+      signedAmount: toFiniteNumber(entry.signedAmount, 0),
+      currency: resolveWalletTransactionExecutionCurrency(entry, user?.currency || 'USD'),
+      originalCurrency: resolveWalletTransactionOriginalCurrency(entry) || null,
+      status: String(entry.status || 'completed').toLowerCase(),
+    }));
+
+  const orderTransactions = (ordersDb?.state?.orders || mockOrders)
+    .filter((entry) => String(entry.userId) === normalizedUserId)
+    .map((order) => {
+      const amount = Math.abs(toFiniteNumber(
+        order?.financialSnapshot?.finalAmountAtExecution
+        ?? order?.priceCoins
+        ?? order?.totalAmount
+        ?? 0
+      ));
+      const normalizedStatus = String(order?.status || 'pending').toLowerCase();
+      const isRefund = normalizedStatus === 'refunded' || Boolean(order?.refundedAt);
+      const type = isRefund ? 'refund' : 'debit';
+
+      return {
+        id: `order-${order.id}`,
+        userId: normalizedUserId,
+        type,
+        amount,
+        signedAmount: type === 'debit' ? -amount : amount,
+        status: normalizedStatus,
+        description: order?.productNameAr || order?.productName || 'Order purchase',
+        reference: order?.externalOrderId || order?.id || null,
+        sourceType: 'order',
+        sourceId: order?.id || null,
+        currency: resolveOrderExecutionCurrency(order, user?.currency || 'USD'),
+        originalCurrency: resolveOrderExecutionCurrency(order) || null,
+        createdAt: order?.createdAt || order?.date || null,
+      };
+    });
+
+  const topupTransactions = (topupsDb?.state?.topups || mockTopups)
+    .filter((entry) => String(entry.userId) === normalizedUserId)
+    .map((topup) => {
+      const amount = Math.abs(toFiniteNumber(
+        topup?.actualPaidAmount
+        ?? topup?.requestedAmount
+        ?? topup?.requestedCoins
+        ?? topup?.amount
+        ?? 0
+      ));
+      const normalizedStatus = String(topup?.status || 'pending').toLowerCase();
+      const isApplied = ['approved', 'completed', 'success'].includes(normalizedStatus);
+
+      return {
+        id: `topup-${topup.id}`,
+        userId: normalizedUserId,
+        type: 'credit',
+        amount,
+        signedAmount: isApplied ? amount : 0,
+        status: normalizedStatus,
+        description: topup?.paymentChannel || topup?.method || 'Balance topup',
+        reference: topup?.id || null,
+        sourceType: 'topup',
+        sourceId: topup?.id || null,
+        currency: resolveTopupExecutionCurrency(topup, user?.currency || 'USD'),
+        originalCurrency: resolveTopupExecutionCurrency(topup) || null,
+        createdAt: topup?.createdAt || topup?.date || null,
+      };
+    });
+
+  const timeline = [...manualTransactions, ...orderTransactions, ...topupTransactions]
+    .sort((left, right) => new Date(left?.createdAt || 0) - new Date(right?.createdAt || 0));
+
+  const currentBalance = toFiniteNumber(user?.coins, 0);
+  const signedTotal = timeline.reduce((sum, entry) => sum + toFiniteNumber(entry.signedAmount, 0), 0);
+  let runningBalance = currentBalance - signedTotal;
+
+  return timeline
+    .map((entry) => {
+      runningBalance += toFiniteNumber(entry.signedAmount, 0);
+      return {
+        ...entry,
+        balanceAfter: runningBalance,
+      };
+    })
+    .sort((left, right) => new Date(right?.createdAt || 0) - new Date(left?.createdAt || 0));
+};
+
+const buildMockWalletSummary = (userId) => {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) return null;
+
+  const usersDb = getUsersDb();
+  const user = (usersDb?.state?.users || mockUsers).find((entry) => String(entry.id) === normalizedUserId) || null;
+  if (!user) return null;
+
+  const transactions = buildMockWalletTransactionsForUser(normalizedUserId);
+  const currency = String(user.currency || 'USD').toUpperCase();
+
+  return {
+    id: normalizedUserId,
+    walletId: normalizedUserId,
+    userId: normalizedUserId,
+    user: sanitizeUser(user),
+    userName: user.name || '',
+    userEmail: user.email || '',
+    walletBalance: toFiniteNumber(user.coins, 0),
+    balance: toFiniteNumber(user.coins, 0),
+    currency,
+    transactionsCount: transactions.length,
+    lastTransactionAt: transactions[0]?.createdAt || null,
+    recentTransactions: transactions.slice(0, 5),
+  };
+};
+
 const mockProviderCatalog = [
   {
     id: 'prov-alpha',
     name: 'Alpha Provider',
     products: [
-      { id: 'alpha-pubg-60', name: 'PUBG UC 60', priceCoins: 52 },
-      { id: 'alpha-netflix-1m', name: 'Netflix 1M', priceCoins: 230 },
-      { id: 'alpha-spotify-1m', name: 'Spotify 1M', priceCoins: 108 },
+      { id: 'alpha-pubg-60', name: 'PUBG UC 60', rawPrice: '52.375', priceCoins: '52.375', minQty: 1, maxQty: 10 },
+      { id: 'alpha-netflix-1m', name: 'Netflix 1M', rawPrice: '230.125', priceCoins: '230.125', minQty: 1, maxQty: 3 },
+      { id: 'alpha-spotify-1m', name: 'Spotify 1M', rawPrice: '108.500', priceCoins: '108.500', minQty: 1, maxQty: 5 },
     ],
   },
   {
     id: 'prov-beta',
     name: 'Beta Supplier',
     products: [
-      { id: 'beta-freefire-100', name: 'FreeFire 100 Diamonds', priceCoins: 44 },
-      { id: 'beta-itunes-10', name: 'iTunes 10$', priceCoins: 355 },
-      { id: 'beta-netflix-1m', name: 'Netflix 1M', priceCoins: 238 },
+      { id: 'beta-freefire-100', name: 'FreeFire 100 Diamonds', rawPrice: '44.250', priceCoins: '44.250', minQty: 1, maxQty: 20 },
+      { id: 'beta-itunes-10', name: 'iTunes 10$', rawPrice: '355.875', priceCoins: '355.875', minQty: 1, maxQty: 2 },
+      { id: 'beta-netflix-1m', name: 'Netflix 1M', rawPrice: '238.250', priceCoins: '238.250', minQty: 1, maxQty: 3 },
     ],
   },
   {
     id: 'prov-gamma',
     name: 'Gamma Digital Hub',
     products: [
-      { id: 'gamma-pubg-325', name: 'PUBG UC 325', priceCoins: 255 },
-      { id: 'gamma-youtube-1m', name: 'YouTube Premium 1M', priceCoins: 122 },
-      { id: 'gamma-disney-1m', name: 'Disney+ 1M', priceCoins: 141 },
+      { id: 'gamma-pubg-325', name: 'PUBG UC 325', rawPrice: '255.990', priceCoins: '255.990', minQty: 1, maxQty: 10 },
+      { id: 'gamma-youtube-1m', name: 'YouTube Premium 1M', rawPrice: '122.333', priceCoins: '122.333', minQty: 1, maxQty: 4 },
+      { id: 'gamma-disney-1m', name: 'Disney+ 1M', rawPrice: '141.750', priceCoins: '141.750', minQty: 1, maxQty: 4 },
     ],
   },
 ];
@@ -189,6 +362,20 @@ const getProviderProduct = (providerId, providerProductId) => {
   const provider = mockProviderCatalog.find((p) => p.id === providerId);
   if (!provider) return null;
   return provider.products.find((p) => p.id === providerProductId) || null;
+};
+
+const getDecimalScale = (value) => {
+  const raw = String(value ?? '').trim();
+  if (!raw.includes('.')) return 0;
+  return raw.split('.')[1]?.replace(/[^\d]/g, '').length || 0;
+};
+
+const addDecimalValues = (baseValue, deltaValue) => {
+  const base = Number(baseValue || 0);
+  const delta = Number(deltaValue || 0);
+  const scale = Math.max(getDecimalScale(baseValue), getDecimalScale(deltaValue));
+  const total = base + delta;
+  return scale > 0 ? Number(total.toFixed(scale)) : total;
 };
 
 const applyProviderPricing = (productData) => {
@@ -206,18 +393,26 @@ const applyProviderPricing = (productData) => {
   }
 
   const providerProduct = getProviderProduct(productData?.providerId, productData?.providerProductId);
-  const syncedBase = Number(providerProduct?.priceCoins || 0);
-  const manualDelta = Number(productData?.manualPriceAdjustment || 0);
+  const syncedBaseRaw = productData?.syncedProviderBasePrice ?? providerProduct?.rawPrice ?? providerProduct?.priceCoins ?? 0;
+  const manualDeltaRaw = productData?.manualPriceAdjustment || 0;
+  const resolvedMinQty = Math.max(
+    Number(providerProduct?.minQty ?? providerProduct?.minimumOrderQty ?? productData?.minQty ?? 1) || 1,
+    1
+  );
+  const resolvedMaxQty = Math.max(
+    Number(providerProduct?.maxQty ?? providerProduct?.maximumOrderQty ?? productData?.maxQty ?? 999) || 999,
+    resolvedMinQty
+  );
 
   return {
     ...productData,
-    basePriceCoins: syncedBase + manualDelta,
-    syncedProviderBasePrice: syncedBase,
-    manualPriceAdjustment: manualDelta,
-    minQty: Number(productData?.minQty || 1),
-    maxQty: Number(productData?.maxQty || 999),
+    basePriceCoins: addDecimalValues(syncedBaseRaw, manualDeltaRaw),
+    syncedProviderBasePrice: Number(syncedBaseRaw || 0),
+    manualPriceAdjustment: Number(manualDeltaRaw || 0),
+    minQty: resolvedMinQty,
+    maxQty: resolvedMaxQty,
     displayOrder: Number(productData?.displayOrder || 0),
-    providerQuantity: Number(productData?.providerQuantity || 0),
+    providerQuantity: resolvedMaxQty,
   };
 };
 
@@ -404,6 +599,10 @@ const mockApi = {
       
       if (!user) throw new Error('Invalid email or password');
 
+      if (user.signupMethod !== 'google' && user.verified === false) {
+        throw new Error('Please verify your email address before logging in');
+      }
+
       const normalizedStatus = normalizeAccountStatus(user.status);
       if (!['approved', 'pending', 'rejected'].includes(normalizedStatus)) {
         user.status = 'pending';
@@ -433,6 +632,7 @@ const mockApi = {
           passwordHash: await hashPassword(`google-${Date.now()}`),
           role: 'customer',
           coins: 0,
+          creditLimit: 0,
           group: getDefaultGroupName(),
           status: 'pending',
           country: 'US',
@@ -440,6 +640,7 @@ const mockApi = {
           phone: '+10000000000',
           joinDate: createdAt,
           createdAt,
+          verified: true,
           signupMethod: 'google',
           approvedAt: null,
           rejectedAt: null,
@@ -452,6 +653,16 @@ const mockApi = {
       }
 
       return { user: sanitizeUser(user), token: 'mock-google-token-12345' };
+    },
+
+    resendVerification: async (email) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      return {
+        success: true,
+        message: email
+          ? 'If that email exists, a verification link has been sent.'
+          : 'Email is required.',
+      };
     },
     
     register: async (userData) => {
@@ -471,8 +682,10 @@ const mockApi = {
         passwordHash: await hashPassword(userData.password || ''),
         role: 'customer',
         coins: 0,
+        creditLimit: 0,
         group: resolveGroupName(userData.group),
         status: 'pending', // Default per requirements
+        verified: false,
         joinDate: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         signupMethod: normalizeSignupMethod(userData.signupMethod || 'email'),
@@ -498,6 +711,11 @@ const mockApi = {
        const user = users.find(u => u.id === userId);
        if (!user) throw new Error('User not found');
        return sanitizeUser(user);
+    },
+
+    refreshSession: async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return { token: 'mock-jwt-token-12345' };
     }
   },
 
@@ -540,6 +758,27 @@ const mockApi = {
       saveDB('products-storage', db);
       return updatedProduct;
     },
+
+    toggleStatus: async (id) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const db = getDB('products-storage', { state: { products: mockProducts } });
+      const index = db.state.products.findIndex(p => p.id === id);
+
+      if (index === -1) throw new Error('Product not found');
+
+      const currentProduct = db.state.products[index];
+      const nextStatus = currentProduct?.status === 'active' ? 'inactive' : 'active';
+      const toggledProduct = applyProviderPricing({
+        ...currentProduct,
+        status: nextStatus,
+        productStatus: nextStatus === 'active' ? 'available' : 'unavailable',
+        isVisibleInStore: nextStatus === 'active',
+      });
+
+      db.state.products[index] = toggledProduct;
+      saveDB('products-storage', db);
+      return toggledProduct;
+    },
     
     delete: async (id) => {
       await new Promise(resolve => setTimeout(resolve, DELAY));
@@ -565,7 +804,14 @@ const mockApi = {
       await new Promise(resolve => setTimeout(resolve, DELAY));
       const product = getProviderProduct(providerId, providerProductId);
       if (!product) throw new Error('Provider product not found');
-      return { basePriceCoins: Number(product.priceCoins || 0) };
+      return {
+        basePriceCoins: product.rawPrice ?? product.priceCoins ?? 0,
+        rawPrice: product.rawPrice ?? product.priceCoins ?? 0,
+        minQty: product.minQty ?? null,
+        minimumOrderQty: product.minQty ?? null,
+        maxQty: product.maxQty ?? null,
+        maximumOrderQty: product.maxQty ?? null,
+      };
     }
   },
 
@@ -576,6 +822,15 @@ const mockApi = {
       const data = getDB('products-storage', { state: { categories: mockCategories } });
       return data.state.categories || mockCategories;
     },
+
+    get: async (id) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const normalizedId = String(id || '').trim();
+      if (!normalizedId) return null;
+      const data = getDB('products-storage', { state: { categories: mockCategories } });
+      const categories = data.state.categories || mockCategories;
+      return categories.find((c) => String(c?.id || '').trim() === normalizedId) || null;
+    },
     
     create: async (categoryData) => {
       await new Promise(resolve => setTimeout(resolve, DELAY));
@@ -585,6 +840,28 @@ const mockApi = {
       db.state.categories = [...(db.state.categories || []), newCategory];
       saveDB('products-storage', db);
       return newCategory;
+    },
+
+    update: async (id, updates) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const normalizedId = String(id || '').trim();
+      if (!normalizedId) throw new Error('Category id is required');
+
+      const db = getDB('products-storage', { state: { categories: mockCategories } });
+      const categories = Array.isArray(db.state.categories) ? db.state.categories : mockCategories;
+      const index = categories.findIndex((c) => String(c?.id || '').trim() === normalizedId);
+      if (index < 0) throw new Error('Category not found');
+
+      const current = categories[index] || {};
+      const nextCategory = {
+        ...current,
+        ...(updates || {}),
+        id: current.id,
+      };
+
+      db.state.categories = categories.map((c) => (String(c?.id || '').trim() === normalizedId ? nextCategory : c));
+      saveDB('products-storage', db);
+      return nextCategory;
     },
     
     delete: async (id) => {
@@ -778,6 +1055,21 @@ const mockApi = {
       }
       return allOrders; // Admin sees all
     },
+
+    getById: async (orderId, userId = null) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const db = getDB('order-storage', { state: { orders: mockOrders } });
+      const allOrders = db.state.orders || mockOrders;
+      const target = allOrders.find((entry) => (
+        entry.id === orderId && (!userId || entry.userId === userId)
+      ));
+
+      if (!target) {
+        throw new Error('Order not found');
+      }
+
+      return target;
+    },
     
     create: async (orderData) => {
       await new Promise(resolve => setTimeout(resolve, DELAY));
@@ -799,12 +1091,17 @@ const mockApi = {
       if (userIndex === -1) throw new Error('User not found');
       const user = userDB.state.users[userIndex];
       
-      if (user.coins < orderData.priceCoins) {
+      const orderPrice = normalizeMoneyAmount(Number(orderData.priceCoins || 0));
+      const currentBalance = toFiniteNumber(user.coins, 0);
+      const creditLimit = normalizeCreditLimitValue(user.creditLimit);
+      const spendableAmount = normalizeMoneyAmount(currentBalance + creditLimit);
+
+      if (spendableAmount < orderPrice) {
           throw new Error('Insufficient balance');
       }
       
       // Deduct Coins
-      user.coins -= orderData.priceCoins;
+      user.coins = normalizeMoneyAmount(currentBalance - orderPrice);
       userDB.state.users[userIndex] = user;
       saveDB('admin-storage', userDB);
       
@@ -913,6 +1210,11 @@ const mockApi = {
        const order = db.state.orders.find(o => o.id === orderId);
        
        if (order) {
+           const isManualOrder = !order.supplierId && String(order.fulfillmentMode || '').toLowerCase() === 'manual';
+           if (!isManualOrder) {
+             throw new Error('Direct status changes are only available for manual orders');
+           }
+
            const previousStatus = String(order.status || '').toLowerCase();
            const nextStatus = String(status || '').toLowerCase();
            const refundStatuses = ['failed', 'rejected', 'denied', 'cancelled', 'canceled', 'refunded'];
@@ -935,7 +1237,7 @@ const mockApi = {
              const user = userDB.state.users.find((item) => item.id === order.userId);
 
              if (user) {
-               user.coins = Number((Number(user.coins || 0) + amountToRefund).toFixed(2));
+               user.coins = normalizeMoneyAmount(Number(user.coins || 0) + amountToRefund);
                saveDB('admin-storage', userDB);
              }
 
@@ -995,13 +1297,55 @@ const mockApi = {
      update: async (id, updates) => {
        await new Promise(resolve => setTimeout(resolve, DELAY));
        const db = getDB('group-storage', { state: { groups: mockGroups } });
-       db.state.groups = (db.state.groups || []).map((g) => (g.id === id ? { ...g, ...updates } : g));
+       const currentGroup = (db.state.groups || []).find((g) => String(g.id) === String(id)) || null;
+       db.state.groups = (db.state.groups || []).map((g) => (String(g.id) === String(id) ? { ...g, ...updates } : g));
        saveDB('group-storage', db);
-       return db.state.groups.find((g) => g.id === id) || null;
+       const nextGroup = db.state.groups.find((g) => String(g.id) === String(id)) || null;
+
+       if (currentGroup && nextGroup && String(currentGroup.name || '') !== String(nextGroup.name || '')) {
+         const usersDb = getDB('admin-storage', { state: { users: mockUsers } });
+         const migrated = await secureUsersInDb(usersDb);
+         if (migrated) saveDB('admin-storage', usersDb);
+
+         usersDb.state.users = (usersDb.state.users || []).map((user) => {
+           const matchesById = String(user?.groupId || '').trim() === String(id);
+           const matchesByName = String(user?.group || '').trim().toLowerCase() === String(currentGroup.name || '').trim().toLowerCase();
+
+           if (!matchesById && !matchesByName) {
+             return user;
+           }
+
+           return {
+             ...user,
+             group: nextGroup.name,
+             groupId: String(nextGroup.id),
+           };
+         });
+         saveDB('admin-storage', usersDb);
+       }
+
+       return nextGroup;
      },
      delete: async (id) => {
        await new Promise(resolve => setTimeout(resolve, DELAY));
        const db = getDB('group-storage', { state: { groups: mockGroups } });
+       const targetGroup = (db.state.groups || []).find((g) => String(g.id) === String(id)) || null;
+       const usersDb = getDB('admin-storage', { state: { users: mockUsers } });
+       const migrated = await secureUsersInDb(usersDb);
+       if (migrated) saveDB('admin-storage', usersDb);
+
+       const hasMembers = (usersDb.state.users || []).some((user) => (
+         String(user?.groupId || '').trim() === String(id)
+         || (
+           targetGroup?.name
+           && String(user?.group || '').trim().toLowerCase() === String(targetGroup.name || '').trim().toLowerCase()
+         )
+       ));
+
+       if (hasMembers) {
+         throw new Error('Cannot delete a group that still has users. Transfer them first.');
+       }
+
        db.state.groups = (db.state.groups || []).filter((g) => g.id !== id);
        saveDB('group-storage', db);
        return { success: true };
@@ -1016,6 +1360,20 @@ const mockApi = {
         const migrated = await secureUsersInDb(data);
         if (migrated) saveDB('admin-storage', data);
         return (data.state.users || mockUsers).map(sanitizeUser);
+      },
+
+      getById: async (userId) => {
+        await new Promise(resolve => setTimeout(resolve, DELAY));
+        const db = getUsersDb();
+        const migrated = await secureUsersInDb(db);
+        if (migrated) saveDB('admin-storage', db);
+
+        const user = (db?.state?.users || mockUsers).find((entry) => String(entry.id) === String(userId));
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        return sanitizeUser(user);
       },
       
       updateStatus: async (userId, status, actorContext) => {
@@ -1061,10 +1419,52 @@ const mockApi = {
           }
 
           if (user) {
-              user.coins = (user.coins || 0) + amount;
+              user.coins = normalizeMoneyAmount(Number(user.coins || 0) + Number(amount || 0));
               saveDB('admin-storage', db);
+
+              const walletTxDb = getWalletTransactionsDb();
+              const transactionCurrency = String(user.currency || 'USD').toUpperCase();
+              const normalizedAmount = Math.abs(toFiniteNumber(amount, 0));
+              const signedAmount = amount >= 0 ? normalizedAmount : -normalizedAmount;
+              walletTxDb.state.transactions = [
+                {
+                  id: `manual-${Date.now()}`,
+                  userId: String(userId),
+                  type: amount >= 0 ? 'credit' : 'debit',
+                  amount: normalizedAmount,
+                  signedAmount,
+                  status: 'completed',
+                  description: amount >= 0 ? 'Admin balance top-up' : 'Admin balance deduction',
+                  reference: `wallet-adjust-${Date.now()}`,
+                  sourceType: 'admin_adjustment',
+                  sourceId: Date.now(),
+                  currency: transactionCurrency,
+                  currencyCode: transactionCurrency,
+                  originalCurrency: transactionCurrency,
+                  financialSnapshot: {
+                    originalCurrency: transactionCurrency,
+                    originalAmount: normalizedAmount,
+                    convertedAmountAtExecution: normalizedAmount,
+                    finalAmountAtExecution: normalizedAmount,
+                    pricingSnapshot: {
+                      currency: transactionCurrency,
+                      baseRate: 1,
+                      finalRate: 1,
+                      fees: 0,
+                      discount: 0,
+                    },
+                  },
+                  createdAt: new Date().toISOString(),
+                  balanceAfter: toFiniteNumber(user.coins, 0),
+                },
+                ...(walletTxDb.state.transactions || []),
+              ];
+              saveWalletTransactionsDb(walletTxDb);
           }
-            return sanitizeUser(user);
+            return {
+              ...sanitizeUser(user),
+              transaction: (getWalletTransactionsDb().state.transactions || [])[0] || null,
+            };
           },
 
           updateGroup: async (userId, group, actorContext) => {
@@ -1077,7 +1477,11 @@ const mockApi = {
           if (!user) return null;
           ensureCanManageUser(actor, user, 'update group of');
             if (user) {
-              user.group = resolveGroupName(group);
+              const groupDb = getDB('group-storage', { state: { groups: mockGroups } });
+              const groups = groupDb?.state?.groups || mockGroups;
+              const matchedGroup = findGroupRecord(group, groups);
+              user.group = matchedGroup?.name || resolveGroupName(group);
+              user.groupId = matchedGroup?.id ? String(matchedGroup.id) : '';
               saveDB('admin-storage', db);
             }
             return sanitizeUser(user);
@@ -1123,6 +1527,24 @@ const mockApi = {
           if (!exists) throw new Error('Currency is not allowed in system settings');
 
           user.currency = code;
+          saveDB('admin-storage', db);
+          return sanitizeUser(user);
+        },
+
+        updateCreditLimit: async (userId, creditLimit, actorContext) => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const db = getDB('admin-storage', { state: { users: mockUsers } });
+          const migrated = await secureUsersInDb(db);
+          if (migrated) saveDB('admin-storage', db);
+          const actor = resolveActor(actorContext);
+          const user = db.state.users.find(u => u.id === userId);
+          if (!user) return null;
+
+          if (!actor || actor.role !== 'admin') {
+            throw new Error('Only admin can update credit limit');
+          }
+
+          user.creditLimit = normalizeCreditLimitValue(creditLimit);
           saveDB('admin-storage', db);
           return sanitizeUser(user);
         },
@@ -1208,6 +1630,12 @@ const mockApi = {
           if (nextPassword) {
             user.passwordHash = await hashPassword(nextPassword);
           }
+          if (updates?.creditLimit !== undefined) {
+            if (!actor || actor.role !== 'admin') {
+              throw new Error('Only admin can update credit limit');
+            }
+            user.creditLimit = normalizeCreditLimitValue(updates.creditLimit);
+          }
 
           saveDB('admin-storage', db);
           return sanitizeUser(user);
@@ -1242,12 +1670,105 @@ const mockApi = {
       }
   },
 
+  adminWallets: {
+    list: async () => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const usersDb = getUsersDb();
+      const migrated = await secureUsersInDb(usersDb);
+      if (migrated) saveDB('admin-storage', usersDb);
+
+      return (usersDb?.state?.users || mockUsers)
+        .filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer')
+        .map((entry) => buildMockWalletSummary(entry.id))
+        .filter(Boolean);
+    },
+
+    getByUserId: async (userId) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const wallet = buildMockWalletSummary(userId);
+      if (!wallet) {
+        throw new Error('Wallet not found');
+      }
+      return wallet;
+    },
+
+    getTransactionsByUserId: async (userId) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      return buildMockWalletTransactionsForUser(userId);
+    },
+  },
+
+  wallet: {
+    getStats: async () => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const authDb = getDB('auth-storage', { state: { user: null } });
+      const authUserId = authDb?.state?.user?.id;
+      const wallet = buildMockWalletSummary(authUserId);
+      const transactions = buildMockWalletTransactionsForUser(authUserId);
+      const totalDeposits = transactions.reduce((sum, entry) => (entry.signedAmount > 0 ? sum + entry.signedAmount : sum), 0);
+      const totalSpent = Math.abs(transactions.reduce((sum, entry) => (entry.signedAmount < 0 ? sum + entry.signedAmount : sum), 0));
+
+      return {
+        walletBalance: wallet?.walletBalance || 0,
+        currency: wallet?.currency || 'USD',
+        recentTransactions: wallet?.recentTransactions || [],
+        netBalance: wallet?.walletBalance || 0,
+        totalTransactions: wallet?.transactionsCount || 0,
+        totalDeposits,
+        totalSpent,
+      };
+    },
+
+    getTransactions: async ({ page = 1, limit = 50 } = {}) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const authDb = getDB('auth-storage', { state: { user: null } });
+      const authUserId = authDb?.state?.user?.id;
+      const items = buildMockWalletTransactionsForUser(authUserId);
+      const start = Math.max(0, (Number(page) - 1) * Number(limit));
+      const typeMap = { credit: 'CREDIT', debit: 'DEBIT', refund: 'REFUND' };
+
+      return items.slice(start, start + Number(limit)).map((entry) => ({
+        _id: entry.id,
+        userId: entry.userId,
+        type: typeMap[entry.type] || 'CREDIT',
+        amount: Math.abs(toFiniteNumber(entry.amount, 0)),
+        signedAmount: toFiniteNumber(entry.signedAmount, 0),
+        balanceAfter: entry.balanceAfter,
+        description: entry.description,
+        status: entry.status,
+        reference: entry.reference,
+        createdAt: entry.createdAt,
+        currency: entry.currency,
+        currencyCode: entry.currencyCode || entry.currency,
+        originalCurrency: entry.originalCurrency || entry.currencyCode || entry.currency,
+        financialSnapshot: entry.financialSnapshot || null,
+        sourceType: entry.sourceType || null,
+        sourceId: entry.sourceId || null,
+      }));
+    },
+  },
+
   // --- Topups ---
   topups: {
     list: async () => {
       await new Promise(resolve => setTimeout(resolve, DELAY));
       const data = getDB('topup-storage', { state: { topups: mockTopups } });
       return data.state.topups || mockTopups;
+    },
+
+    getById: async (topupId, userId = null) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const data = getDB('topup-storage', { state: { topups: mockTopups } });
+      const topups = data.state.topups || mockTopups;
+      const target = topups.find((entry) => (
+        String(entry.id) === String(topupId) && (!userId || String(entry.userId) === String(userId))
+      ));
+
+      if (!target) {
+        throw new Error('Topup not found');
+      }
+
+      return target;
     },
     
     create: async (topupData) => {
@@ -1298,7 +1819,7 @@ const mockApi = {
              const currencies = systemDb?.state?.currencies || mockCurrencies;
              const matchedCurrency = currencies.find((item) => String(item.code || '').toUpperCase() === currencyCode);
              const rate = Number(matchedCurrency?.rate || 1);
-             const creditedCoins = Number((actual / (rate > 0 ? rate : 1)).toFixed(2));
+             const creditedCoins = normalizeMoneyAmount(actual / (rate > 0 ? rate : 1));
              topup.creditedCoins = creditedCoins;
 
              // Add balance only once when entering approved/completed state.
@@ -1307,7 +1828,7 @@ const mockApi = {
                const userDB = getDB('admin-storage', { state: { users: mockUsers } });
                const user = userDB.state.users.find(u => u.id === topup.userId);
                if (user) {
-                 user.coins = Number((Number(user.coins || 0) + creditedCoins).toFixed(2));
+                 user.coins = normalizeMoneyAmount(Number(user.coins || 0) + creditedCoins);
                  saveDB('admin-storage', userDB);
                }
              }

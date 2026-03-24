@@ -5,7 +5,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useLanguage } from '../../context/LanguageContext';
 import useAuthStore from '../../store/useAuthStore';
-import { getDefaultRouteForRole } from '../../utils/authRoles';
+import { getDefaultRouteForRole, isAdminRole } from '../../utils/authRoles';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -48,10 +48,30 @@ const Layout = () => {
   const shellOffset = !isMobile ? (isSidebarOpen ? '288px' : '88px') : '0';
 
   const handleGoBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
+    const path = String(location.pathname || '');
+    const isWalletTopupFlow = (
+      path === '/wallet/add-balance'
+      || path.startsWith('/wallet/payment-details/')
+    );
+    const openedFromSettings = Boolean(location?.state?.fromSettings);
+    const isAdmin = isAdminRole(user?.role);
+    const isAdminWallet = path === '/admin/wallet';
+
+    if (isWalletTopupFlow) {
+      navigate('/wallet');
       return;
     }
+
+    if (openedFromSettings) {
+      navigate('/settings');
+      return;
+    }
+
+    if (isAdmin && !isAdminWallet) {
+      navigate('/admin/dashboard');
+      return;
+    }
+
     navigate(getDefaultRouteForRole(user?.role));
   };
 

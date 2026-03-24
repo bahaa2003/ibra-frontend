@@ -1,5 +1,8 @@
 import { formatDateTime, formatNumber } from './intl';
+import { getMoneyFormatOptions } from './money';
 import { formatCurrencyAmount } from './pricing';
+import { getProductQuantityMeta, resolveProductOrderFields } from './productPurchase';
+import { resolveOrderExecutionCurrency } from './transactionCurrency';
 
 const ORDER_STATUS_META = {
   completed: {
@@ -54,6 +57,33 @@ const VISUAL_STATUS_ALIASES = {
   rejected: 'incomplete',
 };
 
+const MANUAL_STATUS_META = {
+  pending: {
+    labelAr: 'بانتظار المراجعة',
+    labelEn: 'Pending review',
+    descriptionAr: 'الطلب بانتظار المراجعة قبل التنفيذ.',
+    descriptionEn: 'The order is waiting for review before execution.',
+  },
+  processing: {
+    labelAr: 'قيد التنفيذ',
+    labelEn: 'In progress',
+    descriptionAr: 'تم بدء تنفيذ الطلب وجارٍ متابعته.',
+    descriptionEn: 'The order is being processed and tracked.',
+  },
+  completed: {
+    labelAr: 'مكتمل',
+    labelEn: 'Completed',
+    descriptionAr: 'تم تنفيذ الطلب بنجاح وإغلاقه.',
+    descriptionEn: 'The order was fulfilled successfully and closed.',
+  },
+  rejected: {
+    labelAr: 'مرفوض',
+    labelEn: 'Rejected',
+    descriptionAr: 'تم رفض الطلب أو تعذر تنفيذه.',
+    descriptionEn: 'The order was rejected or could not be fulfilled.',
+  },
+};
+
 const EXCLUDED_DYNAMIC_FIELDS = new Set([
   'externalproductid',
   'orderreference',
@@ -62,12 +92,84 @@ const EXCLUDED_DYNAMIC_FIELDS = new Set([
   'service',
 ]);
 
+const DYNAMIC_FIELD_LABELS = {
+  playerid: { ar: 'معرف المستخدم', en: 'User ID' },
+  uid: { ar: 'UID', en: 'UID' },
+  userid: { ar: 'معرف المستخدم', en: 'User ID' },
+  username: { ar: 'اسم المستخدم', en: 'Username' },
+  email: { ar: 'البريد الإلكتروني', en: 'Email' },
+  phone: { ar: 'رقم الهاتف', en: 'Phone Number' },
+  server: { ar: 'السيرفر', en: 'Server' },
+  zone: { ar: 'المنطقة', en: 'Zone' },
+};
+
+const PRIMARY_IDENTIFIER_KEYS = new Set([
+  'playerid',
+  'uid',
+  'userid',
+  'username',
+  'email',
+  'phone',
+]);
+
+const PRIMARY_IDENTIFIER_LABELS = new Set([
+  'id',
+  'uid',
+  'userid',
+  'useridentifier',
+  'playerid',
+  'accountid',
+  'gameid',
+  'loginid',
+  'معرفالمستخدم',
+  'ايديمستخدم',
+  'ايديالمستخدم',
+  'ايديحساب',
+  'معرفالحساب',
+  'معرفاللاعب',
+  'ايدياللاعب',
+]);
+
+const ORDER_DISPLAY_MAXIMUM_FRACTION_DIGITS = 12;
+
 const asNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const toLower = (value) => String(value || '').trim().toLowerCase();
+const toDisplayString = (value) => String(value || '').trim();
+const normalizeDynamicFieldKey = (value) => toLower(value).replace(/[\s_-]+/g, '');
+
+const isPrimaryIdentifierField = (field = {}) => {
+  const normalizedKey = normalizeDynamicFieldKey(field?.key || '');
+  const normalizedLabel = normalizeDynamicFieldKey(field?.label || '');
+
+  if (PRIMARY_IDENTIFIER_KEYS.has(normalizedKey) || PRIMARY_IDENTIFIER_LABELS.has(normalizedLabel)) {
+    return true;
+  }
+
+  if (normalizedLabel === 'id') {
+    return true;
+  }
+
+  const hasIdToken = normalizedLabel.includes('id') || normalizedLabel.includes('uid');
+  const hasUserToken = ['user', 'player', 'account', 'game', 'مستخدم', 'اللاعب', 'حساب']
+    .some((token) => normalizedLabel.includes(token));
+
+  return hasIdToken && hasUserToken;
+};
+
+const resolveDynamicFieldLabel = (key, language = 'ar', explicitLabel = '') => {
+  const normalizedKey = normalizeDynamicFieldKey(key);
+  const alias = DYNAMIC_FIELD_LABELS[normalizedKey];
+  if (alias) {
+    return language === 'ar' ? alias.ar : alias.en;
+  }
+
+  const cleanedLabel = toDisplayString(explicitLabel);
+  return cleanedLabel || humanizeOrderToken(key);
+};
 
 export const humanizeOrderToken = (value) => String(value || '')
   .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -127,6 +229,38 @@ export const createOrderSortOptions = (language = 'ar') => ([
   { value: 'oldest', label: language === 'ar' ? 'الأقدم أولاً' : 'Oldest first' },
 ]);
 
+export const normalizeManualOrderStatus = (status) => {
+  const normalized = toLower(status);
+
+  if (['completed', 'approved', 'delivered', 'success'].includes(normalized)) {
+    return 'completed';
+  }
+
+  if (['failed', 'rejected', 'denied', 'refunded', 'cancelled', 'canceled', 'incomplete'].includes(normalized)) {
+    return 'rejected';
+  }
+
+  if (['processing', 'retry'].includes(normalized)) {
+    return 'processing';
+  }
+
+  return 'pending';
+};
+
+export const createManualOrderStatusOptions = (language = 'ar') => (
+  Object.entries(MANUAL_STATUS_META).map(([value, meta]) => ({
+    value,
+    label: language === 'ar' ? meta.labelAr : meta.labelEn,
+    description: language === 'ar' ? meta.descriptionAr : meta.descriptionEn,
+  }))
+);
+
+export const getManualOrderStatusLabel = (status, language = 'ar') => {
+  const normalized = normalizeManualOrderStatus(status);
+  const meta = MANUAL_STATUS_META[normalized] || MANUAL_STATUS_META.pending;
+  return language === 'ar' ? meta.labelAr : meta.labelEn;
+};
+
 export const getVisualOrderStatus = (status) => {
   const normalized = toLower(status);
   return VISUAL_STATUS_ALIASES[normalized] || 'processing';
@@ -169,28 +303,34 @@ export const getOrderTypeMeta = (order, language = 'ar') => {
   };
 };
 
+const getOrderAmountRawValue = (order = {}) => (
+  order?.financialSnapshot?.finalAmountAtExecution
+  ?? order?.financialSnapshot?.pricingSnapshot?.finalPrice
+  ?? order?.financialSnapshot?.convertedAmountAtExecution
+  ?? order?.totalAmount
+  ?? order?.priceCoins
+);
+
 export const getOrderAmountValue = (order = {}) => {
-  const snapshotAmount = order?.financialSnapshot?.finalAmountAtExecution;
+  const snapshotAmount = getOrderAmountRawValue(order);
   const directAmount = order?.totalAmount ?? order?.priceCoins;
   const unitBasedAmount = asNumber(order?.unitPrice || order?.unitPriceBase) * asNumber(order?.quantity || 1);
   return asNumber(snapshotAmount ?? directAmount ?? unitBasedAmount);
 };
 
-export const getOrderCurrencyCode = (order = {}) => String(
-  order?.currencyCode
-    || order?.financialSnapshot?.pricingSnapshot?.currency
-    || order?.financialSnapshot?.originalCurrency
-    || 'USD'
-).toUpperCase();
+export const getOrderCurrencyCode = (order = {}) => resolveOrderExecutionCurrency(order, 'USD');
 
 export const formatOrderMoney = (order, currencies = [], locale = 'ar-EG') => {
   const amount = getOrderAmountValue(order);
   const currencyCode = getOrderCurrencyCode(order);
+  const displayFormatOptions = {
+    maximumFractionDigits: ORDER_DISPLAY_MAXIMUM_FRACTION_DIGITS,
+  };
 
   try {
-    return formatCurrencyAmount(amount, currencyCode, currencies, locale);
+    return formatCurrencyAmount(amount, currencyCode, currencies, locale, displayFormatOptions);
   } catch (_error) {
-    return `${formatNumber(amount, locale, { maximumFractionDigits: amount % 1 === 0 ? 0 : 2 })} ${currencyCode}`;
+    return `${formatNumber(amount, locale, getMoneyFormatOptions(amount, displayFormatOptions))} ${currencyCode}`;
   }
 };
 
@@ -202,40 +342,207 @@ export const formatOrderDateTime = (value, locale = 'ar-EG') => formatDateTime(v
   minute: '2-digit',
 });
 
-export const getOrderDynamicFields = (order = {}) => {
-  const candidates = [
+export const resolveSiteOrderNumber = (order = {}) => toDisplayString(
+  order?.siteOrderNumber
+    || order?.internalOrderNumber
+    || order?.orderNumber
+    || order?.id
+);
+
+export const resolveSupplierOrderNumber = (order = {}) => toDisplayString(
+  order?.supplierOrderNumber
+    || order?.externalOrderId
+    || order?.providerOrderId
+    || order?.supplierResponseSnapshot?.data?.orderId
+    || order?.supplierResponseSnapshot?.orderId
+);
+
+const getOrderFieldValueEntries = (order = {}) => {
+  const valueSources = [
+    order?.customerInput?.values,
     order?.orderFieldsValues,
     order?.orderFields,
     order?.supplierRequestSnapshot,
   ];
 
-  const source = candidates.find((item) => item && typeof item === 'object' && !Array.isArray(item)) || {};
+  const valuesByKey = new Map();
 
-  return Object.entries(source)
-    .filter(([key, value]) => {
-      const normalizedKey = toLower(key).replace(/\s+/g, '');
-      return (
-        normalizedKey
-        && !EXCLUDED_DYNAMIC_FIELDS.has(normalizedKey)
-        && value !== undefined
-        && value !== null
-        && String(value).trim() !== ''
-      );
-    })
-    .map(([key, value]) => ({
-      key,
-      label: humanizeOrderToken(key),
-      value: String(value),
-    }));
+  valueSources.forEach((source) => {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+
+    Object.entries(source).forEach(([key, value]) => {
+      const normalizedKey = normalizeDynamicFieldKey(key);
+      if (
+        !normalizedKey
+        || EXCLUDED_DYNAMIC_FIELDS.has(normalizedKey)
+        || value === undefined
+        || value === null
+        || String(value).trim() === ''
+      ) {
+        return;
+      }
+
+      valuesByKey.set(normalizedKey, {
+        key,
+        value: String(value),
+      });
+    });
+  });
+
+  const fallbackPlayerId = toDisplayString(order?.playerId);
+  if (fallbackPlayerId && !valuesByKey.has('playerid')) {
+    valuesByKey.set('playerid', {
+      key: 'playerId',
+      value: fallbackPlayerId,
+    });
+  }
+
+  return valuesByKey;
 };
+
+const getOrderFieldDefinitions = (order = {}, { product = null, language = 'ar' } = {}) => {
+  const fieldSnapshot = Array.isArray(order?.customerInput?.fieldsSnapshot) && order.customerInput.fieldsSnapshot.length > 0
+    ? order.customerInput.fieldsSnapshot
+    : (Array.isArray(order?.fieldsSnapshot) && order.fieldsSnapshot.length > 0 ? order.fieldsSnapshot : null);
+
+  if (fieldSnapshot) {
+    return fieldSnapshot.map((field, index) => {
+      const key = String(field?.key || field?.name || field?.id || `field_${index}`);
+      return {
+        key,
+        label: resolveDynamicFieldLabel(
+          key,
+          language,
+          language === 'ar'
+            ? field?.labelAr || field?.placeholderAr || field?.label || field?.placeholder
+            : field?.label || field?.placeholder || field?.labelAr || field?.placeholderAr
+        ),
+        placeholder: toDisplayString(
+          language === 'ar'
+            ? field?.placeholderAr || field?.placeholder
+            : field?.placeholder || field?.placeholderAr
+        ),
+      };
+    });
+  }
+
+  const hasExplicitProductFields = Array.isArray(product?.orderFields) && product.orderFields.length > 0;
+  const hasSupplierMappedFields = Array.isArray(product?.supplierFieldMappings)
+    && product.supplierFieldMappings.some((mapping) => {
+      const internalField = String(mapping?.internalField || '').trim();
+      return internalField && internalField !== 'quantity' && internalField !== 'externalProductId';
+    });
+
+  if (!hasExplicitProductFields && !hasSupplierMappedFields) {
+    return [];
+  }
+
+  return resolveProductOrderFields(product, language).map((field, index) => ({
+    key: String(field?.key || `field_${index}`),
+    label: resolveDynamicFieldLabel(field?.key || `field_${index}`, language, field?.label),
+    placeholder: toDisplayString(field?.placeholder),
+  }));
+};
+
+export const getOrderDynamicFields = (order = {}, { product = null, language = 'ar' } = {}) => {
+  const valuesByKey = getOrderFieldValueEntries(order);
+  const fieldDefinitions = getOrderFieldDefinitions(order, { product, language });
+
+  const orderedFields = [];
+  const seenKeys = new Set();
+
+  fieldDefinitions.forEach((field) => {
+    const normalizedKey = normalizeDynamicFieldKey(field?.key || '');
+    const valueEntry = valuesByKey.get(normalizedKey);
+
+    if (!normalizedKey || !valueEntry || seenKeys.has(normalizedKey)) return;
+
+    orderedFields.push({
+      key: valueEntry.key,
+      label: field.label,
+      value: valueEntry.value,
+    });
+    seenKeys.add(normalizedKey);
+  });
+
+  valuesByKey.forEach((entry, normalizedKey) => {
+    if (seenKeys.has(normalizedKey)) return;
+
+    orderedFields.push({
+      key: entry.key,
+      label: resolveDynamicFieldLabel(entry.key, language),
+      value: entry.value,
+    });
+  });
+
+  return orderedFields;
+};
+
+export const getOrderRequestDetails = (order = {}, { product = null, language = 'ar' } = {}) => {
+  const valuesByKey = getOrderFieldValueEntries(order);
+  const fieldDefinitions = getOrderFieldDefinitions(order, { product, language });
+  const fields = [];
+  const seenKeys = new Set();
+
+  fieldDefinitions.forEach((field) => {
+    const normalizedKey = normalizeDynamicFieldKey(field?.key || '');
+    const valueEntry = valuesByKey.get(normalizedKey);
+
+    if (!normalizedKey || seenKeys.has(normalizedKey)) return;
+
+    fields.push({
+      key: field.key,
+      label: field.label,
+      placeholder: field.placeholder,
+      value: valueEntry?.value || '',
+    });
+    seenKeys.add(normalizedKey);
+  });
+
+  valuesByKey.forEach((entry, normalizedKey) => {
+    if (seenKeys.has(normalizedKey)) return;
+
+    fields.push({
+      key: entry.key,
+      label: resolveDynamicFieldLabel(entry.key, language),
+      placeholder: '',
+      value: entry.value,
+    });
+  });
+
+  const quantitySnapshot = order?.customerInput?.quantitySnapshot || order?.quantitySnapshot || {};
+  const quantityMeta = getProductQuantityMeta({
+    minimumOrderQty: quantitySnapshot?.minQty ?? quantitySnapshot?.minimumOrderQty ?? product?.minimumOrderQty ?? product?.minQty ?? order?.quantity ?? 1,
+    maximumOrderQty: quantitySnapshot?.maxQty ?? quantitySnapshot?.maximumOrderQty ?? product?.maximumOrderQty ?? product?.maxQty ?? order?.quantity ?? 1,
+    stepQty: quantitySnapshot?.stepQty ?? product?.stepQty ?? 1,
+  });
+
+  return {
+    fields,
+    quantity: {
+      label: language === 'ar' ? 'إضافة' : 'Add',
+      value: String(order?.quantity || 1),
+      minQty: quantityMeta.minQty,
+      maxQty: quantityMeta.maxQty,
+      stepQty: quantityMeta.stepQty,
+    },
+  };
+};
+
+export const getPrimaryOrderIdentifierField = (fields = []) => (
+  (Array.isArray(fields) ? fields : []).find((field) => isPrimaryIdentifierField(field)) || null
+);
 
 export const canSyncSupplierOrder = (order = {}) => Boolean(order?.supplierId && order?.externalOrderId);
 
 export const isManualActionableOrder = (order = {}) => {
-  const type = getOrderType(order);
   const statusKey = getVisualOrderStatus(order?.status);
+  return isManualStatusEditableOrder(order) && !['completed', 'incomplete'].includes(statusKey);
+};
 
-  return type === 'manual' && !order?.supplierId && !['completed', 'incomplete'].includes(statusKey);
+export const isManualStatusEditableOrder = (order = {}) => {
+  const type = getOrderType(order);
+  return type === 'manual' && !order?.supplierId;
 };
 
 export const getManualOrderPrimaryAction = (order, language = 'ar') => {
@@ -252,6 +559,36 @@ export const getManualOrderPrimaryAction = (order, language = 'ar') => {
     label: language === 'ar' ? 'قبول الطلب' : 'Accept order',
     nextStatus: 'processing',
   };
+};
+
+export const getCustomerOrderFeedback = (order = {}, language = 'ar') => {
+  const isArabic = language === 'ar';
+  const statusKey = getVisualOrderStatus(order?.status);
+  const typeKey = getOrderType(order);
+
+  if (statusKey === 'completed') {
+    return {
+      tone: 'success',
+      title: isArabic ? 'تم تنفيذ الطلب بنجاح' : 'Your order was completed successfully',
+      description: isArabic
+        ? 'يمكنك مراجعة كل التفاصيل النهائية للطلب من زر التفاصيل.'
+        : 'You can open the details button to review the final order information.',
+      actionLabel: isArabic ? 'عرض التفاصيل' : 'View details',
+    };
+  }
+
+  if (typeKey === 'manual') {
+    return {
+      tone: 'warning',
+      title: isArabic ? 'طلبك قيد المراجعة' : 'Your order is under review',
+      description: isArabic
+        ? 'هذا الطلب يُنفذ يدويًا من الإدارة، وسيتم تحديث حالته فور الانتهاء من مراجعته.'
+        : 'This order is handled manually by the admin team and its status will update once the review is finished.',
+      actionLabel: isArabic ? 'عرض التفاصيل' : 'View details',
+    };
+  }
+
+  return null;
 };
 
 export const enrichOrders = (orders, { users = [], products = [], language = 'ar' } = {}) => {
@@ -271,7 +608,8 @@ export const enrichOrders = (orders, { users = [], products = [], language = 'ar
     };
     const statusMeta = getOrderStatusMeta(hydratedOrder?.status, language);
     const typeMeta = getOrderTypeMeta(hydratedOrder, language);
-    const orderNumber = String(order?.id || order?.orderNumber || '').trim();
+    const siteOrderNumber = resolveSiteOrderNumber(hydratedOrder);
+    const supplierOrderNumber = resolveSupplierOrderNumber(hydratedOrder);
     const customerName = order?.userName
       || linkedUser?.name
       || (language === 'ar' ? 'عميل غير معروف' : 'Unknown customer');
@@ -284,13 +622,24 @@ export const enrichOrders = (orders, { users = [], products = [], language = 'ar
     const createdAt = order?.createdAt || order?.date || order?.updatedAt || '';
     const amountValue = getOrderAmountValue(order);
     const currencyCode = getOrderCurrencyCode(order);
-    const dynamicFields = getOrderDynamicFields(order);
+    const dynamicFields = getOrderDynamicFields(order, {
+      product: linkedProduct,
+      language,
+    });
+    const requestDetails = getOrderRequestDetails(order, {
+      product: linkedProduct,
+      language,
+    });
+    const primaryIdentifierField = getPrimaryOrderIdentifierField(dynamicFields);
     const notes = String(order?.notes || order?.adminNote || order?.providerReferenceMessage || '').trim();
     const supplierName = order?.supplierName || '';
 
     return {
       ...hydratedOrder,
-      orderNumber,
+      orderNumber: siteOrderNumber,
+      siteOrderNumber,
+      internalOrderNumber: siteOrderNumber,
+      supplierOrderNumber,
       customerName,
       customerEmail,
       customerAvatar: order?.customerAvatar || linkedUser?.avatar || buildFallbackAvatar(customerName),
@@ -311,11 +660,15 @@ export const enrichOrders = (orders, { users = [], products = [], language = 'ar
       notes,
       supplierName,
       dynamicFields,
+      requestDetails,
+      primaryIdentifierField,
       canSync: canSyncSupplierOrder(hydratedOrder),
       manualActionable: isManualActionableOrder(hydratedOrder),
+      manualStatusEditable: isManualStatusEditableOrder(hydratedOrder),
       rawStatusLabel: humanizeOrderToken(order?.status || ''),
       searchIndex: toLower([
-        orderNumber,
+        siteOrderNumber,
+        supplierOrderNumber,
         productName,
         order?.productName,
         order?.productNameAr,

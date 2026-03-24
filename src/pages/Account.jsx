@@ -5,7 +5,7 @@ import { Camera, Eye, EyeOff, KeyRound, Mail, Phone, Save, ShieldCheck, User, Us
 import { useLocation } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
+import Input, { inputBaseClassName } from '../components/ui/Input';
 import Badge from '../components/ui/Badge';
 import SaveChangesBar from '../components/account/SaveChangesBar';
 import useAuthStore from '../store/useAuthStore';
@@ -528,8 +528,10 @@ const Account = () => {
                     type={showPassword[item.key] ? 'text' : 'password'}
                     value={passwordForm[item.key]}
                     onChange={(event) => setPasswordForm((prev) => ({ ...prev, [item.key]: event.target.value }))}
-                    className={`w-full rounded-lg border bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition-colors focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.16)] ${
-                      item.error ? 'border-rose-400/80' : 'border-[color:rgb(var(--color-border-rgb)/0.92)] focus:border-[color:rgb(var(--color-primary-rgb)/0.46)]'
+                    className={`${inputBaseClassName} pl-10 ${
+                      item.error
+                        ? 'border-[color:rgb(var(--color-error-rgb)/0.85)] focus:border-[color:rgb(var(--color-error-rgb)/0.8)] focus:ring-[color:rgb(var(--color-error-rgb)/0.16)]'
+                        : ''
                     }`}
                   />
                   <button

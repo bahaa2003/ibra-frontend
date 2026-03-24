@@ -18,15 +18,15 @@ import { filterOrders, enrichOrders, summarizeOrders } from '../utils/orders';
 import { formatNumber } from '../utils/intl';
 
 const SummaryCard = ({ icon: Icon, label, value, note }) => (
-  <Card variant="flat" className="p-4">
-    <div className="flex items-start gap-3">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
-        <Icon className="h-5 w-5" />
+  <Card variant="flat" className="p-2.5 sm:p-3">
+    <div className="flex items-start gap-2">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.85rem] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[color:rgb(var(--color-primary-rgb)/0.07)] text-[var(--color-primary)]">
+        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </div>
-      <div className="min-w-0">
-        <p className="text-sm text-[var(--color-text-secondary)]">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-[var(--color-text)]">{value}</p>
-        <p className="mt-1 text-xs text-[var(--color-muted)]">{note}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] leading-4 text-[var(--color-text-secondary)] sm:text-xs">{label}</p>
+        <p className="mt-0.5 text-lg font-semibold leading-none text-[var(--color-text)] sm:text-xl">{value}</p>
+        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[var(--color-muted)] sm:text-[11px]">{note}</p>
       </div>
     </div>
   </Card>
@@ -34,7 +34,7 @@ const SummaryCard = ({ icon: Icon, label, value, note }) => (
 
 const Orders = () => {
   const { user } = useAuthStore();
-  const { orders, loadOrders } = useOrderStore();
+  const { orders, loadOrders, getOrderById } = useOrderStore();
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { i18n } = useTranslation();
@@ -102,26 +102,26 @@ const Orders = () => {
   const formatCount = (value) => formatNumber(value, locale);
 
   return (
-    <div className="min-w-0 space-y-6 pb-4">
-      <section className="premium-card relative overflow-hidden p-5 sm:p-6">
-        <div className="pointer-events-none absolute -top-16 right-4 h-36 w-36 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.14)] blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-0 h-24 w-24 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.08)] blur-3xl" />
+    <div className="min-w-0 space-y-4 pb-3">
+      <section className="premium-card relative overflow-hidden p-3 sm:p-4">
+        <div className="pointer-events-none absolute -top-16 right-4 h-28 w-28 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.14)] blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-20 w-20 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.08)] blur-3xl" />
 
         <div className="relative min-w-0">
           <span className="section-kicker">
             {isArabic ? 'Orders Overview' : 'Orders Overview'}
           </span>
-          <h1 className="page-heading mt-4 max-w-3xl">
+          <h1 className="page-heading mt-3 max-w-3xl">
             {isArabic ? 'طلباتي' : 'My Orders'}
           </h1>
-          <p className="page-subtitle mt-3 max-w-3xl">
+          <p className="page-subtitle mt-2 max-w-3xl">
             {isArabic
               ? 'كل طلباتك في مكان واحد، مع حالة واضحة وتفاصيل منظمة تساعدك تتابع التنفيذ بسهولة من الهاتف أو الديسكتوب.'
               : 'All your orders in one place, with clear statuses and organized details that are easy to follow on mobile and desktop.'}
           </p>
         </div>
 
-        <div className="relative mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="relative mt-4 grid grid-cols-2 gap-2.5">
           <SummaryCard
             icon={ShoppingCart}
             label={isArabic ? 'إجمالي الطلبات' : 'Total orders'}
@@ -160,17 +160,21 @@ const Orders = () => {
         helperText={isArabic
           ? 'تظهر هنا طلباتك فقط، ويمكنك تصفيتها بسرعة حسب حالتها.'
           : 'Only your own orders appear here, and you can quickly filter them by status.'}
+        compact
       />
 
       {filteredOrders.length ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {filteredOrders.map((order) => (
             <CustomerOrderCard
               key={order.id}
               order={order}
               isArabic={isArabic}
               currencies={currencies}
-              onSelect={() => setSelectedOrderId(order.id)}
+              onSelect={() => {
+                setSelectedOrderId(order.id);
+                void getOrderById(order.id, user?.id).catch(() => {});
+              }}
             />
           ))}
         </div>

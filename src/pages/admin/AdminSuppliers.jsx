@@ -761,6 +761,14 @@ const AdminSuppliers = () => {
                   const deepData = (typeof innerData?.data === 'object' && innerData.data !== null) ? innerData.data : {};
 
                   const balance = deepData?.user_balance ?? innerData?.balance ?? innerData?.user_balance ?? innerData?.remains ?? innerData?.credits ?? raw?.user_balance ?? 'N/A';
+                  const parsedBalance = Number(balance);
+                  const formattedBalance = Number.isFinite(parsedBalance)
+                    ? new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: 3,
+                        maximumFractionDigits: 3,
+                        useGrouping: true,
+                      }).format(parsedBalance)
+                    : balance ?? 'N/A';
                   const currency = deepData?.user_currency ?? innerData?.currency ?? innerData?.user_currency ?? raw?.currency ?? '';
                   const email = deepData?.user_email ?? innerData?.email ?? innerData?.user_email ?? raw?.email ?? '';
                   const userId = deepData?.user_id ?? deepData?.userId ?? innerData?.user_id ?? innerData?.userId ?? innerData?.username ?? raw?.user_id ?? '';
@@ -768,7 +776,7 @@ const AdminSuppliers = () => {
                   const status = deepData?.status ?? innerData?.status ?? raw?.status ?? '';
 
                   const cards = [
-                    { label: 'الرصيد الحالي', value: balance, highlight: true },
+                    { label: 'الرصيد الحالي', value: formattedBalance, highlight: true },
                     { label: 'العملة', value: currency },
                     { label: 'البريد الإلكتروني', value: email },
                     { label: 'معرف الحساب', value: userId },

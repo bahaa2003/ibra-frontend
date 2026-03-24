@@ -9,8 +9,10 @@ import useSystemStore from '../store/useSystemStore';
 import useTopupStore from '../store/useTopupStore';
 import useAuthStore from '../store/useAuthStore';
 import { useToast } from '../components/ui/Toast';
+import { inputBaseClassName, textareaClassName } from '../components/ui/Input';
 import { findPaymentMethodById } from '../utils/paymentSettings';
 import { devLogger } from '../utils/devLogger';
+import { resolveImageUrl } from '../utils/imageUrl';
 
 const getMethodPresentation = (method) => {
   const token = `${method?.id || ''} ${method?.name || ''}`.toLowerCase();
@@ -171,7 +173,8 @@ const PaymentDetails = () => {
       label: t('payments.fields.amount'),
       placeholder: t('payments.fields.amountPlaceholder'),
       type: 'number',
-      min: '1',
+      min: '0.01',
+      step: '0.01',
     },
     senderNumber: {
       label: t('payments.fields.senderNumber'),
@@ -229,7 +232,7 @@ const PaymentDetails = () => {
           <div className={`mb-2 flex items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
             {method.image ? (
               <img
-                src={method.image}
+                src={resolveImageUrl(method.image)}
                 alt={method.name}
                 loading="lazy"
                 decoding="async"
@@ -264,7 +267,7 @@ const PaymentDetails = () => {
             {method.image ? (
               <div className={`mb-4 flex ${isRTL ? 'justify-end' : 'justify-start'}`}>
                 <img
-                  src={method.image}
+                  src={resolveImageUrl(method.image)}
                   alt={method.name}
                   loading="lazy"
                   decoding="async"
@@ -323,9 +326,8 @@ const PaymentDetails = () => {
                   onChange={(e) => handleInputChange(field, e.target.value)}
                   placeholder={config.placeholder}
                   min={config.min}
-                  className={`w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-400 transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 ${
-                    isRTL ? 'text-right' : 'text-left'
-                  }`}
+                  step={config.step}
+                  className={`${inputBaseClassName} ${isRTL ? 'text-right' : 'text-left'}`}
                   disabled={isSubmitting}
                 />
               </div>
@@ -341,9 +343,7 @@ const PaymentDetails = () => {
               onChange={(e) => handleInputChange('notes', e.target.value)}
               placeholder={t('payments.notesPlaceholder')}
               rows={3}
-              className={`w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-400 transition-colors focus:border-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder-gray-500 ${
-                isRTL ? 'text-right' : 'text-left'
-              }`}
+              className={`${textareaClassName} ${isRTL ? 'text-right' : 'text-left'}`}
               disabled={isSubmitting}
             />
           </div>

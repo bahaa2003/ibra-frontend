@@ -71,7 +71,7 @@ const ProductSearchBar = ({
 
     const rect = rootRef.current.getBoundingClientRect();
     setDropdownLayout({
-      top: rect.bottom + 8,
+      top: rect.bottom + 6,
       left: rect.left,
       width: rect.width,
     });
@@ -139,10 +139,10 @@ const ProductSearchBar = ({
       {showDropdown && dropdownLayout && typeof document !== 'undefined' && createPortal(
         <div
           style={dropdownLayout || undefined}
-          className="fixed z-[140] overflow-hidden rounded-[1.4rem] border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.98)] shadow-[0_30px_70px_-34px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+          className="fixed z-[30] overflow-hidden rounded-[1.25rem] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.98)] shadow-[0_24px_60px_-34px_rgba(15,23,42,0.46)] backdrop-blur-xl"
         >
           {results.length > 0 ? (
-            <div className="max-h-[21rem] overflow-y-auto py-2">
+            <div className="max-h-[18rem] overflow-y-auto py-1.5">
               {results.map((product) => (
                 <button
                   key={product.id}
@@ -151,20 +151,20 @@ const ProductSearchBar = ({
                     event.preventDefault();
                     handleSelect(product);
                   }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]"
+                  className="flex w-full items-center gap-2.5 px-2.5 py-2 text-start transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]"
                 >
-                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)]">
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)]">
                     <img
                       src={product.image}
                       alt={product.displayName}
                       loading="lazy"
                       decoding="async"
-                      sizes="56px"
+                      sizes="44px"
                       className="h-full w-full object-cover"
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                    <p className="truncate text-xs font-semibold text-[var(--color-text)] sm:text-[13px]">
                       {product.displayName}
                     </p>
                   </div>
@@ -172,8 +172,8 @@ const ProductSearchBar = ({
               ))}
             </div>
           ) : (
-            <div className="flex items-center gap-3 px-4 py-4 text-sm text-[var(--color-text-secondary)]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[color:rgb(var(--color-border-rgb)/0.86)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)] text-[var(--color-muted)]">
+            <div className="flex items-center gap-2.5 px-3 py-3 text-xs text-[var(--color-text-secondary)] sm:text-sm">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:rgb(var(--color-border-rgb)/0.86)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)] text-[var(--color-muted)]">
                 <SearchX className="h-4 w-4" />
               </div>
               <p>{noResultsLabel || (isArabic ? 'لا توجد منتجات مطابقة' : 'No matching products found')}</p>

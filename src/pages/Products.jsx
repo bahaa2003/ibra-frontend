@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
+import useGroupStore from '../store/useGroupStore';
 import useSystemStore from '../store/useSystemStore';
 import ProductSearchBar from '../components/products/ProductSearchBar';
 import CatalogCard from '../components/products/CatalogCard';
@@ -34,8 +35,8 @@ const getProductsPageCopy = (language = 'ar') => (
         categoryProductsTitle: 'منتجات الكاتلوج',
         emptyCatalogsTitle: 'لا توجد كاتلوجات جاهزة للعرض',
         emptyCatalogsDescription: 'عندما تتوفر أقسام مرتبطة بمنتجات ظاهرة في المتجر ستظهر هنا تلقائيًا.',
-        emptyCategoryTitle: 'لا توجد منتجات داخل هذا الكاتلوج',
-        emptyCategoryDescription: 'قد يكون هذا القسم فارغًا حاليًا أو أن منتجاته غير ظاهرة في المتجر.',
+        emptyCategoryTitle: 'لا يوجد بها عناصر',
+        emptyCategoryDescription: 'هذا القسم فارغ حاليًا، ويمكنك العودة لاختيار قسم آخر.',
       }
     : {
         pageKicker: 'Lighter and clearer storefront',
@@ -51,8 +52,8 @@ const getProductsPageCopy = (language = 'ar') => (
         categoryProductsTitle: 'Catalog products',
         emptyCatalogsTitle: 'No catalogs are ready to display',
         emptyCatalogsDescription: 'Collections linked to visible storefront products will appear here automatically.',
-        emptyCategoryTitle: 'No products inside this catalog',
-        emptyCategoryDescription: 'This collection may currently be empty or its products are hidden from the storefront.',
+        emptyCategoryTitle: 'There are no items in this category',
+        emptyCategoryDescription: 'This category is currently empty, and you can return to choose another one.',
       }
 );
 
@@ -62,6 +63,7 @@ const Products = () => {
   const categories = useMediaStore((state) => state.categories);
   const isLoading = useMediaStore((state) => state.isLoading);
   const loadProducts = useMediaStore((state) => state.loadProducts);
+  const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const loadCurrencies = useSystemStore((state) => state.loadCurrencies);
   const { i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -103,13 +105,17 @@ const Products = () => {
   }, [loadCurrencies]);
 
   const storefrontProducts = useMemo(
-    () => createStorefrontProducts(products, { language, userGroup: user?.group || 'Normal' }),
-    [language, products, user?.group]
+    () => createStorefrontProducts(products, {
+      language,
+      userGroup: user?.groupId || user?.group || 'Normal',
+      userGroupPercentage: user?.groupPercentage ?? null,
+    }),
+    [groupsLastLoadedAt, language, products, user?.group, user?.groupId, user?.groupPercentage]
   );
 
   const storefrontCategories = useMemo(
     () => createStorefrontCategories(categories, storefrontProducts, language)
-      .filter((category) => category.id !== 'all' && category.count > 0),
+      .filter((category) => category.id !== 'all'),
     [categories, language, storefrontProducts]
   );
 
@@ -208,7 +214,7 @@ const Products = () => {
   return (
     <div className="space-y-6 pb-4">
       <section className="border-0 bg-transparent p-0 shadow-none">
-        <div>
+        <div className="mx-auto flex w-full max-w-5xl justify-center">
           <ProductSearchBar
             products={storefrontProducts}
             language={language}
@@ -216,8 +222,8 @@ const Products = () => {
             onSelectProduct={openProduct}
             placeholder={copy.searchPlaceholder}
             noResultsLabel={copy.noResults}
-            className="w-full max-w-[360px] sm:max-w-[460px]"
-            inputClassName="h-9 rounded-xl text-xs shadow-none sm:h-10 sm:text-sm"
+            className="mx-auto w-full"
+            inputClassName="h-11 rounded-[1.35rem] border-[color:rgb(var(--color-border-rgb)/0.18)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] text-sm shadow-[0_16px_40px_-32px_rgba(15,23,42,0.55)] focus:border-[#efc86f] focus:bg-[color:rgb(var(--color-surface-rgb)/0.98)] focus:ring-0 focus:shadow-[0_0_0_1px_rgba(239,200,111,0.68),0_0_16px_rgba(239,200,111,0.18),0_20px_40px_-34px_rgba(15,23,42,0.58)] sm:h-12 sm:rounded-[1.55rem]"
           />
         </div>
       </section>
@@ -229,7 +235,7 @@ const Products = () => {
       {!showInitialLoading && currentCatalog && (
         <>
           {catalogProducts.length > 0 ? (
-            <section className="grid grid-cols-3 gap-x-1.5 gap-y-6 sm:gap-x-3 sm:gap-y-8 lg:gap-x-5 lg:gap-y-10">
+            <section className="grid grid-cols-3 gap-0">
               {catalogProducts.map((product) => (
                 <ProductCardSimple key={product.id} product={product} onOpen={openProduct} />
               ))}

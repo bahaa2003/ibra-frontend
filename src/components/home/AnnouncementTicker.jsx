@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = 'ltr' }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!items?.length) return undefined;
@@ -21,19 +22,25 @@ const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = '
   const endPosition = direction === 'rtl' ? '-100%' : '100%';
 
   return (
-    <section aria-label={ariaLabel} className="relative h-11 overflow-hidden">
+    <section aria-label={ariaLabel} dir={direction} className="px-0.5">
       <motion.div
-        key={activeItem.id}
-        initial={{ left: startPosition }}
-        animate={{ left: endPosition }}
-        transition={{ duration: durationMs / 1000, ease: 'linear' }}
-        className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap"
+        animate={reduceMotion ? undefined : { y: [0, -2, 0] }}
+        transition={reduceMotion ? undefined : { duration: 5.4, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative mx-auto max-w-4xl overflow-hidden rounded-[1.1rem] bg-transparent px-2 py-1.5 text-center shadow-none sm:px-3 sm:py-2"
       >
-        <span className="inline-flex items-center gap-2 px-1 text-sm font-semibold text-[var(--color-text)] sm:text-base">
-          <span aria-hidden="true" className="text-base leading-none">🔥</span>
-          <span>{activeItem.text}</span>
-          <span aria-hidden="true" className="text-base leading-none">🔥</span>
-        </span>
+        <div className="relative min-h-[2.8rem] overflow-hidden">
+          <motion.div
+            key={activeItem.id}
+            initial={reduceMotion ? { opacity: 0 } : { left: startPosition, opacity: 0.9 }}
+            animate={reduceMotion ? { opacity: 1 } : { left: endPosition, opacity: 1 }}
+            transition={reduceMotion ? { duration: 0.22 } : { duration: durationMs / 1000, ease: 'linear' }}
+            className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap"
+          >
+            <p className="px-2 text-[13px] font-semibold leading-6 text-[var(--color-text)] sm:text-[15px] sm:leading-7">
+              {activeItem.text}
+            </p>
+          </motion.div>
+        </div>
       </motion.div>
     </section>
   );

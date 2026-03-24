@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Clock3,
   Home,
+  Mail,
   MessageCircle,
   RefreshCcw,
   ShieldX,
@@ -14,14 +15,17 @@ import Button from '../ui/Button';
 import useAuthStore from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { buildWhatsAppLink, getAdminWhatsAppNumber } from '../../utils/whatsapp';
+import apiClient from '../../services/client';
 import {
   getAccountAccessRoute,
   getAccountStatusBadgeVariant,
   getAccountStatusLabel,
   isApprovedAccountStatus,
+  isVerificationRequiredStatus,
   normalizeAccountStatus,
 } from '../../utils/accountStatus';
 import { getDefaultRouteForRole } from '../../utils/authRoles';
+import { useToast } from '../ui/Toast';
 
 const PENDING_MESSAGE = 'مرحبًا، قمت بإنشاء حساب جديد في IBRA Store عبر Google وأحتاج تفعيل الحساب.';
 const REJECTED_MESSAGE = 'مرحبًا، تم رفض تفعيل حسابي في IBRA Store وأحتاج معرفة التفاصيل.';
@@ -45,16 +49,31 @@ const ACCOUNT_UI = {
       'border-[color:rgb(var(--color-error-rgb)/0.22)] bg-[radial-gradient(circle_at_top,rgba(248,113,113,0.16),transparent_55%),rgba(255,255,255,0.82)] text-[var(--color-error)] dark:bg-[radial-gradient(circle_at_top,rgba(248,113,113,0.14),transparent_52%),rgba(15,23,42,0.9)]',
     message: REJECTED_MESSAGE,
   },
+  verification: {
+    icon: Mail,
+    title: 'تأكيد البريد الإلكتروني',
+    description: 'أرسلنا رابط تأكيد إلى بريدك الإلكتروني. افتح الرسالة وأكمل التفعيل، ويمكنك إعادة إرسال الرابط إذا لم يصلك.',
+    badge: 'تأكيد البريد مطلوب',
+    accent:
+      'border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.16),transparent_55%),rgba(255,255,255,0.82)] text-[var(--color-primary)] dark:bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_52%),rgba(15,23,42,0.9)]',
+    message: 'مرحبًا، أحتاج مساعدة بخصوص تأكيد البريد الإلكتروني لحسابي في IBRA Store.',
+  },
 };
 
 const AccountAccessState = ({ variant = 'pending' }) => {
   const navigate = useNavigate();
   const { dir } = useLanguage();
+  const { addToast } = useToast();
   const { user, blockedStatus, blockedUser, refreshProfile, logout } = useAuthStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const currentStatus = normalizeAccountStatus(user?.status || blockedStatus || variant);
-  const displayVariant = currentStatus === 'rejected' ? 'rejected' : variant;
+  const displayVariant = isVerificationRequiredStatus(currentStatus)
+    ? 'verification'
+    : currentStatus === 'rejected'
+      ? 'rejected'
+      : variant;
   const config = ACCOUNT_UI[displayVariant] || ACCOUNT_UI.pending;
   const Icon = config.icon;
   const activeUser = user || blockedUser || null;
@@ -66,6 +85,30 @@ const AccountAccessState = ({ variant = 'pending' }) => {
     }),
     [config.message]
   );
+
+  const handleResendVerification = async () => {
+    const email = String(activeUser?.email || '').trim();
+    if (!email) {
+      addToast('لا يوجد بريد إلكتروني متاح لإعادة إرسال الرابط.', 'error');
+      return;
+    }
+
+    try {
+      setIsResending(true);
+      const result = await apiClient.auth.resendVerification(email);
+      addToast(
+        result?.message || 'إذا كان البريد موجودًا فسيتم إرسال رابط تأكيد جديد.',
+        'success'
+      );
+    } catch (error) {
+      addToast(
+        error?.message || 'تعذر إعادة إرسال رابط التأكيد الآن.',
+        'error'
+      );
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   const handleRefresh = async () => {
     if (!user) return;
@@ -154,17 +197,42 @@ const AccountAccessState = ({ variant = 'pending' }) => {
             )}
 
             <div className="flex flex-col gap-3">
-              <a
-                href={whatsappLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-[1rem] border border-emerald-500/25 bg-emerald-500/12 px-5 text-sm font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-500/16 dark:text-emerald-300"
-              >
-                <MessageCircle className="h-4 w-4" />
-                التواصل مع الأدمن عبر واتساب
-              </a>
+              {displayVariant === 'verification' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendVerification}
+                  disabled={isResending || !activeUser?.email}
+                >
+                  <Mail className="h-4 w-4" />
+                  {isResending ? 'جاري إعادة الإرسال...' : 'إعادة إرسال رابط التأكيد'}
+                </Button>
+              ) : (
+                <a
+                  href={whatsappLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative overflow-hidden rounded-[1.2rem] border border-emerald-500/24 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.12))] px-5 py-4 text-start shadow-[0_22px_40px_-30px_rgba(5,150,105,0.55)] transition-all hover:-translate-y-0.5 hover:border-emerald-500/36 hover:shadow-[0_28px_50px_-28px_rgba(5,150,105,0.62)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-[0_14px_30px_-18px_rgba(16,185,129,0.95)]">
+                      <MessageCircle className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-[var(--color-text)]">
+                        التواصل مع الأدمن عبر واتساب
+                      </span>
+                      <span className="mt-1 block text-xs leading-6 text-[var(--color-text-secondary)]">
+                        افتح المحادثة مباشرة وأرسل طلب تفعيل الحساب للأدمن.
+                      </span>
+                    </span>
+                    <ArrowRight className={`h-5 w-5 shrink-0 text-emerald-700 transition-transform group-hover:translate-x-1 ${dir === 'rtl' ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`} />
+                  </div>
+                </a>
+              )}
 
-              {user && (
+              {user && displayVariant !== 'verification' && (
                 <Button
                   type="button"
                   variant="outline"

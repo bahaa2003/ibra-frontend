@@ -5,6 +5,11 @@ import apiClient from '../services/client';
 import useNotificationStore from './useNotificationStore';
 import useAuthStore from './useAuthStore';
 import useAdminStore from './useAdminStore';
+import { getManualOrderStatusLabel, isManualStatusEditableOrder, normalizeManualOrderStatus } from '../utils/orders';
+
+const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase();
+const isRealProvider = dataProvider === 'real';
+const fetchedOrderScopesThisSession = new Set();
 
 const ORDERS_CACHE_TTL = 60 * 1000;
 let ordersRequest = null;
@@ -33,8 +38,10 @@ const useOrderStore = create(
         const scope = userId ? `user:${userId}` : 'all';
         const { orders, ordersLastLoadedAt, ordersLastLoadedScope } = get();
         const hasOrders = Array.isArray(orders) && orders.length > 0;
+        const shouldBypassHydratedCache = isRealProvider && !fetchedOrderScopesThisSession.has(scope);
         const hasFreshOrders = (
-          hasOrders
+          !shouldBypassHydratedCache
+          && hasOrders
           && ordersLastLoadedScope === scope
           && (Date.now() - Number(ordersLastLoadedAt || 0) < ORDERS_CACHE_TTL)
         );
@@ -56,6 +63,10 @@ const useOrderStore = create(
               ordersLastLoadedAt: Date.now(),
               ordersLastLoadedScope: scope,
             });
+
+            if (isRealProvider) {
+              fetchedOrderScopesThisSession.add(scope);
+            }
             return nextOrders;
           })
           .catch((_error) => {
@@ -77,6 +88,30 @@ const useOrderStore = create(
           });
 
         return ordersRequest;
+      },
+
+      getOrderById: async (orderId, userId = null) => {
+        const normalizedOrderId = String(orderId || '').trim();
+        if (!normalizedOrderId) return null;
+
+        const fetchedOrder = await apiClient.orders.getById(normalizedOrderId, userId);
+        if (!fetchedOrder) return null;
+
+        set((state) => {
+          const existingOrders = Array.isArray(state.orders) ? state.orders : [];
+          const existingIndex = existingOrders.findIndex((entry) => entry.id === fetchedOrder.id);
+          const nextOrders = existingIndex >= 0
+            ? existingOrders.map((entry) => (entry.id === fetchedOrder.id ? { ...entry, ...fetchedOrder } : entry))
+            : [fetchedOrder, ...existingOrders];
+
+          return {
+            orders: nextOrders,
+            ordersLastLoadedAt: Date.now(),
+            ordersLastLoadedScope: state.ordersLastLoadedScope || (userId ? `user:${userId}` : 'all'),
+          };
+        });
+
+        return fetchedOrder;
       },
       
       addOrder: async (order) => {
@@ -102,6 +137,12 @@ const useOrderStore = create(
         const unitPriceInAccountCurrency = Number(order.unitPrice || basePrice);
         const quantity = Number(order.quantity || 1);
         const finalPrice = Number(order.priceCoins || (unitPriceInAccountCurrency * quantity));
+
+        if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+          const err = new Error('Invalid order amount');
+          err.code = 'INVALID_ORDER_AMOUNT';
+          throw err;
+        }
         
         const orderWithSnapshot = {
           ...order,
@@ -130,7 +171,14 @@ const useOrderStore = create(
         };
 
         const created = await apiClient.orders.create(orderWithSnapshot);
-        const nextOrder = created?.order || created || orderWithSnapshot;
+        const createdOrder = created?.order || created || {};
+        const nextOrder = {
+          ...orderWithSnapshot,
+          ...createdOrder,
+          orderFields: createdOrder?.orderFields || createdOrder?.orderFieldsValues || orderWithSnapshot.orderFields,
+          orderFieldsValues: createdOrder?.orderFieldsValues || createdOrder?.orderFields || orderWithSnapshot.orderFieldsValues,
+          customerInput: createdOrder?.customerInput || orderWithSnapshot.customerInput,
+        };
         set(state => ({
           orders: [nextOrder, ...state.orders],
           ordersLastLoadedAt: Date.now(),
@@ -146,45 +194,26 @@ const useOrderStore = create(
         return created || { order: nextOrder };
       },
 
-      updateOrderStatus: async (id, status) => {
+      updateOrderStatus: async (id, status, orderContext = null) => {
         const target = (get().orders || []).find((o) => o.id === id);
-        if (!target) return;
+        const currentOrder = orderContext || target;
+        if (!currentOrder) return;
 
-        const updated = await apiClient.orders.updateStatus(id, status);
-        const nextOrder = updated || { ...target, status };
+        if (!isManualStatusEditableOrder(currentOrder)) {
+          throw new Error('Direct status changes are only available for manual orders.');
+        }
+
+        const normalizedStatus = normalizeManualOrderStatus(status);
+        const updated = await apiClient.orders.updateStatus(id, normalizedStatus, currentOrder);
+        const nextOrder = updated || { ...currentOrder, status: normalizedStatus };
         set(state => ({
           orders: state.orders.map((o) => (
             o.id === id
-              ? { ...o, ...nextOrder, status: nextOrder.status || status }
+              ? { ...o, ...nextOrder, status: nextOrder.status || normalizedStatus }
               : o
           )),
           ordersLastLoadedAt: Date.now(),
         }));
-
-        // Deduct balance when order is completed
-        if (status === 'completed' && target.financialSnapshot) {
-          const { users } = useAdminStore.getState();
-          const targetUser = users.find(u => u.id === target.userId);
-          
-          if (targetUser) {
-            const currentCoins = Number(targetUser.coins || 0);
-            const orderAmount = Number(target.financialSnapshot.finalAmountAtExecution || 0);
-            const newBalance = Math.max(0, currentCoins - orderAmount); // Prevent negative balance
-            
-            // Update user in admin store
-            useAdminStore.setState((state) => ({
-              users: (state.users || []).map((user) => (
-                user.id === targetUser.id ? { ...user, coins: newBalance } : user
-              )),
-            }));
-            
-            // Update current session if it's the logged-in user
-            const { user: currentUser } = useAuthStore.getState();
-            if (currentUser && currentUser.id === targetUser.id) {
-              useAuthStore.getState().updateUserSession({ coins: newBalance });
-            }
-          }
-        }
 
         if (useAdminStore.getState().loadUsers) {
           await useAdminStore.getState().loadUsers();
@@ -194,17 +223,23 @@ const useOrderStore = create(
           await useAuthStore.getState().refreshProfile();
         }
 
-        if (status === 'approved' || status === 'completed') {
+        if (normalizedStatus === 'completed') {
           useNotificationStore.getState().addNotification({
             title: 'قبول طلب',
             message: `تم قبول الطلب ${target?.id || id}`,
             type: 'success',
           });
-        } else if (status === 'rejected' || status === 'denied') {
+        } else if (normalizedStatus === 'rejected') {
           useNotificationStore.getState().addNotification({
             title: 'رفض طلب',
             message: `تم رفض الطلب ${target?.id || id}`,
             type: 'warning',
+          });
+        } else {
+          useNotificationStore.getState().addNotification({
+            title: 'تحديث حالة الطلب',
+            message: `تم تحديث الطلب ${target?.id || id} إلى ${getManualOrderStatusLabel(normalizedStatus)}`,
+            type: 'info',
           });
         }
 

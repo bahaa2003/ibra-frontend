@@ -35,6 +35,7 @@ export const createDefaultPaymentGroups = () => [
     id: 'egypt-transfer',
     name: 'تحويل مصر',
     description: 'فودافون كاش واتصالات كاش وأورنج كاش والتحويل البنكي',
+    currency: '',
     isActive: true,
     methods: [
       {
@@ -117,6 +118,9 @@ export const normalizePaymentGroup = (group = {}, index = 0) => {
     id,
     name,
     description: String(group?.description || '').trim(),
+    currency: String(group?.currency || group?.currencyCode || '').trim(),
+    image: String(group?.image || group?.imageUrl || group?.logo || '').trim(),
+    imageName: String(group?.imageName || '').trim(),
     isActive: group?.isActive !== false,
     methods,
   };

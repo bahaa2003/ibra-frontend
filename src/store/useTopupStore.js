@@ -7,6 +7,10 @@ import useAuthStore from './useAuthStore';
 import useAdminStore from './useAdminStore';
 import { formatTime } from '../utils/intl';
 
+const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase();
+const isRealProvider = dataProvider === 'real';
+let hasFetchedTopupsFromBackendThisSession = false;
+
 const TOPUPS_CACHE_TTL = 60 * 1000;
 let topupsRequest = null;
 
@@ -32,7 +36,10 @@ const useTopupStore = create(
       loadTopups: async ({ force = false } = {}) => {
         const { topups, topupsLastLoadedAt } = get();
         const hasTopups = Array.isArray(topups) && topups.length > 0;
-        const hasFreshTopups = hasTopups && (Date.now() - Number(topupsLastLoadedAt || 0) < TOPUPS_CACHE_TTL);
+        const shouldBypassHydratedCache = isRealProvider && !hasFetchedTopupsFromBackendThisSession;
+        const hasFreshTopups = !shouldBypassHydratedCache
+          && hasTopups
+          && (Date.now() - Number(topupsLastLoadedAt || 0) < TOPUPS_CACHE_TTL);
 
         if (!force && hasFreshTopups) {
           return topups;
@@ -49,6 +56,10 @@ const useTopupStore = create(
               topups: nextTopups,
               topupsLastLoadedAt: Date.now(),
             });
+
+            if (isRealProvider) {
+              hasFetchedTopupsFromBackendThisSession = true;
+            }
             return nextTopups;
           })
           .catch((_error) => {
@@ -62,6 +73,29 @@ const useTopupStore = create(
           });
 
         return topupsRequest;
+      },
+
+      getTopupById: async (topupId, userId = null) => {
+        const normalizedTopupId = String(topupId || '').trim();
+        if (!normalizedTopupId) return null;
+
+        const fetchedTopup = await apiClient.topups.getById(normalizedTopupId, userId);
+        if (!fetchedTopup) return null;
+
+        set((state) => {
+          const existingTopups = Array.isArray(state.topups) ? state.topups : [];
+          const existingIndex = existingTopups.findIndex((entry) => String(entry.id) === String(fetchedTopup.id));
+          const nextTopups = existingIndex >= 0
+            ? existingTopups.map((entry) => (String(entry.id) === String(fetchedTopup.id) ? { ...entry, ...fetchedTopup } : entry))
+            : [fetchedTopup, ...existingTopups];
+
+          return {
+            topups: nextTopups,
+            topupsLastLoadedAt: Date.now(),
+          };
+        });
+
+        return fetchedTopup;
       },
 
       requestTopup: async (amountOrPayload, method, userId, userName) => {
@@ -192,11 +226,6 @@ const useTopupStore = create(
           updatedTopup.adminNote = review.adminNote || '';
         }
 
-        // Update user balance if approving topup
-        if (status === 'approved' && useAdminStore.getState().loadUsers) {
-          await useAdminStore.getState().loadUsers();
-        }
-
         const updated = await apiClient.topups.updateStatus(id, status, updatedTopup);
         const finalUpdate = updated || updatedTopup;
 
@@ -204,6 +233,11 @@ const useTopupStore = create(
           topups: state.topups.map(t => t.id === id ? finalUpdate : t),
           topupsLastLoadedAt: Date.now(),
         }));
+
+        // Refresh wallet/user snapshots so dashboard metrics reflect the approval immediately.
+        if ((status === 'approved' || status === 'completed') && useAdminStore.getState().loadUsers) {
+          await useAdminStore.getState().loadUsers({ force: true });
+        }
 
         const requestedAmount = Number(finalUpdate?.requestedAmount ?? finalUpdate?.requestedCoins ?? target?.requestedAmount ?? target?.requestedCoins ?? 0);
         const actualAmount = Number(finalUpdate?.actualPaidAmount ?? requestedAmount);

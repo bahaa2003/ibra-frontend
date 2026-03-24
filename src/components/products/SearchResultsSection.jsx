@@ -39,7 +39,7 @@ const SearchResultsSection = ({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-0">
         {results.map((product) => (
           <ProductCardSimple
             key={product.id}

@@ -21,7 +21,7 @@ const statusVariant = (status) => {
 const isPendingLike = (status) => status === 'pending' || status === 'requested';
 
 const AdminPayments = () => {
-  const { topups, loadTopups, updateTopupStatus, updateTopupRequest } = useTopupStore();
+  const { topups, loadTopups, getTopupById, updateTopupStatus, updateTopupRequest } = useTopupStore();
   const { users, loadUsers } = useAdminStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { addToast } = useToast();
@@ -52,21 +52,37 @@ const AdminPayments = () => {
     [topups]
   );
 
-  const openApproveModal = (request) => {
-    setSelectedRequest(request);
+  const openApproveModal = async (request) => {
+    let nextRequest = request;
+
+    try {
+      nextRequest = await getTopupById(request.id) || request;
+    } catch (_error) {
+      nextRequest = request;
+    }
+
+    setSelectedRequest(nextRequest);
     setReviewForm({
-      actualPaidAmount: String(request?.requestedAmount ?? request?.requestedCoins ?? request?.amount ?? 0),
-      currencyCode: request?.currencyCode || 'USD',
+      actualPaidAmount: String(nextRequest?.requestedAmount ?? nextRequest?.requestedCoins ?? nextRequest?.amount ?? 0),
+      currencyCode: nextRequest?.currencyCode || 'USD',
       adminNote: '',
     });
     setIsReviewModalOpen(true);
   };
 
-  const openEditModal = (request) => {
-    setSelectedRequest(request);
+  const openEditModal = async (request) => {
+    let nextRequest = request;
+
+    try {
+      nextRequest = await getTopupById(request.id) || request;
+    } catch (_error) {
+      nextRequest = request;
+    }
+
+    setSelectedRequest(nextRequest);
     setEditForm({
-      requestedAmount: String(request?.requestedAmount ?? request?.requestedCoins ?? request?.amount ?? 0),
-      adminNote: request?.adminNote || '',
+      requestedAmount: String(nextRequest?.requestedAmount ?? nextRequest?.requestedCoins ?? nextRequest?.amount ?? 0),
+      adminNote: nextRequest?.adminNote || '',
     });
     setIsEditModalOpen(true);
   };
@@ -325,6 +341,7 @@ const AdminPayments = () => {
             label="المبلغ المطلوب بعد التعديل"
             type="number"
             min="0"
+            step="0.01"
             value={editForm.requestedAmount}
             onChange={(e) => setEditForm((prev) => ({ ...prev, requestedAmount: e.target.value }))}
           />
@@ -383,6 +400,7 @@ const AdminPayments = () => {
             label="المبلغ الفعلي المدفوع"
             type="number"
             min="0"
+            step="0.01"
             value={reviewForm.actualPaidAmount}
             onChange={(e) => setReviewForm((prev) => ({ ...prev, actualPaidAmount: e.target.value }))}
           />

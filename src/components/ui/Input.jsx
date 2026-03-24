@@ -3,12 +3,12 @@ import { cn } from './Button';
 import { useLanguage } from '../../context/LanguageContext';
 
 export const inputBaseClassName =
-  'flex h-11 w-full rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-all duration-200 hover:border-[color:rgb(var(--color-primary-rgb)/0.22)] focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] focus:bg-[color:rgb(var(--color-surface-rgb)/0.98)] focus:outline-none focus:ring-4 focus:ring-[color:rgb(var(--color-primary-rgb)/0.12)] disabled:cursor-not-allowed disabled:opacity-55';
-export const textareaClassName = cn(inputBaseClassName, 'min-h-[120px] resize-none py-3');
+  'flex h-10 w-full rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] px-3.5 py-2.5 text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] shadow-[var(--shadow-subtle)] transition-all duration-200 hover:border-[color:rgb(var(--color-primary-rgb)/0.22)] focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] focus:bg-[color:rgb(var(--color-surface-rgb)/0.98)] focus:outline-none focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.12)] focus:shadow-[var(--shadow-subtle),var(--shadow-focus)] disabled:cursor-not-allowed disabled:opacity-55 sm:h-11 sm:px-4 sm:py-3 sm:text-sm';
+export const textareaClassName = cn(inputBaseClassName, 'min-h-[96px] resize-none py-2.5 sm:min-h-[120px] sm:py-3');
 export const selectClassName = cn(inputBaseClassName, 'appearance-none pr-10');
 export const searchInputClassName = cn(
   inputBaseClassName,
-  'h-14 rounded-full border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] shadow-[0_12px_36px_-28px_rgb(0_0_0/0.88)] focus:shadow-[0_18px_44px_-28px_rgb(var(--color-primary-rgb)/0.35)]'
+  'h-11 rounded-full border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-surface-rgb)/0.9)] sm:h-12'
 );
 
 const Input = React.forwardRef(({ className, label, error, icon, suffix, variant = 'default', ...props }, ref) => {
@@ -19,7 +19,7 @@ const Input = React.forwardRef(({ className, label, error, icon, suffix, variant
   return (
     <div className="w-full">
       {label && (
-        <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-secondary)]">
+        <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)] sm:text-sm">
           {label}
         </label>
       )}

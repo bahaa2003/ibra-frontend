@@ -1,78 +1,60 @@
 import React from 'react';
 import { Eye } from 'lucide-react';
 import Card from '../ui/Card';
-import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import OrderStatusBadge from './OrderStatusBadge';
 import { formatOrderDateTime, formatOrderMoney } from '../../utils/orders';
 
-const OrdersMobileCards = ({ orders, isArabic, currencies, onViewOrder }) => {
+const OrdersMobileCards = ({
+  orders,
+  isArabic,
+  currencies,
+  onViewOrder,
+}) => {
   const locale = isArabic ? 'ar-EG' : 'en-US';
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
       {orders.map((order) => (
-        <Card key={order.id} variant="flat" className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="h-16 w-16 overflow-hidden rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.82)]">
-              {order.productImage ? (
-                <img src={order.productImage} alt={order.productName} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
-              ) : null}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[var(--color-text)]">{order.productName}</p>
-                  <p className="mt-1 text-xs text-[var(--color-muted)]">#{order.orderNumber}</p>
-                </div>
-                <OrderStatusBadge status={order.status} isArabic={isArabic} />
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Badge variant={order.typeVariant}>{order.typeLabel}</Badge>
-                {order.supplierName ? (
-                  <Badge variant="secondary">{order.supplierName}</Badge>
-                ) : null}
-              </div>
-            </div>
+        <Card key={order.id} variant="flat" className="p-3 sm:p-3.5">
+          <div className="mb-2 flex items-start justify-start [direction:ltr]">
+            <OrderStatusBadge status={order.status} isArabic={isArabic} className="shrink-0" />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="flex items-center gap-3 rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.74)] p-3">
-              <img
-                src={order.customerAvatar}
-                alt={order.customerName}
-                loading="lazy"
-                decoding="async"
-                className="h-10 w-10 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] object-cover"
-              />
-              <div className="min-w-0">
-                <p className="truncate font-medium text-[var(--color-text)]">{order.customerName}</p>
-                <p className="truncate text-xs text-[var(--color-muted)]">{order.customerEmail || '-'}</p>
-              </div>
+          <div className="min-w-0">
+            <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text)]">
+              {order.productName}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+              {formatOrderMoney(order, currencies, locale)}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <div className="rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.76)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 py-2">
+              <p className="text-[10px] text-[var(--color-muted)]">
+                {isArabic ? 'اسم المستخدم' : 'Customer name'}
+              </p>
+              <p className="mt-1 truncate text-sm font-medium text-[var(--color-text)]">
+                {order.customerName}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">
+                {order.customerEmail || '-'}
+              </p>
             </div>
 
-            <div className="rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.74)] p-3">
-              <p className="text-xs text-[var(--color-muted)]">{isArabic ? 'التاريخ' : 'Date'}</p>
-              <p className="mt-1 font-medium text-[var(--color-text)]">{formatOrderDateTime(order.createdAt, locale)}</p>
-            </div>
-
-            <div className="rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.74)] p-3">
-              <p className="text-xs text-[var(--color-muted)]">{isArabic ? 'الإجمالي' : 'Total'}</p>
-              <p className="mt-1 font-semibold text-[var(--color-text)]">{formatOrderMoney(order, currencies, locale)}</p>
-            </div>
-
-            <div className="rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.74)] p-3">
-              <p className="text-xs text-[var(--color-muted)]">{isArabic ? 'المورد' : 'Supplier'}</p>
-              <p className="mt-1 font-medium text-[var(--color-text)]">
-                {order.supplierName || (isArabic ? 'بدون مورد' : 'No supplier')}
+            <div className="rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.76)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 py-2">
+              <p className="text-[10px] text-[var(--color-muted)]">
+                {isArabic ? 'التاريخ' : 'Date'}
+              </p>
+              <p className="mt-1 text-[13px] font-medium text-[var(--color-text)]">
+                {formatOrderDateTime(order.createdAt, locale)}
               </p>
             </div>
           </div>
 
-          <div className="mt-4">
-            <Button variant="secondary" className="w-full" onClick={() => onViewOrder(order)}>
+          <div className="mt-3">
+            <Button variant="secondary" className="h-9 w-full rounded-[0.9rem] text-xs" onClick={() => onViewOrder(order)}>
               <Eye className="h-4 w-4" />
               <span>{isArabic ? 'عرض التفاصيل' : 'View details'}</span>
             </Button>

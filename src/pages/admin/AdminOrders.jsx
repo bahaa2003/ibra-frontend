@@ -8,7 +8,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import Card from '../../components/ui/Card';
 import OrdersFiltersBar from '../../components/orders/OrdersFiltersBar';
-import OrdersTable from '../../components/orders/OrdersTable';
 import OrdersMobileCards from '../../components/orders/OrdersMobileCards';
 import EmptyOrdersState from '../../components/orders/EmptyOrdersState';
 import { useToast } from '../../components/ui/Toast';
@@ -16,28 +15,32 @@ import useOrderStore from '../../store/useOrderStore';
 import useAdminStore from '../../store/useAdminStore';
 import useMediaStore from '../../store/useMediaStore';
 import useSystemStore from '../../store/useSystemStore';
-import { filterOrders, enrichOrders, summarizeOrders } from '../../utils/orders';
+import {
+  filterOrders,
+  enrichOrders,
+  getManualOrderStatusLabel,
+  summarizeOrders,
+} from '../../utils/orders';
 import { formatNumber } from '../../utils/intl';
 
 const OrderDetailsDrawer = lazy(() => import('../../components/orders/OrderDetailsDrawer'));
 
-const SummaryCard = ({ icon: Icon, label, value, note }) => (
-  <Card className="admin-premium-stat p-3 sm:p-3.5">
-    <div className="flex items-start gap-2.5">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.85rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)] sm:h-10 sm:w-10">
-        <Icon className="h-4 w-4" />
+const SummaryCard = ({ icon: Icon, label, value }) => (
+  <Card className="admin-premium-stat p-2.5">
+    <div className="flex items-start gap-2">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
+        <Icon className="h-3.5 w-3.5" />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-[var(--color-text-secondary)] sm:text-sm">{label}</p>
-        <p className="mt-0.5 text-xl font-semibold text-[var(--color-text)] sm:text-2xl">{value}</p>
-        <p className="mt-0.5 text-[11px] text-[var(--color-muted)] sm:text-xs">{note}</p>
+        <p className="text-[11px] text-[var(--color-text-secondary)]">{label}</p>
+        <p className="mt-0.5 text-lg font-semibold text-[var(--color-text)]">{value}</p>
       </div>
     </div>
   </Card>
 );
 
 const AdminOrders = () => {
-  const { orders, loadOrders, updateOrderStatus, syncOrderSupplierStatus } = useOrderStore();
+  const { orders, loadOrders, getOrderById, updateOrderStatus, syncOrderSupplierStatus } = useOrderStore();
   const { users, loadUsers } = useAdminStore();
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
@@ -108,10 +111,11 @@ const AdminOrders = () => {
 
   const formatCount = (value) => formatNumber(value, locale);
 
-  const handleAccept = useCallback(async (order, nextStatus) => {
-    const confirmationMessage = nextStatus === 'completed'
-      ? (isArabic ? 'هل تريد تأكيد اكتمال هذا الطلب؟' : 'Do you want to mark this order as completed?')
-      : (isArabic ? 'هل تريد قبول هذا الطلب وبدء تنفيذه؟' : 'Do you want to accept this order and move it in progress?');
+  const handleUpdateStatus = useCallback(async (order, nextStatus) => {
+    const nextStatusLabel = getManualOrderStatusLabel(nextStatus, isArabic ? 'ar' : 'en');
+    const confirmationMessage = isArabic
+      ? `هل تريد تحديث حالة هذا الطلب إلى "${nextStatusLabel}"؟`
+      : `Do you want to update this order to "${nextStatusLabel}"?`;
 
     if (!window.confirm(confirmationMessage)) {
       return;
@@ -120,45 +124,23 @@ const AdminOrders = () => {
     setActionOrderId(order.id);
 
     try {
-      await updateOrderStatus(order.id, nextStatus);
-      await loadUsers();
+      await updateOrderStatus(order.id, nextStatus, order);
+      await Promise.allSettled([
+        Promise.resolve(loadUsers()),
+        Promise.resolve(loadOrders(undefined, { force: true })),
+      ]);
       addToast(
-        nextStatus === 'completed'
-          ? (isArabic ? 'تم تحديث الطلب إلى مكتمل' : 'Order marked as completed')
-          : (isArabic ? 'تم قبول الطلب وهو الآن قيد التنفيذ' : 'Order accepted and moved in progress'),
-        'success'
+        isArabic
+          ? `تم تحديث حالة الطلب إلى ${nextStatusLabel}`
+          : `Order status updated to ${nextStatusLabel}`,
+        nextStatus === 'rejected' ? 'info' : 'success'
       );
     } catch (error) {
       addToast(error?.message || (isArabic ? 'تعذر تحديث حالة الطلب' : 'Unable to update order status'), 'error');
     } finally {
       setActionOrderId('');
     }
-  }, [addToast, isArabic, loadUsers, updateOrderStatus]);
-
-  const handleReject = useCallback(async (order) => {
-    const confirmationMessage = isArabic
-      ? 'هل تريد رفض هذا الطلب؟'
-      : 'Do you want to reject this order?';
-
-    if (!window.confirm(confirmationMessage)) {
-      return;
-    }
-
-    setActionOrderId(order.id);
-
-    try {
-      await updateOrderStatus(order.id, 'rejected');
-      await loadUsers();
-      addToast(
-        isArabic ? 'تم رفض الطلب وإعادة ضبط حالته' : 'Order rejected successfully',
-        'info'
-      );
-    } catch (error) {
-      addToast(error?.message || (isArabic ? 'تعذر رفض الطلب' : 'Unable to reject order'), 'error');
-    } finally {
-      setActionOrderId('');
-    }
-  }, [addToast, isArabic, loadUsers, updateOrderStatus]);
+  }, [addToast, isArabic, loadOrders, loadUsers, updateOrderStatus]);
 
   const handleSync = useCallback(async (order) => {
     setSyncingOrderId(order.id);
@@ -178,9 +160,15 @@ const AdminOrders = () => {
     }
   }, [addToast, isArabic, syncOrderSupplierStatus]);
 
-  const handleViewOrder = useCallback((order) => {
+  const handleViewOrder = useCallback(async (order) => {
     setSelectedOrderId(order.id);
-  }, []);
+
+    try {
+      await getOrderById(order.id);
+    } catch (error) {
+      addToast(error?.message || (isArabic ? 'تعذر تحميل تفاصيل الطلب' : 'Unable to load order details'), 'error');
+    }
+  }, [addToast, getOrderById, isArabic]);
 
   const handleCloseOrderDetails = useCallback(() => {
     setSelectedOrderId(null);
@@ -188,48 +176,36 @@ const AdminOrders = () => {
 
   return (
     <div className="min-w-0 space-y-4 pb-4 sm:space-y-5">
-      <section className="admin-premium-hero relative overflow-hidden p-4 sm:p-5">
+      <section className="admin-premium-hero relative overflow-hidden p-3">
         <div className="pointer-events-none absolute -top-20 right-8 h-40 w-40 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.18)] blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-28 w-28 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.12)] blur-3xl" />
 
         <div className="relative min-w-0">
-          <span className="section-kicker">
-            {isArabic ? 'Order Control Center' : 'Order Control Center'}
-          </span>
-          <h1 className="page-heading mt-4 max-w-3xl">
+          <h1 className="page-heading max-w-3xl">
             {isArabic ? 'الطلبات' : 'Orders'}
           </h1>
-          <p className="page-subtitle mt-3 max-w-3xl">
-            {isArabic
-              ? 'لوحة مركزية لمراجعة جميع طلبات المتجر، متابعة حالتها، والتعامل مع الطلبات اليدوية بشكل واضح وسريع دون كسر الربط الحالي.'
-              : 'A central workspace for reviewing all store orders, tracking their status, and handling manual requests without breaking the current backend flow.'}
-          </p>
         </div>
 
-        <div className="relative mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="relative mt-3 grid grid-cols-2 gap-2">
           <SummaryCard
             icon={ShoppingCart}
             label={isArabic ? 'إجمالي الطلبات' : 'Total orders'}
             value={formatCount(summary.total)}
-            note={isArabic ? 'كل الطلبات المسجلة' : 'All recorded orders'}
           />
           <SummaryCard
             icon={Clock3}
             label={isArabic ? 'قيد التنفيذ' : 'In progress'}
             value={formatCount(summary.processing)}
-            note={isArabic ? 'تحت المراجعة أو التنفيذ' : 'Currently being processed'}
           />
           <SummaryCard
             icon={ShieldCheck}
             label={isArabic ? 'يدوية تحتاج قرار' : 'Manual pending'}
             value={formatCount(summary.manualPending)}
-            note={isArabic ? 'تنتظر قبول أو رفض' : 'Waiting for accept or reject'}
           />
           <SummaryCard
             icon={CheckCircle2}
             label={isArabic ? 'مكتملة' : 'Completed'}
             value={formatCount(summary.completed)}
-            note={isArabic ? 'طلبات تم تنفيذها بنجاح' : 'Successfully fulfilled orders'}
           />
         </div>
       </section>
@@ -252,33 +228,16 @@ const AdminOrders = () => {
         searchPlaceholder={isArabic
           ? 'ابحث باسم المنتج، العميل، البريد الإلكتروني، أو رقم الطلب'
           : 'Search by product, customer, email, or order number'}
-        helperText={isArabic
-          ? 'يمكنك الفرز والفلترة حسب الحالة، النوع، التاريخ، أو تتبع طلب محدد من رقم الطلب.'
-          : 'Filter by status, type, date, or jump directly to a specific order using its number.'}
+        helperText={null}
       />
 
       {filteredOrders.length ? (
-        <>
-          <div className="xl:hidden">
-            <OrdersMobileCards
-              orders={filteredOrders}
-              isArabic={isArabic}
-              currencies={currencies}
-              onViewOrder={handleViewOrder}
-            />
-          </div>
-
-          <div className="hidden xl:block">
-            <Card className="admin-premium-panel p-2.5">
-              <OrdersTable
-                orders={filteredOrders}
-                isArabic={isArabic}
-                currencies={currencies}
-                onViewOrder={handleViewOrder}
-              />
-            </Card>
-          </div>
-        </>
+        <OrdersMobileCards
+          orders={filteredOrders}
+          isArabic={isArabic}
+          currencies={currencies}
+          onViewOrder={handleViewOrder}
+        />
       ) : (
         <EmptyOrdersState
           title={isLoading
@@ -301,8 +260,7 @@ const AdminOrders = () => {
             isArabic={isArabic}
             currencies={currencies}
             view="admin"
-            onAccept={handleAccept}
-            onReject={handleReject}
+            onUpdateStatus={handleUpdateStatus}
             onSync={handleSync}
             isActionLoading={Boolean(selectedOrder && actionOrderId === selectedOrder.id)}
             isSyncing={Boolean(selectedOrder && syncingOrderId === selectedOrder.id)}

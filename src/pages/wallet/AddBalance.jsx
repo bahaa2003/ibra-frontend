@@ -1,137 +1,112 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, CreditCard, Smartphone, Building } from 'lucide-react';
+import { ArrowLeft, Wallet, AlertCircle, Loader } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Header from '../../components/Header';
+import PaymentMethodCard from '../../components/wallet/PaymentMethodCard';
+import useAuthStore from '../../store/useAuthStore';
+import useSystemStore from '../../store/useSystemStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTranslation } from 'react-i18next';
 import { formatNumber } from '../../utils/intl';
+import { resolveImageUrl } from '../../utils/imageUrl';
+import { CreditCard, Smartphone, Building, Banknote } from 'lucide-react';
 
-const PaymentMethodCard = ({ method, isSelected, onClick }) => {
-  const { dir } = useLanguage();
-  const isRTL = dir === 'rtl';
-
-  const getIcon = (type) => {
-    switch (type) {
-      case 'card':
-        return CreditCard;
-      case 'mobile':
-        return Smartphone;
-      case 'bank':
-        return Building;
-      default:
-        return CreditCard;
-    }
-  };
-
-  const Icon = getIcon(method.type);
-
-  return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className={`relative cursor-pointer transition-all duration-300 ${
-        isSelected
-          ? 'bg-gradient-to-r from-orange-400/20 to-pink-500/20 border-orange-400/50 shadow-lg shadow-orange-500/10'
-          : 'bg-black/40 hover:bg-black/60 border-white/10'
-      } backdrop-blur-xl border rounded-xl p-4`}
-    >
-      <div className={`flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-        <div className={`w-12 h-12 rounded-lg ${isSelected ? 'bg-gradient-to-r from-orange-400 to-pink-500' : 'bg-white/10'} flex items-center justify-center`}>
-          <Icon className={`w-6 h-6 ${isSelected ? 'text-white' : 'text-gray-400'}`} />
-        </div>
-        <div className={`flex-1 ${isRTL ? 'text-right' : 'text-left'}`}>
-          <h3 className="text-white font-semibold">{method.name}</h3>
-          <p className="text-gray-400 text-sm">{method.description}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-xs px-2 py-1 rounded-full ${
-              method.status === 'active'
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              {method.status === 'active' ? 'متاح' : 'غير متاح'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {isSelected && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="absolute top-2 right-2 w-6 h-6 bg-gradient-to-r from-orange-400 to-pink-500 rounded-full flex items-center justify-center"
-        >
-          <div className="w-2 h-2 bg-white rounded-full"></div>
-        </motion.div>
-      )}
-    </motion.div>
-  );
+// ── Icon resolver for groups/methods without uploaded images ──────────────
+const getMethodIcon = (type) => {
+  switch (String(type || '').toLowerCase()) {
+    case 'mobile_wallet':
+    case 'mobile':
+    case 'ewallet':
+      return Smartphone;
+    case 'bank_transfer':
+    case 'bank':
+      return Building;
+    case 'card':
+    case 'credit_card':
+      return CreditCard;
+    case 'cash':
+      return Banknote;
+    default:
+      return CreditCard;
+  }
 };
 
 const AddBalance = () => {
-  const { dir } = useLanguage();
+  const { t, dir } = useLanguage();
+  const { t: i18t } = useTranslation();
   const navigate = useNavigate();
   const isRTL = dir === 'rtl';
 
-  const [selectedMethod, setSelectedMethod] = useState(null);
+  const { user } = useAuthStore();
+  const { paymentSettings, loadPaymentSettings } = useSystemStore();
 
-  // Mock balance - in real app, this would come from API
-  const currentBalance = 2500;
-  const currentCurrency = 'EGP';
+  // ── Ensure payment settings are loaded ─────────────────────────────────
+  useEffect(() => {
+    loadPaymentSettings();
+  }, [loadPaymentSettings]);
 
-  const manualMethods = [
-    {
-      id: 'vodafone',
-      name: 'فودافون كاش',
-      description: 'ادفع من خلال فودافون كاش',
-      type: 'mobile',
-      status: 'active'
-    },
-    {
-      id: 'etisalat',
-      name: 'اتصالات كاش',
-      description: 'ادفع من خلال اتصالات كاش',
-      type: 'mobile',
-      status: 'active'
-    },
-    {
-      id: 'orange',
-      name: 'أورانج كاش',
-      description: 'ادفع من خلال أورانج كاش',
-      type: 'mobile',
-      status: 'active'
-    },
-    {
-      id: 'bank',
-      name: 'تحويل بنكي',
-      description: 'ادفع من خلال التحويل البنكي',
-      type: 'bank',
-      status: 'active'
-    },
-    {
-      id: 'western',
-      name: 'ويسترن يونيون',
-      description: 'ادفع من خلال ويسترن يونيون',
-      type: 'bank',
-      status: 'active'
-    }
-  ];
+  // ── Filter groups + methods by user currency ───────────────────────────
+  const userCurrency = String(user?.currency || 'USD').toUpperCase();
+  const walletBalance = Number(user?.walletBalance ?? 0);
+
+  const filteredGroups = useMemo(() => {
+    const groups = paymentSettings?.paymentGroups;
+    if (!Array.isArray(groups)) return [];
+
+    return groups
+      .filter((group) => {
+        // Must match the user's current currency
+        const groupCurrency = String(group.currency || '').toUpperCase();
+        if (groupCurrency !== userCurrency) return false;
+        // Must be active
+        if (group.isActive === false) return false;
+        return true;
+      })
+      .map((group) => ({
+        ...group,
+        // Filter methods within each group to only active ones
+        methods: (group.methods || []).filter((m) => m.isActive !== false),
+      }))
+      // Remove groups with zero active methods after filtering
+      .filter((group) => group.methods.length > 0);
+  }, [paymentSettings, userCurrency]);
+
+  const hasAnyMethods = filteredGroups.length > 0;
+  const isLoading = !paymentSettings?.paymentGroups;
+
+  // ── Handlers ───────────────────────────────────────────────────────────
 
   const handleMethodSelect = (method) => {
-    setSelectedMethod(method);
-  };
-
-  const handleContinue = () => {
-    if (selectedMethod) {
-      navigate(`/wallet/payment-details/${selectedMethod.id}`);
-    }
+    navigate(`/wallet/payment-details/${method.id}`);
   };
 
   const handleBack = () => {
     navigate('/wallet');
   };
 
+  const handleMenuClick = () => {
+    // Handle mobile menu
+  };
+
+  // ── Enrich methods with icons for the card component ───────────────────
+  const enrichMethod = (method, group) => ({
+    ...method,
+    icon: getMethodIcon(method.type || group.type),
+    // Ensure the card can access group-level info if needed
+    groupName: group.name,
+    groupCurrency: group.currency,
+  });
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900" dir={dir}>
+      <Header
+        user={user}
+        onMenuClick={handleMenuClick}
+        showUserInfo={true}
+      />
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Back Button */}
@@ -143,7 +118,7 @@ const AddBalance = () => {
           className={`flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 ${isRTL ? 'flex-row-reverse' : ''}`}
         >
           <ArrowLeft className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`} />
-          العودة للمحفظة
+          {isRTL ? 'العودة للمحفظة' : 'Back to Wallet'}
         </motion.button>
 
         {/* Page Header */}
@@ -153,8 +128,14 @@ const AddBalance = () => {
           transition={{ duration: 0.5, delay: 0.1 }}
           className={`mb-8 ${isRTL ? 'text-right' : 'text-left'}`}
         >
-          <h1 className="text-3xl font-bold text-white mb-2">إضافة رصيد</h1>
-          <p className="text-gray-400">جميع عمليات الشحن تتم يدويًا من خلال الإدارة</p>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            {isRTL ? 'إضافة رصيد' : 'Add Balance'}
+          </h1>
+          <p className="text-gray-400">
+            {isRTL
+              ? 'اختر طريقة الدفع المناسبة لإضافة رصيد إلى محفظتك'
+              : 'Choose a payment method to add balance to your wallet'}
+          </p>
         </motion.div>
 
         {/* Current Balance Card */}
@@ -165,60 +146,118 @@ const AddBalance = () => {
           className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl p-6 mb-8"
         >
           <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <div>
-              <p className="text-gray-400 text-sm">الرصيد الحالي</p>
-              <p className="text-white text-2xl font-bold">{formatNumber(currentBalance, 'en-US')} {currentCurrency}</p>
-            </div>
-            <div className="text-gray-400 text-sm">
-              ≈ {formatNumber(Math.round(currentBalance / 50), 'en-US')} USD
+            <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-orange-400 to-pink-500 flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-gray-400 text-sm">
+                  {isRTL ? 'الرصيد الحالي' : 'Current Balance'}
+                </p>
+                <p className="text-white text-2xl font-bold">
+                  {formatNumber(walletBalance, 'en-US')} {userCurrency}
+                </p>
+              </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Payment Methods */}
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-        >
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-white mb-2">اختر طريقة الدفع المناسبة</h2>
-            <p className="text-gray-400 text-sm mb-4">
-              بعد اختيار وسيلة الدفع ورفع الإيصال، سيتم مراجعة الطلب من الإدارة وإضافة الرصيد إلى المحفظة.
+        {/* Loading State */}
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-16"
+          >
+            <Loader className="w-8 h-8 text-orange-400 animate-spin mb-4" />
+            <p className="text-gray-400">
+              {isRTL ? 'جاري تحميل طرق الدفع...' : 'Loading payment methods...'}
             </p>
-            <p className="text-gray-400 text-sm">
-              سيتم مراجعة طلبك من قبل الإدارة قبل تأكيد الإيداع. قد يستغرق الأمر حتى 24 ساعة.
-            </p>
-          </div>
+          </motion.div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {manualMethods.map((method) => (
-              <PaymentMethodCard
-                key={method.id}
-                method={method}
-                isSelected={selectedMethod?.id === method.id}
-                onClick={() => handleMethodSelect(method)}
-              />
+        {/* No Methods Available */}
+        {!isLoading && !hasAnyMethods && (
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-8 text-center"
+          >
+            <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-white text-lg font-semibold mb-2">
+              {isRTL ? 'لا توجد طرق دفع متاحة' : 'No Payment Methods Available'}
+            </h3>
+            <p className="text-gray-400 max-w-md mx-auto">
+              {isRTL
+                ? `لا توجد طرق دفع متاحة حاليًا لعملتك (${userCurrency}). يرجى التواصل مع الدعم.`
+                : `No payment methods are currently available for your currency (${userCurrency}). Please contact support.`}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Payment Groups */}
+        {!isLoading && hasAnyMethods && (
+          <div className="space-y-8">
+            {filteredGroups.map((group, groupIndex) => (
+              <motion.div
+                key={group.id || group._id || groupIndex}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.3 + groupIndex * 0.1 }}
+              >
+                {/* Group Header */}
+                <div className={`mb-4 ${isRTL ? 'text-right' : 'text-left'}`}>
+                  <div className={`flex items-center gap-3 mb-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                    {group.image ? (
+                      <img
+                        src={resolveImageUrl(group.image)}
+                        alt={group.name}
+                        className="w-8 h-8 rounded-lg object-cover border border-white/20"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-orange-400/20 to-pink-500/20 border border-white/10 flex items-center justify-center">
+                        {React.createElement(getMethodIcon(group.type), {
+                          className: 'w-4 h-4 text-orange-400',
+                        })}
+                      </div>
+                    )}
+                    <h2 className="text-xl font-semibold text-white">{group.name}</h2>
+                  </div>
+                  {group.description && (
+                    <p className="text-gray-400 text-sm">{group.description}</p>
+                  )}
+                </div>
+
+                {/* Methods Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {group.methods.map((method, methodIndex) => (
+                    <PaymentMethodCard
+                      key={method.id || method._id || methodIndex}
+                      method={enrichMethod(method, group)}
+                      onSelect={handleMethodSelect}
+                      index={methodIndex}
+                    />
+                  ))}
+                </div>
+              </motion.div>
             ))}
           </div>
-        </motion.div>
+        )}
 
-        {/* Continue Button */}
-        {selectedMethod && (
+        {/* Info Notice */}
+        {!isLoading && hasAnyMethods && (
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex justify-center"
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className={`mt-8 bg-black/30 border border-white/5 rounded-xl p-4 ${isRTL ? 'text-right' : 'text-left'}`}
           >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleContinue}
-              className="bg-gradient-to-r from-orange-400 to-pink-500 text-white px-8 py-3 rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/25 transition-all"
-            >
-              متابعة
-            </motion.button>
+            <p className="text-gray-500 text-sm">
+              {isRTL
+                ? 'بعد اختيار وسيلة الدفع ورفع الإيصال، سيتم مراجعة الطلب من الإدارة وإضافة الرصيد إلى المحفظة. قد يستغرق الأمر حتى 24 ساعة.'
+                : 'After selecting a payment method and uploading your receipt, your request will be reviewed by admin and the balance will be added to your wallet. This may take up to 24 hours.'}
+            </p>
           </motion.div>
         )}
       </div>

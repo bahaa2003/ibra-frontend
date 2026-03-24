@@ -4,6 +4,7 @@ import { resolveImageUrl } from '../../utils/imageUrl';
 import { uploadImage } from '../../services/realApi';
 import useMediaStore from '../../store/useMediaStore';
 import apiClient from '../../services/client';
+import useAuthStore from '../../store/useAuthStore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -15,15 +16,150 @@ import { formatNumber } from '../../utils/intl';
 import { validateProductForm, getProductStatus, getAvailableProductStatuses, getScheduleVisibilityModes } from '../../utils/productStatus';
 
 const getProviderProductSearchToken = (product) =>
-    `${product?.name || ''} ${product?.priceCoins || ''}`.toLowerCase();
+    `${product?.name || ''} ${getProviderProductPriceValue(product) || ''}`.toLowerCase();
+
+const getProviderProductPriceValue = (product) => (
+    product?.rawPrice
+    ?? product?.priceCoins
+    ?? product?.basePriceCoins
+    ?? product?.supplierPrice
+    ?? ''
+);
+
+const getProviderProductMinQtyValue = (product) => (
+    product?.minQty
+    ?? product?.minimumOrderQty
+    ?? product?.min
+    ?? product?.minimumQty
+    ?? ''
+);
+
+const getProviderProductMaxQtyValue = (product) => (
+    product?.maxQty
+    ?? product?.maximumOrderQty
+    ?? product?.max
+    ?? product?.maximumQty
+    ?? ''
+);
+
+const getProviderProductIdentifiers = (product) => Array.from(new Set(
+    [
+        product?.id,
+        product?.providerProductId,
+        product?.externalProductId,
+    ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+));
+
+const hasMatchingProviderProduct = (product, ...selectedValues) => {
+    const identifiers = getProviderProductIdentifiers(product);
+    if (!identifiers.length) return false;
+
+    return selectedValues
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .some((value) => identifiers.includes(value));
+};
+
+const normalizePriceInput = (value) => {
+    const raw = String(value ?? '').trim().replace(/,/g, '.');
+    if (!raw) return '';
+
+    const sign = raw.startsWith('-') ? '-' : '';
+    const unsigned = sign ? raw.slice(1) : raw;
+    const [integerPartRaw = '0', ...fractionParts] = unsigned.split('.');
+    const integerDigits = integerPartRaw.replace(/[^\d]/g, '') || '0';
+    const fractionDigits = fractionParts.join('').replace(/[^\d]/g, '');
+    return fractionDigits ? `${sign}${integerDigits}.${fractionDigits}` : `${sign}${integerDigits}`;
+};
+
+const formatExactDecimal = (value, language) => {
+    const normalized = normalizePriceInput(value);
+    if (!normalized) return '';
+
+    const negative = normalized.startsWith('-');
+    const unsigned = negative ? normalized.slice(1) : normalized;
+    const [integerPart = '0', fractionPart = ''] = unsigned.split('.');
+    const formattedInteger = formatNumber(Number(integerPart || 0), language === 'en' ? 'en-US' : 'ar-EG', {
+        maximumFractionDigits: 0,
+    });
+
+    return `${negative ? '-' : ''}${formattedInteger}${fractionPart ? `.${fractionPart}` : ''}`;
+};
+
+const countFractionDigits = (value) => {
+    const normalized = normalizePriceInput(value);
+    if (!normalized.includes('.')) return 0;
+    return normalized.split('.')[1]?.length || 0;
+};
+
+const addPriceValues = (baseValue, deltaValue) => {
+    const base = Number(baseValue || 0);
+    const delta = Number(deltaValue || 0);
+    const scale = Math.max(countFractionDigits(baseValue), countFractionDigits(deltaValue));
+    const total = base + delta;
+
+    if (scale <= 0) {
+        return String(total);
+    }
+
+    return total.toFixed(scale);
+};
+
+const parsePositiveQuantity = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const buildProviderSyncSnapshot = (product, options = {}) => {
+    const fallbackMinQty = parsePositiveQuantity(options.fallbackMinQty, 1);
+    const fallbackMaxQty = parsePositiveQuantity(options.fallbackMaxQty, Math.max(999, fallbackMinQty));
+    const syncedProviderBasePrice = normalizePriceInput(options.rawPrice ?? getProviderProductPriceValue(product));
+    const manualPriceAdjustment = normalizePriceInput(options.manualPriceAdjustment ?? '');
+    const minimumOrderQty = parsePositiveQuantity(options.minQty ?? getProviderProductMinQtyValue(product), fallbackMinQty);
+    const maximumOrderQty = Math.max(
+        parsePositiveQuantity(options.maxQty ?? getProviderProductMaxQtyValue(product), fallbackMaxQty),
+        minimumOrderQty
+    );
+    const basePriceCoins = syncedProviderBasePrice
+        ? (options.enableManualPrice ? addPriceValues(syncedProviderBasePrice, manualPriceAdjustment) : syncedProviderBasePrice)
+        : '';
+
+    return {
+        syncedProviderBasePrice,
+        basePriceCoins,
+        minimumOrderQty,
+        maximumOrderQty,
+        minQty: minimumOrderQty,
+        maxQty: maximumOrderQty,
+    };
+};
+
+const mergeProviderSyncIntoForm = (prev, supplierId, providerProductId, snapshot) => {
+    const currentSupplierId = String(prev.supplierId || prev.providerId || '').trim();
+    const currentProviderProductId = String(prev.providerProductId || prev.externalProductId || '').trim();
+
+    if (
+        currentSupplierId !== String(supplierId || '').trim()
+        || currentProviderProductId !== String(providerProductId || '').trim()
+    ) {
+        return prev;
+    }
+
+    return { ...prev, ...snapshot };
+};
+
+const usesProviderPricingMode = (value) => ['use_supplier_price', 'supplier_price_plus_margin'].includes(String(value || '').trim());
 
 const formatProviderProductPrice = (value, language) => {
-    const amount = Number(value);
+    const normalized = normalizePriceInput(value);
+    const amount = Number(normalized);
     if (!Number.isFinite(amount) || amount <= 0) {
         return '';
     }
 
-    const formatted = formatNumber(amount, language === 'en' ? 'en-US' : 'ar-EG');
+    const formatted = formatExactDecimal(normalized, language);
     return language === 'en' ? `$${formatted} USD` : `${formatted} دولار`;
 };
 
@@ -31,22 +167,35 @@ const AdminProducts = () => {
     const {
         products,
         categories,
+        addCategory,
+        updateCategory,
+        deleteCategory,
         addProduct,
         updateProduct,
+        toggleProductStatus,
         deleteProduct,
-        addCategory,
-        deleteCategory,
         loadProducts,
         resetProducts,
     } = useMediaStore();
+    const { user } = useAuthStore();
     const { addToast } = useToast();
     const { t, language } = useLanguage();
     const isEnglish = language === 'en';
 
-    const [activeTab, setActiveTab] = useState('products');
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [isSavingProduct, setIsSavingProduct] = useState(false);
+    const [togglingProductId, setTogglingProductId] = useState(null);
+
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [editingCategory, setEditingCategory] = useState(null);
+    const [isSavingCategory, setIsSavingCategory] = useState(false);
+    const [categoryForm, setCategoryForm] = useState({
+        name: '',
+        nameAr: '',
+        sortOrder: 0,
+        image: '',
+    });
     const [providers, setProviders] = useState([]);
     const [providerProducts, setProviderProducts] = useState([]);
     const [providerProductQuery, setProviderProductQuery] = useState('');
@@ -72,6 +221,7 @@ const AdminProducts = () => {
         syncPriceWithProvider: false,
         enableManualPrice: false,
         manualPriceAdjustment: '',
+        syncedProviderBasePrice: '',
         basePriceCoins: '',
         minQty: 1,
         maxQty: 999,
@@ -109,11 +259,34 @@ const AdminProducts = () => {
         hideWhenOutOfStock: false,
         showOutOfStockLabel: true,
     });
-    const [categoryForm, setCategoryForm] = useState({
-        name: '',
-        nameAr: '',
-        image: '',
-    });
+
+    const sortedAdminProducts = useMemo(() => (
+        Array.isArray(products) ? [...products] : []
+    ).sort((left, right) => {
+        const orderDelta = Number(left?.displayOrder || 0) - Number(right?.displayOrder || 0);
+        if (orderDelta !== 0) return orderDelta;
+        return String(left?.name || '').localeCompare(String(right?.name || ''), isEnglish ? 'en' : 'ar');
+    }), [products, isEnglish]);
+
+    const sortedAdminCategories = useMemo(() => (
+        Array.isArray(categories) ? [...categories] : []
+    ).sort((left, right) => {
+        const leftOrder = Number(left?.sortOrder ?? left?.displayOrder);
+        const rightOrder = Number(right?.sortOrder ?? right?.displayOrder);
+        const leftHas = Number.isFinite(leftOrder);
+        const rightHas = Number.isFinite(rightOrder);
+
+        if (leftHas && rightHas) {
+            const delta = leftOrder - rightOrder;
+            if (delta !== 0) return delta;
+        } else if (leftHas && !rightHas) {
+            return -1;
+        } else if (!leftHas && rightHas) {
+            return 1;
+        }
+
+        return String(left?.name || '').localeCompare(String(right?.name || ''), isEnglish ? 'en' : 'ar');
+    }), [categories, isEnglish]);
 
     useEffect(() => {
         loadProducts();
@@ -126,14 +299,28 @@ const AdminProducts = () => {
     }, [isProductModalOpen, categories, productForm.category]);
 
     useEffect(() => {
-        if (!isProductModalOpen) return;
+        let isMounted = true;
+
         apiClient.suppliers
             .list()
-            .then((data) => setProviders(Array.isArray(data) ? data.filter((s) => s.isActive).map((s) => ({ id: s.id, name: s.supplierName })) : []))
+            .then((data) => {
+                if (!isMounted) return;
+
+                setProviders(Array.isArray(data) ? data.map((supplier) => ({
+                    id: supplier.id,
+                    name: supplier.supplierName || supplier.name || supplier.id,
+                    isActive: supplier.isActive !== false,
+                })) : []);
+            })
             .catch(() => {
+                if (!isMounted) return;
                 setProviders([]);
                 addToast('فشل تحميل المزودين', 'error');
             });
+
+        return () => {
+            isMounted = false;
+        };
     }, [isProductModalOpen, addToast]);
 
     useEffect(() => {
@@ -147,7 +334,11 @@ const AdminProducts = () => {
             .then((items) => {
                 const nextItems = Array.isArray(items) ? items : [];
                 setProviderProducts(nextItems);
-                if (!nextItems.some((p) => p.id === (productForm.externalProductId || productForm.providerProductId))) {
+                if (!nextItems.some((p) => hasMatchingProviderProduct(
+                    p,
+                    productForm.providerProductId,
+                    productForm.externalProductId
+                ))) {
                     setProductForm((prev) => ({ ...prev, externalProductId: '', providerProductId: '', externalProductName: '' }));
                 }
             })
@@ -162,11 +353,15 @@ const AdminProducts = () => {
     }, [isProductModalOpen, productForm.providerId, productForm.supplierId]);
 
     const selectedSupplierId = productForm.supplierId || productForm.providerId;
-    const selectedProviderProductId = productForm.externalProductId || productForm.providerProductId;
+    const selectedProviderProductId = productForm.providerProductId || productForm.externalProductId;
     const canSyncWithProvider = Boolean(productForm.syncPriceWithProvider && selectedSupplierId && selectedProviderProductId);
     const selectedProviderProduct = useMemo(
-        () => providerProducts.find((product) => product.id === selectedProviderProductId) || null,
-        [providerProducts, selectedProviderProductId]
+        () => providerProducts.find((product) => hasMatchingProviderProduct(
+            product,
+            productForm.providerProductId,
+            productForm.externalProductId
+        )) || null,
+        [productForm.externalProductId, productForm.providerProductId, providerProducts]
     );
     const filteredProviderProducts = useMemo(() => {
         const normalizedQuery = String(providerProductQuery || '').trim().toLowerCase();
@@ -176,40 +371,92 @@ const AdminProducts = () => {
 
         return providerProducts.filter((product) => getProviderProductSearchToken(product).includes(normalizedQuery));
     }, [providerProducts, providerProductQuery]);
+    const activeProviders = useMemo(
+        () => providers.filter((provider) => provider.isActive !== false),
+        [providers]
+    );
+    const providerNamesById = useMemo(
+        () => new Map(providers.map((provider) => [String(provider.id || '').trim(), provider.name])),
+        [providers]
+    );
 
-    const syncProviderPrice = async (manualOverride, supplierIdOverride, externalProductIdOverride) => {
+    const getProviderDisplayName = (product) => {
+        const providerId = String(product?.providerId || product?.supplierId || '').trim();
+        if (!providerId) return '-';
+
+        return (
+            String(product?.providerName || product?.supplierName || '').trim()
+            || providerNamesById.get(providerId)
+            || providerId
+        );
+    };
+
+    const syncProviderPrice = async (manualOverride, supplierIdOverride, providerProductIdOverride) => {
         const supplierId = supplierIdOverride || productForm.supplierId || productForm.providerId;
-        const externalProductId = externalProductIdOverride || productForm.externalProductId || productForm.providerProductId;
-        if (!supplierId || !externalProductId) return;
+        const providerProductId = providerProductIdOverride || productForm.providerProductId || productForm.externalProductId;
+        if (!supplierId || !providerProductId) return;
+        const fallbackProviderProduct = selectedProviderProduct
+            || providerProducts.find((product) => hasMatchingProviderProduct(product, providerProductId));
+
+        if (fallbackProviderProduct) {
+            setProductForm((prev) => mergeProviderSyncIntoForm(
+                prev,
+                supplierId,
+                providerProductId,
+                buildProviderSyncSnapshot(fallbackProviderProduct, {
+                    enableManualPrice: prev.enableManualPrice,
+                    manualPriceAdjustment: manualOverride ?? prev.manualPriceAdjustment,
+                    fallbackMinQty: prev.minimumOrderQty,
+                    fallbackMaxQty: prev.maximumOrderQty,
+                })
+            ));
+        }
         try {
             setIsSyncingPrice(true);
-            const synced = await apiClient.products.getSyncedPrice(supplierId, externalProductId);
-            const syncedBase = Number(synced?.basePriceCoins || 0);
-            const extraRaw = manualOverride ?? productForm.manualPriceAdjustment;
-            const extra = Number(extraRaw || 0);
-            const finalPrice = productForm.enableManualPrice ? syncedBase + extra : syncedBase;
-            setProductForm((prev) => ({ ...prev, basePriceCoins: finalPrice }));
+            const synced = await apiClient.products.getSyncedPrice(supplierId, providerProductId);
+            const syncSource = { ...(fallbackProviderProduct || {}), ...(synced || {}) };
+            setProductForm((prev) => mergeProviderSyncIntoForm(
+                prev,
+                supplierId,
+                providerProductId,
+                buildProviderSyncSnapshot(syncSource, {
+                    enableManualPrice: prev.enableManualPrice,
+                    manualPriceAdjustment: manualOverride ?? prev.manualPriceAdjustment,
+                    fallbackMinQty: prev.minimumOrderQty,
+                    fallbackMaxQty: prev.maximumOrderQty,
+                })
+            ));
         } catch {
-            addToast('تعذر مزامنة سعر المزود', 'error');
+            addToast('تعذر مزامنة السعر والحدود من المورد', 'error');
         } finally {
             setIsSyncingPrice(false);
         }
     };
 
+    useEffect(() => {
+        if (!isProductModalOpen || !productForm.syncPriceWithProvider || !selectedSupplierId || !selectedProviderProductId) {
+            return;
+        }
+
+        void syncProviderPrice(undefined, selectedSupplierId, selectedProviderProductId);
+    }, [isProductModalOpen, productForm.syncPriceWithProvider, selectedSupplierId, selectedProviderProductId, selectedProviderProduct]);
+
     const handleProviderProductSelect = (value) => {
-        const selected = providerProducts.find((product) => product.id === value);
+        const selected = providerProducts.find((product) => hasMatchingProviderProduct(product, value));
         setProductForm((prev) => ({
             ...prev,
-            externalProductId: value,
+            externalProductId: String(selected?.externalProductId || value).trim(),
             providerProductId: value,
             externalProductName: selected?.name || '',
+            ...(prev.syncPriceWithProvider && selected
+                ? buildProviderSyncSnapshot(selected, {
+                    enableManualPrice: prev.enableManualPrice,
+                    manualPriceAdjustment: prev.manualPriceAdjustment,
+                    fallbackMinQty: prev.minimumOrderQty,
+                    fallbackMaxQty: prev.maximumOrderQty,
+                })
+                : {}),
         }));
-
-        if (productForm.syncPriceWithProvider && value && selectedSupplierId) {
-            setTimeout(() => {
-                syncProviderPrice(undefined, selectedSupplierId, value);
-            }, 0);
-        }
     };
 
     const parseSupplierMappings = (text) => String(text || '')
@@ -249,7 +496,13 @@ const AdminProducts = () => {
 
     const openProductModal = (product = null) => {
         if (product) {
-            const hasLinkedProvider = Boolean(product.providerId && product.providerProductId);
+            const linkedProviderId = String(product.providerId || product.supplierId || '').trim();
+            const linkedProviderProductId = String(product.providerProductId || product.externalProductId || '').trim();
+            const hasLinkedProvider = Boolean(linkedProviderId && linkedProviderProductId);
+            const shouldSyncWithProvider = hasLinkedProvider && (
+                Boolean(product.syncPriceWithProvider)
+                || usesProviderPricingMode(product.externalPricingMode)
+            );
             setEditingProduct(product);
             setProductForm({
                 name: product.name || '',
@@ -257,22 +510,23 @@ const AdminProducts = () => {
                 description: product.description || '',
                 descriptionAr: product.descriptionAr || '',
                 category: product.category || categories[0]?.id || '',
-                providerId: product.providerId || '',
-                providerProductId: product.providerProductId || '',
-                supplierId: product.supplierId || product.providerId || '',
-                externalProductId: product.externalProductId || product.providerProductId || '',
+                providerId: linkedProviderId,
+                providerProductId: linkedProviderProductId,
+                supplierId: linkedProviderId,
+                externalProductId: String(product.externalProductId || product.providerProductId || linkedProviderProductId).trim(),
                 externalProductName: product.externalProductName || '',
                 autoFulfillmentEnabled: product.autoFulfillmentEnabled !== false,
-                externalPricingMode: product.externalPricingMode || 'use_local_price',
                 supplierMarginType: product.supplierMarginType || 'fixed',
                 supplierMarginValue: product.supplierMarginValue ?? 0,
                 fallbackSupplierId: product.fallbackSupplierId || '',
                 supplierNotes: product.supplierNotes || '',
                 supplierFieldMappingsText: Array.isArray(product.supplierFieldMappings) ? product.supplierFieldMappings.map((m) => `${m.internalField}:${m.externalField}`).join('\n') : 'playerId:uid\nquantity:qty',
-                syncPriceWithProvider: hasLinkedProvider ? product.syncPriceWithProvider !== false : false,
+                syncPriceWithProvider: shouldSyncWithProvider,
+                externalPricingMode: product.externalPricingMode || (shouldSyncWithProvider ? 'use_supplier_price' : 'use_local_price'),
                 enableManualPrice: Number(product.manualPriceAdjustment || 0) !== 0,
-                manualPriceAdjustment: product.manualPriceAdjustment ?? '',
-                basePriceCoins: product.basePriceCoins ?? '',
+                manualPriceAdjustment: normalizePriceInput(product.manualPriceAdjustment ?? ''),
+                syncedProviderBasePrice: normalizePriceInput(product.syncedProviderBasePrice ?? product.basePriceCoins ?? ''),
+                basePriceCoins: normalizePriceInput(product.basePriceCoins ?? ''),
                 minQty: product.minQty ?? 1,
                 maxQty: product.maxQty ?? 999,
                 displayOrder: product.displayOrder ?? 0,
@@ -320,6 +574,7 @@ const AdminProducts = () => {
                 syncPriceWithProvider: false,
                 enableManualPrice: false,
                 manualPriceAdjustment: '',
+                syncedProviderBasePrice: '',
                 basePriceCoins: '',
                 minQty: 1,
                 maxQty: 999,
@@ -352,6 +607,8 @@ const AdminProducts = () => {
     const handleProductSubmit = async (e) => {
         e.preventDefault();
 
+        if (isSavingProduct) return;
+
         // validation شامل
         const validationErrors = validateProductForm(productForm, { requireImage: !editingProduct });
         if (validationErrors.length > 0) {
@@ -360,32 +617,53 @@ const AdminProducts = () => {
         }
 
         const selectedSupplierId = String(productForm.supplierId || productForm.providerId || '').trim();
+        const selectedProviderProductId = String(productForm.providerProductId || productForm.externalProductId || '').trim();
         const selectedExternalProductId = String(productForm.externalProductId || productForm.providerProductId || '').trim();
-        const hasProviderLink = Boolean(selectedSupplierId && selectedExternalProductId);
+        const hasProviderLink = Boolean(selectedSupplierId && selectedProviderProductId);
         const shouldSyncWithProvider = Boolean(productForm.syncPriceWithProvider && hasProviderLink);
+        const resolvedExternalPricingMode = shouldSyncWithProvider
+            ? (usesProviderPricingMode(productForm.externalPricingMode) ? productForm.externalPricingMode : 'use_supplier_price')
+            : (usesProviderPricingMode(productForm.externalPricingMode) ? 'use_local_price' : productForm.externalPricingMode);
         const fallbackName = String(productForm.name || productForm.nameAr || '').trim();
         const fallbackNameAr = String(productForm.nameAr || productForm.name || '').trim();
         const fallbackCategory = String(productForm.category || categories[0]?.id || '').trim();
         const productImage = String(productForm.image || editingProduct?.image || '').trim();
 
-        const minQty = Number(productForm.minimumOrderQty === '' || productForm.minimumOrderQty == null ? 1 : productForm.minimumOrderQty);
-        const maxQty = Number(productForm.maximumOrderQty === '' || productForm.maximumOrderQty == null ? 999 : productForm.maximumOrderQty);
+        let minQty = Number(productForm.minimumOrderQty === '' || productForm.minimumOrderQty == null ? 1 : productForm.minimumOrderQty);
+        let maxQty = Number(productForm.maximumOrderQty === '' || productForm.maximumOrderQty == null ? 999 : productForm.maximumOrderQty);
         const stepQty = Number(productForm.stepQty === '' || productForm.stepQty == null ? 1 : productForm.stepQty);
 
-        let basePriceCoins = Number(productForm.basePriceCoins || 0);
+        let basePriceCoinsValue = normalizePriceInput(productForm.basePriceCoins);
+        let basePriceCoins = Number(basePriceCoinsValue || 0);
         let syncedProviderBasePrice = null;
-        const manualPriceAdjustment = productForm.enableManualPrice ? Number(productForm.manualPriceAdjustment || 0) : 0;
+        const manualPriceAdjustmentRaw = normalizePriceInput(productForm.manualPriceAdjustment);
+        const manualPriceAdjustment = productForm.enableManualPrice ? Number(manualPriceAdjustmentRaw || 0) : 0;
 
         if (shouldSyncWithProvider) {
             try {
-                const synced = await apiClient.products.getSyncedPrice(selectedSupplierId, selectedExternalProductId);
-                syncedProviderBasePrice = Number(synced?.basePriceCoins || 0);
-                basePriceCoins = syncedProviderBasePrice + manualPriceAdjustment;
+                const synced = await apiClient.products.getSyncedPrice(selectedSupplierId, selectedProviderProductId);
+                const syncedSnapshot = buildProviderSyncSnapshot(
+                    { ...(selectedProviderProduct || {}), ...(synced || {}) },
+                    {
+                        enableManualPrice: productForm.enableManualPrice,
+                        manualPriceAdjustment: manualPriceAdjustmentRaw,
+                        fallbackMinQty: minQty,
+                        fallbackMaxQty: maxQty,
+                    }
+                );
+                syncedProviderBasePrice = Number(normalizePriceInput(syncedSnapshot.syncedProviderBasePrice || '') || 0);
+                basePriceCoinsValue = syncedSnapshot.basePriceCoins;
+                basePriceCoins = Number(normalizePriceInput(basePriceCoinsValue) || 0);
+                minQty = syncedSnapshot.minimumOrderQty;
+                maxQty = syncedSnapshot.maximumOrderQty;
+                setProductForm((prev) => ({ ...prev, ...syncedSnapshot }));
             } catch {
-                addToast('فشل مزامنة سعر المزود قبل الحفظ', 'error');
+                addToast('فشل مزامنة السعر والحدود من المورد قبل الحفظ', 'error');
                 return;
             }
-        } else if (Number.isNaN(basePriceCoins) || basePriceCoins <= 0) {
+        }
+
+        if (Number.isNaN(basePriceCoins) || basePriceCoins <= 0) {
             addToast('يرجى إدخال سعر يدوي صحيح', 'error');
             return;
         }
@@ -403,14 +681,14 @@ const AdminProducts = () => {
             
             // التسعير والمورد
             providerId: selectedSupplierId,
-            providerProductId: selectedExternalProductId,
+            providerProductId: selectedProviderProductId,
             supplierId: selectedSupplierId,
             externalProductId: selectedExternalProductId,
             externalProductName: String(productForm.externalProductName || '').trim(),
             autoFulfillmentEnabled: Boolean(productForm.autoFulfillmentEnabled),
             fallbackSupplierId: String(productForm.fallbackSupplierId || '').trim(),
             supplierFieldMappings: parseSupplierMappings(productForm.supplierFieldMappingsText),
-            externalPricingMode: String(productForm.externalPricingMode || 'use_local_price'),
+            externalPricingMode: String(resolvedExternalPricingMode || 'use_local_price'),
             supplierMarginType: String(productForm.supplierMarginType || 'fixed'),
             supplierMarginValue: Number(productForm.supplierMarginValue || 0),
             supplierNotes: String(productForm.supplierNotes || '').trim(),
@@ -418,7 +696,7 @@ const AdminProducts = () => {
             enableManualPrice: productForm.enableManualPrice,
             manualPriceAdjustment,
             syncedProviderBasePrice,
-            basePriceCoins,
+            basePriceCoins: basePriceCoinsValue || String(basePriceCoins),
             
             // الكميات والحدود
             minimumOrderQty: minQty,
@@ -450,59 +728,122 @@ const AdminProducts = () => {
             showOutOfStockLabel: productForm.showOutOfStockLabel,
         };
 
+        setIsSavingProduct(true);
+
         try {
             if (editingProduct) {
                 await updateProduct(editingProduct.id, payload);
-                addToast(t('productUpdated') || 'تم تحديث المنتج', 'success');
             } else {
                 await addProduct(payload);
-                addToast(t('productAdded') || 'تمت إضافة المنتج', 'success');
             }
 
-            loadProducts();
             setIsProductModalOpen(false);
+            addToast(
+                editingProduct
+                    ? (t('productUpdated') || 'تم تحديث المنتج')
+                    : (t('productAdded') || 'تمت إضافة المنتج'),
+                'success'
+            );
+
+            void loadProducts({ force: true });
         } catch (error) {
             addToast(error?.message || 'فشل حفظ المنتج', 'error');
+        } finally {
+            setIsSavingProduct(false);
         }
     };
 
-    const handleCategorySubmit = (e) => {
-        e.preventDefault();
-        if (!categoryForm.name) {
-            addToast('اسم القسم مطلوب', 'error');
+    const handleToggleProductStatus = async (product) => {
+        const isCurrentlyActive = product.status === 'active';
+        const actionLabel = isCurrentlyActive
+            ? (isEnglish ? 'deactivate' : 'إيقاف')
+            : (isEnglish ? 'activate' : 'تفعيل');
+
+        try {
+            setTogglingProductId(product.id);
+            const updatedProduct = await toggleProductStatus(product.id);
+            addToast(
+                updatedProduct?.status === 'active'
+                    ? (isEnglish ? 'Product activated successfully' : 'تم تفعيل المنتج بنجاح')
+                    : (isEnglish ? 'Product deactivated successfully' : 'تم إيقاف المنتج بنجاح'),
+                'success'
+            );
+        } catch (error) {
+            addToast(error?.message || (isEnglish ? `Failed to ${actionLabel} product` : `فشل ${actionLabel} المنتج`), 'error');
+        } finally {
+            setTogglingProductId((currentId) => (currentId === product.id ? null : currentId));
+        }
+    };
+
+    const openCategoryModal = (category = null) => {
+        if (category) {
+            setEditingCategory(category);
+            setCategoryForm({
+                name: String(category?.name || ''),
+                nameAr: String(category?.nameAr || ''),
+                sortOrder: Number(category?.sortOrder ?? category?.displayOrder ?? 0),
+                image: String(category?.image || ''),
+            });
+        } else {
+            setEditingCategory(null);
+            setCategoryForm({ name: '', nameAr: '', sortOrder: 0, image: '' });
+        }
+        setIsCategoryModalOpen(true);
+    };
+
+    const handleCategorySubmit = async (event) => {
+        event.preventDefault();
+
+        const name = String(categoryForm.name || '').trim();
+        const nameAr = String(categoryForm.nameAr || '').trim();
+        const sortOrder = Number(categoryForm.sortOrder ?? 0);
+        const safeSortOrder = Number.isFinite(sortOrder) ? sortOrder : 0;
+
+        if (!name && !nameAr) {
+            addToast(isEnglish ? 'Category name is required' : 'اسم القسم مطلوب', 'error');
             return;
         }
 
-        let safeId = categoryForm.name.trim().toLowerCase().replace(/\s+/g, '-');
-        if (!safeId) safeId = `cat-${Date.now()}`;
-        if (categories.some((c) => c.id === safeId)) safeId = `${safeId}-${Date.now()}`;
+        setIsSavingCategory(true);
+        try {
+            if (editingCategory) {
+                await updateCategory(editingCategory.id, {
+                    name,
+                    nameAr,
+                    sortOrder: safeSortOrder,
+                    image: categoryForm.image || '',
+                });
+                addToast(isEnglish ? 'Category updated' : 'تم تحديث القسم', 'success');
+            } else {
+                await addCategory({
+                    name,
+                    nameAr,
+                    sortOrder: safeSortOrder,
+                    image: categoryForm.image || '',
+                });
+                addToast(isEnglish ? 'Category added' : 'تمت إضافة القسم', 'success');
+            }
 
-        addCategory({
-            id: safeId,
-            name: categoryForm.name,
-            nameAr: categoryForm.nameAr,
-            image: categoryForm.image || 'https://via.placeholder.com/300x200',
-        });
-
-        addToast('تمت إضافة القسم بنجاح', 'success');
-        setCategoryForm({ name: '', nameAr: '', image: '' });
-        setIsCategoryModalOpen(false);
+            setIsCategoryModalOpen(false);
+            setEditingCategory(null);
+        } catch (error) {
+            addToast(error?.message || (isEnglish ? 'Failed to save category' : 'فشل حفظ القسم'), 'error');
+        } finally {
+            setIsSavingCategory(false);
+        }
     };
 
-    const handleDeleteCategory = (category) => {
-        const impacted = (products || []).filter((p) => {
-            const raw = String(p.category || '').trim();
-            return raw === category.id || raw === category.name || raw === category.nameAr;
-        }).length;
+    const handleDeleteCategory = async (category) => {
+        if (!category) return;
+        const label = String(category?.nameAr || category?.name || '').trim() || (isEnglish ? 'this category' : 'هذا القسم');
+        if (!window.confirm(isEnglish ? `Delete ${label}?` : `حذف ${label}؟`)) return;
 
-        const confirmed = window.confirm(
-            `هل تريد حذف القسم "${category.name}"؟ سيتم حذف ${impacted} منتج من هذا القسم أيضًا.`
-        );
-
-        if (!confirmed) return;
-
-        deleteCategory(category.id);
-        addToast(`تم حذف القسم ومعه ${impacted} منتج`, 'success');
+        try {
+            await deleteCategory(category.id);
+            addToast(isEnglish ? 'Category deleted' : 'تم حذف القسم', 'success');
+        } catch (error) {
+            addToast(error?.message || (isEnglish ? 'Failed to delete category' : 'فشل حذف القسم'), 'error');
+        }
     };
 
     return (
@@ -519,41 +860,104 @@ const AdminProducts = () => {
                         <RefreshCw className="h-3 w-3" /> Reset
                     </button>
                 </div>
-
-                <div className="flex gap-2">
-                    <Button variant={activeTab === 'products' ? 'primary' : 'outline'} onClick={() => setActiveTab('products')}>
-                        {t('products')}
-                    </Button>
-                    <Button variant={activeTab === 'categories' ? 'primary' : 'outline'} onClick={() => setActiveTab('categories')}>
-                        {t('categories') || 'الأقسام'}
-                    </Button>
-                </div>
             </div>
             </section>
 
-            {activeTab === 'products' ? (
-                <>
-                    <div className="flex justify-end">
-                        <Button onClick={() => openProductModal()}>
-                            <Plus className="mr-2 h-4 w-4" /> {t('addProduct')}
-                        </Button>
+            <div className="admin-premium-panel overflow-hidden">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{isEnglish ? 'Catalog (Categories)' : 'الكاتلوج (الأقسام)'}</h2>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {isEnglish ? 'Control category display order (lower number shows first).' : 'حدد ترتيب ظهور الأقسام (الرقم الأقل يظهر أولاً).'}
+                        </p>
                     </div>
+                    <Button onClick={() => openCategoryModal()}>
+                        <Plus className="mr-2 h-4 w-4" /> {isEnglish ? 'Add Category' : 'إضافة قسم'}
+                    </Button>
+                </div>
 
-                    <div className="admin-premium-panel overflow-hidden">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>{t('products')}</TableHead>
-                                    <TableHead className="text-center">المزود</TableHead>
-                                    <TableHead className="text-center">{t('category') || 'القسم'}</TableHead>
-                                    <TableHead className="text-center">{t('basePrice')}</TableHead>
-                                    <TableHead className="text-center">{t('common.status', { defaultValue: 'الحالة' })}</TableHead>
-                                    <TableHead className="text-end">{t('actions') || 'الإجراءات'}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {(products || []).map((product) => (
-                                    <TableRow key={product.id}>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>{isEnglish ? 'Name' : 'الاسم'}</TableHead>
+                            <TableHead className="text-center">{isEnglish ? 'Order' : 'الترتيب'}</TableHead>
+                            <TableHead className="text-end">{t('actions') || (isEnglish ? 'Actions' : 'الإجراءات')}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedAdminCategories.map((category) => (
+                            <TableRow key={category.id}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+                                            {category.image ? (
+                                                <img src={resolveImageUrl(category.image)} alt={category.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                                    <Package className="h-5 w-5" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="truncate font-medium text-gray-900 dark:text-white">{category.name || '-'}</div>
+                                            <div className="truncate text-xs text-gray-500">{category.nameAr || ''}</div>
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <Badge variant="outline">{Number(category?.sortOrder ?? category?.displayOrder ?? 0)}</Badge>
+                                </TableCell>
+                                <TableCell className="text-end">
+                                    <div className="flex justify-end gap-2">
+                                        <Button size="sm" variant="ghost" onClick={() => openCategoryModal(category)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                            onClick={() => handleDeleteCategory(category)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+
+                        {!sortedAdminCategories.length && (
+                            <TableRow>
+                                <TableCell colSpan={3} className="py-8 text-center text-sm text-gray-500">
+                                    {isEnglish ? 'No categories yet.' : 'لا توجد أقسام حتى الآن.'}
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+
+            <div className="flex justify-end">
+                <Button onClick={() => openProductModal()}>
+                    <Plus className="mr-2 h-4 w-4" /> {t('addProduct')}
+                </Button>
+            </div>
+
+            <div className="admin-premium-panel overflow-hidden">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>{t('products')}</TableHead>
+                            <TableHead className="text-center">المزود</TableHead>
+                            <TableHead className="text-center">{t('category') || 'القسم'}</TableHead>
+                            <TableHead className="text-center">{isEnglish ? 'Order' : 'الترتيب'}</TableHead>
+                            <TableHead className="text-center">{t('basePrice')}</TableHead>
+                            <TableHead className="text-center">{t('common.status', { defaultValue: 'الحالة' })}</TableHead>
+                            <TableHead className="text-end">{t('actions') || 'الإجراءات'}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {sortedAdminProducts.map((product) => (
+                            <TableRow key={product.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100">
@@ -566,17 +970,44 @@ const AdminProducts = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Badge variant="outline">{providers.find((p) => p.id === product.providerId)?.name || product.providerId || '-'}</Badge>
+                                            <Badge variant="outline">{getProviderDisplayName(product)}</Badge>
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <Badge variant="outline">{categories.find((c) => c.id === product.category)?.name || product.category}</Badge>
                                         </TableCell>
-                                        <TableCell className="text-center">{product.basePriceCoins}</TableCell>
+                                        <TableCell className="text-center">
+                                            <Badge variant="outline">{Number(product?.displayOrder || 0)}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            {formatExactDecimal(product.basePriceCoins, language) || product.basePriceCoins || '-'}
+                                        </TableCell>
                                         <TableCell className="text-center">
                                             <Badge variant={product.status === 'active' ? 'success' : 'secondary'}>{product.status}</Badge>
                                         </TableCell>
                                         <TableCell className="text-end">
                                             <div className="flex justify-end gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className={product.status === 'active'
+                                                        ? 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'
+                                                        : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'}
+                                                    onClick={() => handleToggleProductStatus(product)}
+                                                    disabled={togglingProductId === product.id}
+                                                    title={product.status === 'active'
+                                                        ? (isEnglish ? 'Deactivate product' : 'إيقاف المنتج')
+                                                        : (isEnglish ? 'Activate product' : 'تفعيل المنتج')}
+                                                >
+                                                    {togglingProductId === product.id ? (
+                                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <span className="text-xs font-semibold">
+                                                            {product.status === 'active'
+                                                                ? (isEnglish ? 'Deactivate' : 'إيقاف')
+                                                                : (isEnglish ? 'Activate' : 'تفعيل')}
+                                                        </span>
+                                                    )}
+                                                </Button>
                                                 <Button size="sm" variant="ghost" onClick={() => openProductModal(product)}>
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
@@ -591,40 +1022,63 @@ const AdminProducts = () => {
                                             </div>
                                         </TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </>
-            ) : (
-                <>
-                    <div className="flex justify-end">
-                        <Button onClick={() => setIsCategoryModalOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" /> {t('addCategory') || 'إضافة قسم'}
-                        </Button>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+
+            <Modal
+                isOpen={isCategoryModalOpen}
+                onClose={() => !isSavingCategory && setIsCategoryModalOpen(false)}
+                title={editingCategory ? (isEnglish ? 'Edit Category' : 'تعديل القسم') : (isEnglish ? 'Add Category' : 'إضافة قسم')}
+            >
+                <form onSubmit={handleCategorySubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label={isEnglish ? 'English Name' : 'الاسم بالإنجليزية'}
+                            value={categoryForm.name}
+                            onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))}
+                            placeholder={isEnglish ? 'Example: Games' : 'مثال: Games'}
+                        />
+                        <Input
+                            label={isEnglish ? 'Arabic Name' : 'الاسم بالعربية'}
+                            value={categoryForm.nameAr}
+                            onChange={(e) => setCategoryForm((prev) => ({ ...prev, nameAr: e.target.value }))}
+                            placeholder={isEnglish ? 'Example: ألعاب' : 'مثال: ألعاب'}
+                        />
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                        {(categories || []).map((cat) => (
-                            <div key={cat.id} className="group admin-premium-panel relative overflow-hidden">
-                                <div className="aspect-video bg-gray-100">
-                                    <img src={resolveImageUrl(cat.image)} alt={cat.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
-                                </div>
-                                <div className="bg-white p-4 dark:bg-gray-800">
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{cat.nameAr || cat.name}</h3>
-                                    <p className="text-sm text-gray-500">{cat.name}</p>
-                                </div>
-                                <button
-                                    onClick={() => handleDeleteCategory(cat)}
-                                    className="absolute right-2 top-2 rounded-full bg-white/90 p-2 text-red-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </div>
-                        ))}
+                    <Input
+                        label={isEnglish ? 'Display Order (number)' : 'ترتيب العرض (رقم)'}
+                        type="number"
+                        value={categoryForm.sortOrder}
+                        onChange={(e) => setCategoryForm((prev) => ({ ...prev, sortOrder: e.target.value }))}
+                        placeholder={isEnglish ? 'Example: 1' : 'مثال: 1'}
+                    />
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{isEnglish ? 'Category Image (upload)' : 'صورة القسم (رفع)'}</label>
+                        <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800/50">
+                            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setCategoryForm, 'categories')} className="hidden" id="category-image-upload" />
+                            <label htmlFor="category-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
+                                {categoryForm.image
+                                    ? <img src={resolveImageUrl(categoryForm.image)} alt="preview" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" />
+                                    : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">{isEnglish ? 'Click to upload' : 'اضغط لرفع الصورة'}</span></>
+                                }
+                            </label>
+                        </div>
                     </div>
-                </>
-            )}
+
+                    <div className="flex gap-3">
+                        <Button type="button" variant="ghost" className="flex-1" onClick={() => setIsCategoryModalOpen(false)} disabled={isSavingCategory}>
+                            {isEnglish ? 'Cancel' : 'إلغاء'}
+                        </Button>
+                        <Button type="submit" className="flex-1" disabled={isSavingCategory}>
+                            {editingCategory ? (isEnglish ? 'Save' : 'حفظ') : (isEnglish ? 'Add' : 'إضافة')}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
 
             <Modal isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} title={editingProduct ? t('editProduct') : t('addProduct')} size="xl">
                 <form onSubmit={handleProductSubmit} className="space-y-6">
@@ -655,6 +1109,14 @@ const AdminProducts = () => {
                                     ))}
                                 </select>
                             </div>
+
+                            <Input
+                                label={isEnglish ? 'Display Order (number)' : 'ترتيب العرض (رقم)'}
+                                type="number"
+                                value={productForm.displayOrder}
+                                onChange={(e) => setProductForm({ ...productForm, displayOrder: e.target.value })}
+                                placeholder={isEnglish ? 'Example: 10' : 'مثال: 10'}
+                            />
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة المنتج (رفع)</label>
@@ -689,12 +1151,14 @@ const AdminProducts = () => {
                                                 providerId: value,
                                                 externalProductId: '',
                                                 providerProductId: '',
+                                                externalProductName: '',
+                                                syncedProviderBasePrice: '',
                                                 syncPriceWithProvider: value ? prev.syncPriceWithProvider : false,
                                             }));
                                         }}
                                     >
                                         <option value="" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">اختر المزود</option>
-                                        {providers.map((provider) => (
+                                        {activeProviders.map((provider) => (
                                             <option key={provider.id} value={provider.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{provider.name}</option>
                                         ))}
                                     </select>
@@ -710,10 +1174,24 @@ const AdminProducts = () => {
                                                         {selectedProviderProduct?.name || (isEnglish ? 'No provider product selected yet' : 'لم يتم اختيار منتج من المورد بعد')}
                                                     </p>
                                                     <p className="mt-1 text-xs text-[var(--color-muted)]">
-                                                        {selectedProviderProduct?.priceCoins
-                                                            ? formatProviderProductPrice(selectedProviderProduct.priceCoins, language)
+                                                        {getProviderProductPriceValue(selectedProviderProduct)
+                                                            ? formatProviderProductPrice(getProviderProductPriceValue(selectedProviderProduct), language)
                                                             : (isEnglish ? 'Choose a supplier first, then select a product' : 'اختر المورد أولاً ثم اختر المنتج المناسب')}
                                                     </p>
+                                                    {selectedProviderProduct ? (
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {getProviderProductMinQtyValue(selectedProviderProduct) ? (
+                                                                <Badge variant="secondary">
+                                                                    {isEnglish ? 'Min:' : 'الحد الأدنى:'} {getProviderProductMinQtyValue(selectedProviderProduct)}
+                                                                </Badge>
+                                                            ) : null}
+                                                            {getProviderProductMaxQtyValue(selectedProviderProduct) ? (
+                                                                <Badge variant="secondary">
+                                                                    {isEnglish ? 'Max:' : 'الحد الأقصى:'} {getProviderProductMaxQtyValue(selectedProviderProduct)}
+                                                                </Badge>
+                                                            ) : null}
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                             </div>
 
@@ -743,8 +1221,12 @@ const AdminProducts = () => {
 
                                                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                                                         {filteredProviderProducts.length ? filteredProviderProducts.map((providerProduct) => {
-                                                            const isSelected = providerProduct.id === selectedProviderProductId;
-                                                            const providerPrice = formatProviderProductPrice(providerProduct.priceCoins, language);
+                                                            const isSelected = hasMatchingProviderProduct(
+                                                                providerProduct,
+                                                                productForm.providerProductId,
+                                                                productForm.externalProductId
+                                                            );
+                                                            const providerPrice = formatProviderProductPrice(getProviderProductPriceValue(providerProduct), language);
 
                                                             return (
                                                                 <button
@@ -767,11 +1249,23 @@ const AdminProducts = () => {
 
                                                                     <div className="min-w-0 flex-1">
                                                                         <p className="truncate text-sm font-semibold text-[var(--color-text)]">{providerProduct.name || providerProduct.id}</p>
-                                                                        {providerPrice ? (
-                                                                            <p className="mt-1 text-xs font-medium text-[var(--color-primary)]">
-                                                                                {providerPrice}
-                                                                            </p>
-                                                                        ) : null}
+                                                                        <div className="mt-1 flex flex-wrap gap-2">
+                                                                            {providerPrice ? (
+                                                                                <Badge variant="info" className="px-2 py-0.5">
+                                                                                    {providerPrice}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                            {getProviderProductMinQtyValue(providerProduct) ? (
+                                                                                <Badge variant="secondary" className="px-2 py-0.5">
+                                                                                    {isEnglish ? 'Min' : 'من'} {getProviderProductMinQtyValue(providerProduct)}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                            {getProviderProductMaxQtyValue(providerProduct) ? (
+                                                                                <Badge variant="secondary" className="px-2 py-0.5">
+                                                                                    {isEnglish ? 'Max' : 'إلى'} {getProviderProductMaxQtyValue(providerProduct)}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                        </div>
                                                                     </div>
 
                                                                     {isSelected ? (
@@ -820,7 +1314,28 @@ const AdminProducts = () => {
                                     <select
                                         className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                         value={productForm.externalPricingMode}
-                                        onChange={(e) => setProductForm({ ...productForm, externalPricingMode: e.target.value })}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            setProductForm((prev) => {
+                                                const nextForm = {
+                                                    ...prev,
+                                                    externalPricingMode: value,
+                                                    syncPriceWithProvider: usesProviderPricingMode(value),
+                                                };
+                                                if (!usesProviderPricingMode(value) || !selectedProviderProduct) {
+                                                    return nextForm;
+                                                }
+                                                return {
+                                                    ...nextForm,
+                                                    ...buildProviderSyncSnapshot(selectedProviderProduct, {
+                                                        enableManualPrice: prev.enableManualPrice,
+                                                        manualPriceAdjustment: prev.manualPriceAdjustment,
+                                                        fallbackMinQty: prev.minimumOrderQty,
+                                                        fallbackMaxQty: prev.maximumOrderQty,
+                                                    }),
+                                                };
+                                            });
+                                        }}
                                     >
                                         <option value="use_supplier_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام سعر المزود</option>
                                         <option value="use_local_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام السعر المحلي</option>
@@ -872,10 +1387,30 @@ const AdminProducts = () => {
                                             checked={Boolean(productForm.syncPriceWithProvider)}
                                             onChange={(e) => {
                                                 const checked = e.target.checked;
-                                                setProductForm({ ...productForm, syncPriceWithProvider: checked });
+                                                setProductForm((prev) => {
+                                                    const nextForm = {
+                                                        ...prev,
+                                                        syncPriceWithProvider: checked,
+                                                        externalPricingMode: checked
+                                                            ? 'use_supplier_price'
+                                                            : (usesProviderPricingMode(prev.externalPricingMode) ? 'use_local_price' : prev.externalPricingMode),
+                                                    };
+                                                    if (!checked || !selectedProviderProduct) {
+                                                        return nextForm;
+                                                    }
+                                                    return {
+                                                        ...nextForm,
+                                                        ...buildProviderSyncSnapshot(selectedProviderProduct, {
+                                                            enableManualPrice: prev.enableManualPrice,
+                                                            manualPriceAdjustment: prev.manualPriceAdjustment,
+                                                            fallbackMinQty: prev.minimumOrderQty,
+                                                            fallbackMaxQty: prev.maximumOrderQty,
+                                                        }),
+                                                    };
+                                                });
                                             }}
                                         />
-                                        مزامنة السعر من المورد
+                                        مزامنة السعر والحدود من المورد
                                     </label>
 
                                     <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -884,45 +1419,80 @@ const AdminProducts = () => {
                                             checked={Boolean(productForm.enableManualPrice)}
                                             onChange={(e) => {
                                                 const checked = e.target.checked;
-                                                setProductForm((prev) => ({
-                                                    ...prev,
-                                                    enableManualPrice: checked,
-                                                    manualPriceAdjustment: checked ? prev.manualPriceAdjustment : '',
-                                                }));
-                                                if (productForm.syncPriceWithProvider) {
-                                                    setTimeout(() => {
-                                                        syncProviderPrice(checked ? productForm.manualPriceAdjustment : 0);
-                                                    }, 0);
-                                                }
+                                                setProductForm((prev) => {
+                                                    const nextManualPriceAdjustment = checked ? prev.manualPriceAdjustment : '';
+                                                    const nextForm = {
+                                                        ...prev,
+                                                        enableManualPrice: checked,
+                                                        manualPriceAdjustment: nextManualPriceAdjustment,
+                                                    };
+                                                    if (!prev.syncPriceWithProvider) {
+                                                        return nextForm;
+                                                    }
+                                                    const syncSource = selectedProviderProduct || {
+                                                        rawPrice: prev.syncedProviderBasePrice,
+                                                        minQty: prev.minimumOrderQty,
+                                                        maxQty: prev.maximumOrderQty,
+                                                    };
+                                                    return {
+                                                        ...nextForm,
+                                                        ...buildProviderSyncSnapshot(syncSource, {
+                                                            enableManualPrice: checked,
+                                                            manualPriceAdjustment: nextManualPriceAdjustment,
+                                                            fallbackMinQty: prev.minimumOrderQty,
+                                                            fallbackMaxQty: prev.maximumOrderQty,
+                                                        }),
+                                                    };
+                                                });
                                             }}
                                             disabled={!productForm.syncPriceWithProvider}
                                         />
                                         إضافة سعر يدوي
                                     </label>
+                                </div>
 
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => syncProviderPrice()}
-                                        disabled={isSyncingPrice || !productForm.providerId || !productForm.providerProductId || !productForm.syncPriceWithProvider}
-                                    >
-                                        {isSyncingPrice ? 'Syncing...' : 'مزامنة الآن'}
-                                    </Button>
+                                <div className="mt-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[color:rgb(var(--color-primary-rgb)/0.06)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+                                    {isSyncingPrice ? (
+                                        <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-[var(--color-primary)]" />
+                                    ) : (
+                                        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-primary)]" />
+                                    )}
+                                    <span>
+                                        {isEnglish
+                                            ? 'Price, minimum, and maximum quantities are refreshed automatically from the linked supplier when you pick a product and again before saving.'
+                                            : 'السعر والحد الأدنى والحد الأقصى يتم تحديثهم تلقائيًا من المورد المرتبط عند اختيار المنتج، ثم تتم مراجعتهم مرة أخرى قبل الحفظ.'}
+                                    </span>
                                 </div>
 
                                 {productForm.syncPriceWithProvider && productForm.enableManualPrice ? (
                                     <div className="mt-3">
                                         <Input
                                             label="Manual Price Add (+/-)"
-                                            type="number"
+                                            type="text"
+                                            inputMode="decimal"
                                             value={productForm.manualPriceAdjustment}
                                             onChange={(e) => {
                                                 const value = e.target.value;
-                                                setProductForm({ ...productForm, manualPriceAdjustment: value });
-                                                setTimeout(() => {
-                                                    syncProviderPrice(value);
-                                                }, 0);
+                                                setProductForm((prev) => {
+                                                    const nextForm = { ...prev, manualPriceAdjustment: value };
+                                                    if (!prev.syncPriceWithProvider) {
+                                                        return nextForm;
+                                                    }
+                                                    const syncSource = selectedProviderProduct || {
+                                                        rawPrice: prev.syncedProviderBasePrice,
+                                                        minQty: prev.minimumOrderQty,
+                                                        maxQty: prev.maximumOrderQty,
+                                                    };
+                                                    return {
+                                                        ...nextForm,
+                                                        ...buildProviderSyncSnapshot(syncSource, {
+                                                            enableManualPrice: prev.enableManualPrice,
+                                                            manualPriceAdjustment: value,
+                                                            fallbackMinQty: prev.minimumOrderQty,
+                                                            fallbackMaxQty: prev.maximumOrderQty,
+                                                        }),
+                                                    };
+                                                });
                                             }}
                                         />
                                     </div>
@@ -935,6 +1505,8 @@ const AdminProducts = () => {
                                     type="number"
                                     value={productForm.minimumOrderQty}
                                     onChange={(e) => setProductForm({ ...productForm, minimumOrderQty: e.target.value })}
+                                    readOnly={Boolean(canSyncWithProvider)}
+                                    disabled={Boolean(canSyncWithProvider)}
                                     required
                                 />
                                 <Input
@@ -942,12 +1514,15 @@ const AdminProducts = () => {
                                     type="number"
                                     value={productForm.maximumOrderQty}
                                     onChange={(e) => setProductForm({ ...productForm, maximumOrderQty: e.target.value })}
+                                    readOnly={Boolean(canSyncWithProvider)}
+                                    disabled={Boolean(canSyncWithProvider)}
                                     required
                                 />
                                 <div className="w-full">
                                     <Input
                                         label={isEnglish ? 'Final Price' : 'السعر النهائي'}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={productForm.basePriceCoins}
                                         onChange={(e) => setProductForm({ ...productForm, basePriceCoins: e.target.value })}
                                         readOnly={Boolean(canSyncWithProvider)}
@@ -968,6 +1543,26 @@ const AdminProducts = () => {
                                     </p>
                                 </div>
                             </div>
+
+                            {selectedProviderProduct ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {getProviderProductPriceValue(selectedProviderProduct) ? (
+                                        <Badge variant="info">
+                                            {isEnglish ? 'Supplier Price:' : 'سعر المورد:'} {formatProviderProductPrice(getProviderProductPriceValue(selectedProviderProduct), language)}
+                                        </Badge>
+                                    ) : null}
+                                    {getProviderProductMinQtyValue(selectedProviderProduct) ? (
+                                        <Badge variant="secondary">
+                                            {isEnglish ? 'Min:' : 'الحد الأدنى:'} {getProviderProductMinQtyValue(selectedProviderProduct)}
+                                        </Badge>
+                                    ) : null}
+                                    {getProviderProductMaxQtyValue(selectedProviderProduct) ? (
+                                        <Badge variant="secondary">
+                                            {isEnglish ? 'Max:' : 'الحد الأقصى:'} {getProviderProductMaxQtyValue(selectedProviderProduct)}
+                                        </Badge>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
                     </div>
 
@@ -1194,33 +1789,14 @@ const AdminProducts = () => {
                     </div>
 
                     <div className="flex justify-end gap-2 pt-4">
-                        <Button type="button" variant="ghost" onClick={() => setIsProductModalOpen(false)}>إلغاء</Button>
-                        <Button type="submit">حفظ المنتج</Button>
+                        <Button type="button" variant="ghost" onClick={() => setIsProductModalOpen(false)} disabled={isSavingProduct}>إلغاء</Button>
+                        <Button type="submit" disabled={isSavingProduct}>
+                            {isSavingProduct ? 'جارٍ حفظ المنتج...' : 'حفظ المنتج'}
+                        </Button>
                     </div>
                 </form>
             </Modal>
 
-            <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title={t('addCategory') || 'إضافة قسم'}>
-                <form onSubmit={handleCategorySubmit} className="space-y-4">
-                    <Input label="الاسم بالعربية" value={categoryForm.nameAr} onChange={(e) => setCategoryForm({ ...categoryForm, nameAr: e.target.value })} required />
-                    <Input label="الاسم بالإنجليزية" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} required />
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة القسم (رفع)</label>
-                        <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800/50">
-                            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setCategoryForm, 'categories')} className="hidden" id="category-image-upload" />
-                            <label htmlFor="category-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
-                                {categoryForm.image ? <img src={resolveImageUrl(categoryForm.image)} alt="معاينة" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
-                            </label>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4">
-                        <Button type="button" variant="ghost" onClick={() => setIsCategoryModalOpen(false)}>إلغاء</Button>
-                        <Button type="submit">حفظ القسم</Button>
-                    </div>
-                </form>
-            </Modal>
         </div>
     );
 };

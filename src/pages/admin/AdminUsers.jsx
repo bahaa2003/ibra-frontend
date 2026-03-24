@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Eye,
   KeyRound,
+  MailCheck,
   Search,
   UserCheck,
   UserX,
@@ -23,6 +24,7 @@ import { useToast } from '../../components/ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatNumber, getNumericLocale } from '../../utils/intl';
+import { formatWalletAmount } from '../../utils/storefront';
 import {
   getAccountStatusBadgeVariant,
   getAccountStatusLabel,
@@ -37,12 +39,47 @@ import {
 const FILTER_OPTIONS = ['all', 'pending', 'approved', 'rejected'];
 
 const summaryCardClassName =
-  'rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-4 shadow-[var(--shadow-subtle)]';
+  'rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.8)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-2.5 shadow-[var(--shadow-subtle)]';
+
+const compactButtonClassName = 'h-8 rounded-[var(--radius-sm)] px-2.5 text-[11px]';
+const compactFieldClassName =
+  'h-9 rounded-full px-3 text-[11px] shadow-[0_8px_20px_-20px_rgb(0_0_0/0.8)]';
+const compactTableHeadClassName = 'h-9 px-2.5 text-[10px] tracking-[0.08em]';
+const compactTableCellClassName = 'px-2.5 py-2 text-[11px]';
+const detailsMetricClassName =
+  'rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-surface-rgb)/0.62)] p-2.5';
+
+const balanceBadgeClassName = [
+  'wallet-balance-shimmer relative isolate inline-flex items-center gap-1 overflow-hidden rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+  'border-[#e6c76b] bg-[linear-gradient(135deg,rgba(255,248,220,0.96),rgba(244,210,102,0.2))]',
+  'text-[#8c6500] shadow-[0_10px_22px_-20px_rgba(191,149,27,0.95)]',
+].join(' ');
 
 const resolveInitialGroupValue = (entry, groups) => {
   if (entry?.groupId) return entry.groupId;
   const matchedGroup = (groups || []).find((group) => group.name === entry?.group || group.nameAr === entry?.group);
   return matchedGroup?.id || groups?.[0]?.id || '';
+};
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const buildWalletPreview = (entry, wallet = null) => {
+  if (!entry && !wallet) return null;
+
+  const recentTransactions = Array.isArray(wallet?.recentTransactions) ? wallet.recentTransactions : [];
+  const balance = toFiniteNumber(wallet?.walletBalance ?? wallet?.balance ?? entry?.coins, 0);
+
+  return {
+    userId: String(wallet?.userId || entry?.id || ''),
+    walletBalance: balance,
+    currency: String(wallet?.currency || entry?.currency || 'USD').toUpperCase(),
+    transactionsCount: toFiniteNumber(wallet?.transactionsCount ?? recentTransactions.length, recentTransactions.length),
+    recentTransactions,
+    lastTransactionAt: wallet?.lastTransactionAt || recentTransactions[0]?.createdAt || null,
+  };
 };
 
 const AdminUsers = () => {
@@ -54,12 +91,18 @@ const AdminUsers = () => {
   const {
     users,
     loadUsers,
+    getUserById,
+    wallets,
+    loadWallets,
+    getUserWallet,
     updateUserStatus,
     updateUserGroup,
     updateUserCoins,
     updateUserCurrency,
+    updateUserCreditLimit,
     deleteUser,
     resetUserPassword,
+    resendUserVerification,
   } = useAdminStore();
   const { groups, loadGroups } = useGroupStore();
   const { currencies, loadCurrencies } = useSystemStore();
@@ -72,14 +115,21 @@ const AdminUsers = () => {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [approveTarget, setApproveTarget] = useState(null);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approveGroup, setApproveGroup] = useState('');
+  const [approveCurrency, setApproveCurrency] = useState('USD');
+  const [approveCreditLimit, setApproveCreditLimit] = useState('0');
   const [rejectTarget, setRejectTarget] = useState(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [settingsTopupAmount, setSettingsTopupAmount] = useState('');
   const [settingsGroup, setSettingsGroup] = useState('');
   const [settingsCurrency, setSettingsCurrency] = useState('USD');
+  const [settingsCreditLimit, setSettingsCreditLimit] = useState('0');
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [manualPassword, setManualPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
@@ -88,7 +138,8 @@ const AdminUsers = () => {
     loadUsers();
     loadGroups();
     loadCurrencies();
-  }, [loadCurrencies, loadGroups, loadUsers]);
+    Promise.resolve(loadWallets()).catch(() => null);
+  }, [loadCurrencies, loadGroups, loadUsers, loadWallets]);
 
   useEffect(() => {
     if (!FILTER_OPTIONS.includes(statusFromQuery)) return;
@@ -102,6 +153,7 @@ const AdminUsers = () => {
       setSelectedUser(nextSelected);
       setSettingsGroup(resolveInitialGroupValue(nextSelected, groups));
       setSettingsCurrency(nextSelected.currency || currencies[0]?.code || 'USD');
+      setSettingsCreditLimit(String(toFiniteNumber(nextSelected?.creditLimit, 0)));
     }
   }, [currencies, groups, selectedUser?.id, users]);
 
@@ -146,14 +198,37 @@ const AdminUsers = () => {
       });
   }, [customerUsers, filter, search]);
 
-  const openDetails = (entry) => {
+  const walletByUserId = useMemo(
+    () => new Map((wallets || []).map((entry) => [String(entry?.userId || entry?.id || '').trim(), entry])),
+    [wallets]
+  );
+
+  const openDetails = async (entry) => {
     setSelectedUser(entry);
     setSettingsTopupAmount('');
     setSettingsGroup(resolveInitialGroupValue(entry, groups));
     setSettingsCurrency(entry?.currency || currencies[0]?.code || 'USD');
+    setSettingsCreditLimit(String(toFiniteNumber(entry?.creditLimit, 0)));
     setTemporaryPassword('');
     setManualPassword('');
     setIsDetailsOpen(true);
+    setIsDetailsLoading(true);
+
+    try {
+      const [userResult] = await Promise.allSettled([
+        getUserById(entry.id, { force: true }),
+        getUserWallet(entry.id, { force: true }),
+      ]);
+
+      if (userResult.status === 'fulfilled' && userResult.value) {
+        setSelectedUser(userResult.value);
+        setSettingsGroup(resolveInitialGroupValue(userResult.value, groups));
+        setSettingsCurrency(userResult.value?.currency || currencies[0]?.code || 'USD');
+        setSettingsCreditLimit(String(toFiniteNumber(userResult.value?.creditLimit, 0)));
+      }
+    } finally {
+      setIsDetailsLoading(false);
+    }
   };
 
   const formatDate = (value) => {
@@ -165,6 +240,16 @@ const AdminUsers = () => {
       hour: 'numeric',
       minute: '2-digit',
     });
+  };
+
+  const resolveWalletForEntry = (entry) => {
+    if (!entry?.id) return null;
+    return buildWalletPreview(entry, walletByUserId.get(String(entry.id).trim()) || null);
+  };
+
+  const formatBalance = (entry) => {
+    const walletPreview = resolveWalletForEntry(entry);
+    return formatWalletAmount((walletPreview?.walletBalance ?? entry?.coins) || 0, walletPreview?.currency || entry?.currency || 'USD');
   };
 
   const handleFilterChange = (value) => {
@@ -184,13 +269,59 @@ const AdminUsers = () => {
     }
   };
 
-  const handleApprove = async (entry) => {
+  const askApprove = (entry) => {
+    if (!entry?.id) return;
+
+    setApproveTarget(entry);
+    setApproveGroup(resolveInitialGroupValue(entry, groups));
+    setApproveCurrency(String(entry?.currency || currencies?.[0]?.code || 'USD').toUpperCase());
+    setApproveCreditLimit(String(toFiniteNumber(entry?.creditLimit, 0)));
+    setIsApproveModalOpen(true);
+  };
+
+  const confirmApprove = async () => {
+    if (!approveTarget?.id) return;
+
+    const normalizedGroup = String(approveGroup || '').trim();
+    const normalizedCurrency = String(approveCurrency || '').trim().toUpperCase();
+    const parsedCreditLimit = Number(approveCreditLimit);
+
+    if (!normalizedGroup) {
+      addToast('يجب اختيار مجموعة قبل تفعيل الحساب.', 'error');
+      return;
+    }
+
+    if (!normalizedCurrency) {
+      addToast('يجب اختيار عملة قبل تفعيل الحساب.', 'error');
+      return;
+    }
+
+    if (!Number.isFinite(parsedCreditLimit) || parsedCreditLimit < 0) {
+      addToast('حد الدين يجب أن يكون رقمًا صالحًا أكبر من أو يساوي صفر.', 'error');
+      return;
+    }
+
+    const normalizedCreditLimit = toFiniteNumber(parsedCreditLimit, 0);
+
     setIsSubmitting(true);
     try {
-      const updated = await updateUserStatus(entry.id, 'approved', actor);
+      // 1) Ensure required fields are set BEFORE approving.
+      await updateUserGroup(approveTarget.id, normalizedGroup, actor);
+      await updateUserCreditLimit(approveTarget.id, normalizedCreditLimit, actor);
+      await updateUserCurrency(approveTarget.id, normalizedCurrency, actor);
+
+      // 2) Approve the account.
+      const updated = await updateUserStatus(approveTarget.id, 'approved', actor);
       syncSelectedUser(updated);
       addToast('تمت الموافقة على الحساب بنجاح.', 'success');
-      await loadUsers();
+
+      setIsApproveModalOpen(false);
+      setApproveTarget(null);
+
+      await Promise.allSettled([
+        loadUsers({ force: true }),
+        getUserWallet(approveTarget.id, { force: true }),
+      ]);
     } catch (error) {
       addToast(error?.message || 'تعذر اعتماد هذا الحساب.', 'error');
     } finally {
@@ -213,7 +344,10 @@ const AdminUsers = () => {
       addToast('تم رفض الحساب بنجاح.', 'success');
       setIsRejectModalOpen(false);
       setRejectTarget(null);
-      await loadUsers();
+      await Promise.allSettled([
+        loadUsers({ force: true }),
+        getUserWallet(rejectTarget.id, { force: true }),
+      ]);
     } catch (error) {
       addToast(error?.message || 'تعذر رفض هذا الحساب.', 'error');
     } finally {
@@ -225,7 +359,7 @@ const AdminUsers = () => {
     if (!selectedUser) return;
 
     if (isRejectedAccountStatus(selectedUser.status)) {
-      await handleApprove(selectedUser);
+      askApprove(selectedUser);
       return;
     }
 
@@ -238,7 +372,7 @@ const AdminUsers = () => {
     try {
       await updateUserGroup(selectedUser.id, settingsGroup, actor);
       addToast('تم تحديث المجموعة بنجاح.', 'success');
-      await loadUsers();
+      await loadUsers({ force: true });
     } catch (error) {
       addToast(error?.message || 'تعذر تحديث المجموعة.', 'error');
     }
@@ -250,9 +384,34 @@ const AdminUsers = () => {
     try {
       await updateUserCurrency(selectedUser.id, settingsCurrency, actor);
       addToast('تم تحديث العملة بنجاح.', 'success');
-      await loadUsers();
+      await Promise.allSettled([
+        loadUsers({ force: true }),
+        getUserWallet(selectedUser.id, { force: true }),
+      ]);
     } catch (error) {
       addToast(error?.message || 'تعذر تحديث العملة.', 'error');
+    }
+  };
+
+  const handleSettingsCreditLimitSave = async () => {
+    if (!selectedUser) return;
+
+    const parsedValue = Number(settingsCreditLimit);
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+      addToast('حد الدين يجب أن يكون رقمًا صالحًا أكبر من أو يساوي صفر.', 'error');
+      return;
+    }
+
+    const normalizedValue = toFiniteNumber(parsedValue, 0);
+
+    try {
+      const updated = await updateUserCreditLimit(selectedUser.id, normalizedValue, actor);
+      syncSelectedUser(updated || { ...selectedUser, creditLimit: normalizedValue });
+      setSettingsCreditLimit(String(normalizedValue));
+      addToast('تم تحديث حد الدين بنجاح.', 'success');
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || 'تعذر تحديث حد الدين.', 'error');
     }
   };
 
@@ -263,9 +422,26 @@ const AdminUsers = () => {
       await updateUserCoins(selectedUser.id, Number(settingsTopupAmount), actor);
       addToast('تم تطبيق الرصيد الإضافي بنجاح.', 'success');
       setSettingsTopupAmount('');
-      await loadUsers();
+      await Promise.allSettled([
+        loadUsers({ force: true }),
+        getUserWallet(selectedUser.id, { force: true }),
+      ]);
     } catch (error) {
       addToast(error?.message || 'تعذر تطبيق الرصيد الإضافي.', 'error');
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!selectedUser?.id) return;
+
+    setIsSubmitting(true);
+    try {
+      const result = await resendUserVerification(selectedUser.id);
+      addToast(result?.message || 'تمت إعادة إرسال رابط التفعيل.', 'success');
+    } catch (error) {
+      addToast(error?.message || 'تعذر إعادة إرسال رابط التفعيل.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -344,30 +520,37 @@ const AdminUsers = () => {
     navigate(`/admin/users/${selectedUser.id}/transactions`);
   };
 
+  const selectedWallet = useMemo(
+    () => buildWalletPreview(selectedUser, walletByUserId.get(String(selectedUser?.id || '').trim()) || null),
+    [selectedUser, walletByUserId]
+  );
+  const canResendVerification = Boolean(selectedUser?.email) && (!selectedUser?.verified || isPendingAccountStatus(selectedUser?.status));
+
   return (
-    <div className="min-w-0 space-y-6">
-      <section className="admin-premium-hero space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="min-w-0 space-y-3">
+      <section className="admin-premium-hero space-y-2.5">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">
+          <h1 className="text-lg font-bold text-[var(--color-text)]">
             {t('userManagement')}
           </h1>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+          <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">
             مراجعة طلبات التفعيل الجديدة وإدارة بيانات حسابات العملاء من مكان واحد.
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[30rem] lg:grid-cols-[minmax(0,1fr)_160px]">
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:min-w-[22rem] lg:grid-cols-[minmax(0,1fr)_118px]">
           <Input
             placeholder={t('searchUsers')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            icon={<Search className="h-4 w-4" />}
+            icon={<Search className="h-3 w-3" />}
             variant="search"
+            className={compactFieldClassName}
           />
 
           <select
-            className="h-14 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] px-4 text-sm text-[var(--color-text)] shadow-[0_12px_36px_-28px_rgb(0_0_0/0.88)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
+            className={`border border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] ${compactFieldClassName}`}
             value={filter}
             onChange={(event) => handleFilterChange(event.target.value)}
           >
@@ -379,75 +562,79 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-1.5 md:grid-cols-3">
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm text-[var(--color-text-secondary)]">حسابات بانتظار التفعيل</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--color-text)]">{formatNumber(pendingCount, locale)}</p>
+              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات بانتظار التفعيل</p>
+              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(pendingCount, locale)}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-lg)] bg-[color:rgb(var(--color-warning-rgb)/0.12)] text-[var(--color-warning)]">
-              <UserCheck className="h-5 w-5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-warning-rgb)/0.12)] text-[var(--color-warning)]">
+              <UserCheck className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
 
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm text-[var(--color-text-secondary)]">حسابات مفعّلة</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--color-text)]">{formatNumber(approvedCount, locale)}</p>
+              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات مفعّلة</p>
+              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(approvedCount, locale)}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-lg)] bg-[color:rgb(var(--color-success-rgb)/0.12)] text-[var(--color-success)]">
-              <CheckCircle2 className="h-5 w-5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-success-rgb)/0.12)] text-[var(--color-success)]">
+              <CheckCircle2 className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
 
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm text-[var(--color-text-secondary)]">حسابات مرفوضة</p>
-              <p className="mt-2 text-2xl font-bold text-[var(--color-text)]">{formatNumber(rejectedCount, locale)}</p>
+              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات مرفوضة</p>
+              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(rejectedCount, locale)}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-lg)] bg-[color:rgb(var(--color-error-rgb)/0.12)] text-[var(--color-error)]">
-              <UserX className="h-5 w-5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-error-rgb)/0.12)] text-[var(--color-error)]">
+              <UserX className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
       </div>
       </section>
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-2.5 md:hidden">
         {filteredUsers.map((entry) => (
-          <Card key={entry.id} variant="elevated" className="p-4">
-            <div className="flex items-start gap-3">
+          <Card key={entry.id} variant="elevated" className="p-3">
+            <div className="flex items-start gap-2.5">
               <img
                 src={entry.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.name || 'User')}&background=random`}
                 alt={entry.name}
-                className="h-12 w-12 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
+                className="h-10 w-10 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-2.5">
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-[var(--color-text)]">{entry.name}</p>
-                    <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{entry.email}</p>
+                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">{entry.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">{entry.email}</p>
+                    <span className={`mt-1.5 ${balanceBadgeClassName}`}>
+                      <Wallet className="h-3 w-3" />
+                      {formatBalance(entry)}
+                    </span>
                   </div>
                   <Badge variant={getAccountStatusBadgeVariant(entry.status)}>
                     {getAccountStatusLabel(entry.status, isArabic)}
                   </Badge>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs">
                   <div>
-                    <p className="text-[var(--color-text-secondary)]">طريقة التسجيل</p>
-                    <p className="mt-1 font-medium text-[var(--color-text)]">
+                    <p className="text-[11px] text-[var(--color-text-secondary)]">طريقة التسجيل</p>
+                    <p className="mt-0.5 font-medium text-[var(--color-text)]">
                       {getSignupMethodLabel(entry.signupMethod || entry.authProvider, isArabic)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[var(--color-text-secondary)]">تاريخ التسجيل</p>
-                    <p className="mt-1 font-medium text-[var(--color-text)]">
+                    <p className="text-[11px] text-[var(--color-text-secondary)]">تاريخ التسجيل</p>
+                    <p className="mt-0.5 font-medium text-[var(--color-text)]">
                       {formatDate(getUserRegistrationDate(entry))}
                     </p>
                   </div>
@@ -455,19 +642,19 @@ const AdminUsers = () => {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {isPendingAccountStatus(entry.status) && (
                 <>
-                  <Button size="sm" onClick={() => handleApprove(entry)} disabled={isSubmitting}>
+                  <Button size="sm" className={compactButtonClassName} onClick={() => askApprove(entry)} disabled={isSubmitting}>
                     موافقة
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => askReject(entry)} disabled={isSubmitting}>
+                  <Button size="sm" className={compactButtonClassName} variant="danger" onClick={() => askReject(entry)} disabled={isSubmitting}>
                     رفض
                   </Button>
                 </>
               )}
-              <Button size="sm" variant="outline" onClick={() => openDetails(entry)}>
-                <Eye className="h-4 w-4" />
+              <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
+                <Eye className="h-3.5 w-3.5" />
                 عرض التفاصيل
               </Button>
             </div>
@@ -475,68 +662,71 @@ const AdminUsers = () => {
         ))}
 
         {!filteredUsers.length && (
-          <Card variant="elevated" className="p-8 text-center">
-            <p className="text-sm font-semibold text-[var(--color-text)]">لا توجد حسابات مطابقة لهذا الفلتر.</p>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">جرّب توسيع البحث أو تغيير الحالة المحددة.</p>
+          <Card variant="elevated" className="p-6 text-center">
+            <p className="text-xs font-semibold text-[var(--color-text)]">لا توجد حسابات مطابقة لهذا الفلتر.</p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">جرّب توسيع البحث أو تغيير الحالة المحددة.</p>
           </Card>
         )}
       </div>
 
       <div className="admin-premium-panel hidden overflow-hidden md:block">
-        <Table>
+        <Table className="text-xs">
           <TableHeader>
             <TableRow>
-              <TableHead>المستخدم</TableHead>
-              <TableHead>طريقة التسجيل</TableHead>
-              <TableHead>تاريخ التسجيل</TableHead>
-              <TableHead>الحالة</TableHead>
-              <TableHead>الرصيد</TableHead>
-              <TableHead className="text-end">الإجراءات</TableHead>
+              <TableHead className={compactTableHeadClassName}>المستخدم</TableHead>
+              <TableHead className={compactTableHeadClassName}>طريقة التسجيل</TableHead>
+              <TableHead className={compactTableHeadClassName}>تاريخ التسجيل</TableHead>
+              <TableHead className={compactTableHeadClassName}>الحالة</TableHead>
+              <TableHead className={compactTableHeadClassName}>الرصيد</TableHead>
+              <TableHead className={`text-end ${compactTableHeadClassName}`}>الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredUsers.map((entry) => (
               <TableRow key={entry.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
+                <TableCell className={compactTableCellClassName}>
+                  <div className="flex items-center gap-2.5">
                     <img
                       src={entry.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.name || 'User')}&background=random`}
                       alt={entry.name}
-                      className="h-10 w-10 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
+                      className="h-9 w-9 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
                     />
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-[var(--color-text)]">{entry.name}</p>
-                      <p className="truncate text-xs text-[var(--color-text-secondary)]">{entry.email}</p>
+                      <p className="truncate text-sm font-semibold text-[var(--color-text)]">{entry.name}</p>
+                      <p className="truncate text-[11px] text-[var(--color-text-secondary)]">{entry.email}</p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <span className="font-medium text-[var(--color-text)]">
+                <TableCell className={compactTableCellClassName}>
+                  <span className="text-xs font-medium text-[var(--color-text)]">
                     {getSignupMethodLabel(entry.signupMethod || entry.authProvider, isArabic)}
                   </span>
                 </TableCell>
-                <TableCell>{formatDate(getUserRegistrationDate(entry))}</TableCell>
-                <TableCell>
+                <TableCell className={compactTableCellClassName}>{formatDate(getUserRegistrationDate(entry))}</TableCell>
+                <TableCell className={compactTableCellClassName}>
                   <Badge variant={getAccountStatusBadgeVariant(entry.status)}>
                     {getAccountStatusLabel(entry.status, isArabic)}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <span className="font-medium text-[var(--color-text)]">{formatNumber(entry.coins || 0, locale)}</span>
+                <TableCell className={compactTableCellClassName}>
+                  <span className={balanceBadgeClassName}>
+                    <Wallet className="h-3 w-3" />
+                    {formatBalance(entry)}
+                  </span>
                 </TableCell>
-                <TableCell className="text-end">
-                  <div className="flex justify-end gap-2">
+                <TableCell className={`text-end ${compactTableCellClassName}`}>
+                  <div className="flex justify-end gap-1.5">
                     {isPendingAccountStatus(entry.status) && (
                       <>
-                        <Button size="sm" onClick={() => handleApprove(entry)} disabled={isSubmitting}>
+                        <Button size="sm" className={compactButtonClassName} onClick={() => askApprove(entry)} disabled={isSubmitting}>
                           موافقة
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => askReject(entry)} disabled={isSubmitting}>
+                        <Button size="sm" className={compactButtonClassName} variant="danger" onClick={() => askReject(entry)} disabled={isSubmitting}>
                           رفض
                         </Button>
                       </>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => openDetails(entry)}>
+                    <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                       عرض التفاصيل
                     </Button>
                   </div>
@@ -553,18 +743,18 @@ const AdminUsers = () => {
         title={selectedUser ? `بيانات الحساب - ${selectedUser.name}` : 'بيانات الحساب'}
         size="lg"
       >
-        <div className="space-y-5">
-          <div className="rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.78)] p-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-center gap-3">
+        <div className="space-y-4">
+          <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.78)] p-3.5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-center gap-2.5">
                 <img
                   src={selectedUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser?.name || 'User')}&background=random`}
                   alt={selectedUser?.name}
-                  className="h-14 w-14 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
+                  className="h-12 w-12 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] object-cover"
                 />
                 <div>
-                  <p className="text-base font-semibold text-[var(--color-text)]">{selectedUser?.name}</p>
-                  <p className="text-sm text-[var(--color-text-secondary)]">{selectedUser?.email}</p>
+                  <p className="text-sm font-semibold text-[var(--color-text)]">{selectedUser?.name}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">{selectedUser?.email}</p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">ID: {selectedUser?.id}</p>
                 </div>
               </div>
@@ -574,50 +764,138 @@ const AdminUsers = () => {
               </Badge>
             </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs text-[var(--color-text-secondary)]">طريقة التسجيل</p>
+            {isDetailsLoading ? (
+              <p className="mt-3 text-[11px] text-[var(--color-text-secondary)]">
+                يتم الآن مزامنة الملف الشخصي والمحفظة من السجل المباشر...
+              </p>
+            ) : null}
+
+            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
+              <div className={detailsMetricClassName}>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">الرصيد الحالي</p>
                 <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {formatWalletAmount(selectedWallet?.walletBalance || 0, selectedWallet?.currency || selectedUser?.currency || 'USD')}
+                </p>
+              </div>
+              <div className={detailsMetricClassName}>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">حد الدين</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {formatWalletAmount(toFiniteNumber(selectedUser?.creditLimit, 0), selectedWallet?.currency || selectedUser?.currency || 'USD')}
+                </p>
+              </div>
+              <div className={detailsMetricClassName}>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">حالة البريد</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {selectedUser?.verified ? 'مؤكد' : 'غير مؤكد'}
+                </p>
+              </div>
+              <div className={detailsMetricClassName}>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">عمليات المحفظة</p>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                  {formatNumber(selectedWallet?.transactionsCount || 0, locale)}
+                </p>
+              </div>
+              <div className={detailsMetricClassName}>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">آخر حركة</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--color-text)]">
+                  {selectedWallet?.lastTransactionAt ? formatDate(selectedWallet.lastTransactionAt) : 'لا توجد حركة بعد'}
+                </p>
+              </div>
+            </div>
+
+            {selectedWallet?.recentTransactions?.[0] ? (
+              <div className="mt-3 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[linear-gradient(135deg,rgba(255,248,220,0.34),rgba(255,255,255,0.04))] p-2.5">
+                <p className="text-[11px] text-[var(--color-text-secondary)]">آخر عملية محفوظة بالمحفظة</p>
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--color-text)]">
+                      {selectedWallet.recentTransactions[0]?.description || 'Wallet activity'}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">
+                      {formatDate(selectedWallet.recentTransactions[0]?.createdAt)}
+                    </p>
+                  </div>
+                  <span className={balanceBadgeClassName}>
+                    <Wallet className="h-3 w-3" />
+                    {formatWalletAmount(
+                      selectedWallet.recentTransactions[0]?.signedAmount ?? selectedWallet.recentTransactions[0]?.amount ?? 0,
+                      selectedWallet.recentTransactions[0]?.currency || selectedWallet?.currency || selectedUser?.currency || 'USD',
+                      { signed: true }
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+              <Button variant="outline" className={compactButtonClassName} onClick={handleOpenUserTransactions}>
+                <Eye className="h-3.5 w-3.5" />
+                المحفظة والسجل
+              </Button>
+              {canResendVerification ? (
+                <Button variant="ghost" className={compactButtonClassName} onClick={handleResendVerification} disabled={isSubmitting}>
+                  <MailCheck className="h-3.5 w-3.5" />
+                  إعادة إرسال التفعيل
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="mt-3 grid gap-2.5 text-xs sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">طريقة التسجيل</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">
                   {getSignupMethodLabel(selectedUser?.signupMethod || selectedUser?.authProvider, isArabic)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-[var(--color-text-secondary)]">تاريخ التسجيل</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                <p className="text-[11px] text-[var(--color-text-secondary)]">تاريخ التسجيل</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">
                   {formatDate(getUserRegistrationDate(selectedUser))}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-[var(--color-text-secondary)]">المجموعة</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">{selectedUser?.group || '-'}</p>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">المجموعة</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">{selectedUser?.group || '-'}</p>
               </div>
               <div>
-                <p className="text-xs text-[var(--color-text-secondary)]">العملة</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">{selectedUser?.currency || '-'}</p>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">العملة</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">{selectedUser?.currency || '-'}</p>
               </div>
-              <div className="mt-4 flex justify-end">
-                <Button variant="outline" onClick={handleOpenUserTransactions}>
-                  <Eye className="h-4 w-4" />
-                  المعاملات
-                </Button>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">حد الدين</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">
+                  {formatWalletAmount(toFiniteNumber(selectedUser?.creditLimit, 0), selectedWallet?.currency || selectedUser?.currency || 'USD')}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">اسم المستخدم</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">{selectedUser?.username || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">الهاتف</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">{selectedUser?.phone || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-secondary)]">حالة التحقق</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--color-text)]">{selectedUser?.verified ? 'مفعل' : 'بانتظار التأكيد'}</p>
               </div>
             </div>
           </div>
 
           {(isPendingAccountStatus(selectedUser?.status) || isApprovedAccountStatus(selectedUser?.status) || isRejectedAccountStatus(selectedUser?.status)) && (
-            <div className="rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-4">
-              <p className="text-sm font-semibold text-[var(--color-text)]">قرار التفعيل</p>
+            <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-3.5">
+              <p className="text-xs font-semibold text-[var(--color-text)]">قرار التفعيل</p>
               <p className="mt-1 text-xs leading-6 text-[var(--color-text-secondary)]">
                 اعتماد أو رفض الحساب مع تحديث حالته فورًا في النظام.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-1.5">
                 {(isPendingAccountStatus(selectedUser?.status) || isRejectedAccountStatus(selectedUser?.status)) && (
-                  <Button onClick={() => handleApprove(selectedUser)} disabled={isSubmitting}>
+                  <Button className={compactButtonClassName} onClick={() => askApprove(selectedUser)} disabled={isSubmitting}>
                     موافقة على الحساب
                   </Button>
                 )}
                 {(isPendingAccountStatus(selectedUser?.status) || isApprovedAccountStatus(selectedUser?.status)) && (
-                  <Button variant="danger" onClick={handleStatusToggleFromDetails} disabled={isSubmitting}>
+                  <Button className={compactButtonClassName} variant="danger" onClick={handleStatusToggleFromDetails} disabled={isSubmitting}>
                     رفض الحساب
                   </Button>
                 )}
@@ -625,15 +903,15 @@ const AdminUsers = () => {
             </div>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-3 rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-4">
-              <p className="text-sm font-semibold text-[var(--color-text)]">المجموعة والعملة</p>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="space-y-2.5 rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-3.5">
+              <p className="text-xs font-semibold text-[var(--color-text)]">المجموعة والعملة</p>
 
               <div className="space-y-2">
-                <label className="text-xs text-[var(--color-text-secondary)]">المجموعة</label>
-                <div className="flex gap-2">
+                <label className="text-[11px] text-[var(--color-text-secondary)]">المجموعة</label>
+                <div className="flex gap-1.5">
                   <select
-                    className="h-11 flex-1 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
+                    className="h-10 flex-1 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
                     value={settingsGroup}
                     onChange={(event) => setSettingsGroup(event.target.value)}
                   >
@@ -643,17 +921,17 @@ const AdminUsers = () => {
                       </option>
                     ))}
                   </select>
-                  <Button variant="outline" onClick={handleSettingsGroupSave}>
+                  <Button variant="outline" className={compactButtonClassName} onClick={handleSettingsGroupSave}>
                     حفظ
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-[var(--color-text-secondary)]">العملة</label>
-                <div className="flex gap-2">
+                <label className="text-[11px] text-[var(--color-text-secondary)]">العملة</label>
+                <div className="flex gap-1.5">
                   <select
-                    className="h-11 flex-1 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
+                    className="h-10 flex-1 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
                     value={settingsCurrency}
                     onChange={(event) => setSettingsCurrency(event.target.value)}
                   >
@@ -663,28 +941,48 @@ const AdminUsers = () => {
                       </option>
                     ))}
                   </select>
-                  <Button variant="outline" onClick={handleSettingsCurrencySave}>
+                  <Button variant="outline" className={compactButtonClassName} onClick={handleSettingsCurrencySave}>
+                    حفظ
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] text-[var(--color-text-secondary)]">حد الدين</label>
+                <div className="flex gap-1.5">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={settingsCreditLimit}
+                    onChange={(event) => setSettingsCreditLimit(event.target.value)}
+                    placeholder="0.00"
+                    className="h-10 flex-1 px-3 text-xs"
+                  />
+                  <Button variant="outline" className={compactButtonClassName} onClick={handleSettingsCreditLimitSave}>
                     حفظ
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3 rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-4">
-              <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-[var(--color-primary)]" />
-                <p className="text-sm font-semibold text-[var(--color-text)]">الرصيد وكلمة المرور</p>
+            <div className="space-y-2.5 rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-3.5">
+              <div className="flex items-center gap-1.5">
+                <Wallet className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+                <p className="text-xs font-semibold text-[var(--color-text)]">الرصيد وكلمة المرور</p>
               </div>
 
               <Input
                 label="إضافة رصيد"
                 type="number"
-                min="1"
+                min="0.01"
+                step="0.01"
                 value={settingsTopupAmount}
                 onChange={(event) => setSettingsTopupAmount(event.target.value)}
-                placeholder="100"
+                placeholder="100.00"
+                className="h-10 px-3 text-xs"
               />
-              <Button onClick={handleSettingsTopup} className="w-full">
+              <Button onClick={handleSettingsTopup} className={`w-full ${compactButtonClassName}`}>
                 إضافة الرصيد
               </Button>
 
@@ -694,20 +992,20 @@ const AdminUsers = () => {
                 value={manualPassword}
                 onChange={(event) => setManualPassword(event.target.value)}
                 placeholder="أدخل كلمة مرور جديدة (8 أحرف على الأقل)"
-                className="font-mono"
+                className="h-10 px-3 text-xs font-mono"
               />
-              <Button variant="outline" onClick={handleSetPassword} className="w-full" disabled={!String(manualPassword || '').trim()}>
+              <Button variant="outline" onClick={handleSetPassword} className={`w-full ${compactButtonClassName}`} disabled={!String(manualPassword || '').trim()}>
                 تعيين كلمة المرور
               </Button>
               <p className="text-xs text-[var(--color-text-secondary)]">يمكنك تعيين كلمة مرور مباشرة لأي حساب من هنا.</p>
 
-              <div className="rounded-[var(--radius-lg)] bg-[color:rgb(var(--color-surface-rgb)/0.68)] p-3">
+              <div className="rounded-[var(--radius-md)] bg-[color:rgb(var(--color-surface-rgb)/0.68)] p-2.5">
                 <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
                   إعادة تعيين كلمة المرور ستُنشئ كلمة مرور مؤقتة جديدة لهذا المستخدم.
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={handleResetPassword}>
-                    <KeyRound className="h-4 w-4" />
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <Button variant="outline" className={compactButtonClassName} onClick={handleResetPassword}>
+                    <KeyRound className="h-3.5 w-3.5" />
                     إعادة تعيين كلمة المرور
                   </Button>
                 </div>
@@ -720,7 +1018,7 @@ const AdminUsers = () => {
                       onClick={handleCopyTemporaryPassword}
                       onFocus={(event) => event.target.select()}
                       title="اضغط لنسخ كلمة المرور"
-                      className="mt-3 cursor-copy"
+                      className="mt-2.5 h-10 cursor-copy px-3 text-xs"
                     />
                     <p className="mt-1 text-xs text-[var(--color-text-secondary)]">اضغط على كلمة المرور لنسخها</p>
                   </>
@@ -729,12 +1027,94 @@ const AdminUsers = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-[color:rgb(var(--color-border-rgb)/0.84)] pt-4">
-            <Button variant="ghost" onClick={() => setIsDetailsOpen(false)}>
+          <div className="flex flex-wrap justify-end gap-1.5 border-t border-[color:rgb(var(--color-border-rgb)/0.84)] pt-3">
+            <Button variant="ghost" className={compactButtonClassName} onClick={() => setIsDetailsOpen(false)}>
               إغلاق
             </Button>
-            <Button variant="danger" onClick={handleDeleteUser}>
+            <Button variant="danger" className={compactButtonClassName} onClick={handleDeleteUser}>
               حذف المستخدم
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isApproveModalOpen}
+        onClose={() => {
+          if (isSubmitting) return;
+          setIsApproveModalOpen(false);
+          setApproveTarget(null);
+        }}
+        title={approveTarget ? `تفعيل الحساب - ${approveTarget.name}` : 'تفعيل الحساب'}
+        size="md"
+      >
+        <div className="space-y-3">
+          <p className="text-xs leading-6 text-[var(--color-text-secondary)]">
+            قبل تفعيل الحساب، يجب تحديد المجموعة وحد الدين والعملة. لن يتمكن العميل من دخول الموقع إلا بعد التفعيل.
+          </p>
+
+          <div className="space-y-2">
+            <label className="text-[11px] text-[var(--color-text-secondary)]">المجموعة</label>
+            <select
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
+              value={approveGroup}
+              onChange={(event) => setApproveGroup(event.target.value)}
+            >
+              {(groups || []).map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] text-[var(--color-text-secondary)]">العملة</label>
+            <select
+              className="h-10 w-full rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)]"
+              value={approveCurrency}
+              onChange={(event) => setApproveCurrency(event.target.value)}
+            >
+              {(currencies || []).map((currencyItem) => (
+                <option key={currencyItem.code} value={currencyItem.code}>
+                  {currencyItem.code} - {currencyItem.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] text-[var(--color-text-secondary)]">حد الدين</label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={approveCreditLimit}
+              onChange={(event) => setApproveCreditLimit(event.target.value)}
+              placeholder="0.00"
+              className="h-10 px-3 text-xs"
+            />
+          </div>
+
+          <div className="flex justify-end gap-1.5">
+            <Button
+              variant="outline"
+              className={compactButtonClassName}
+              onClick={() => {
+                if (isSubmitting) return;
+                setIsApproveModalOpen(false);
+                setApproveTarget(null);
+              }}
+              disabled={isSubmitting}
+            >
+              إلغاء
+            </Button>
+            <Button
+              className={compactButtonClassName}
+              onClick={confirmApprove}
+              disabled={isSubmitting}
+            >
+              تفعيل الحساب
             </Button>
           </div>
         </div>
@@ -745,11 +1125,11 @@ const AdminUsers = () => {
         onClose={() => setIsRejectModalOpen(false)}
         title="تأكيد رفض الحساب"
         footer={(
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setIsRejectModalOpen(false)}>
+          <div className="flex justify-end gap-1.5">
+            <Button variant="ghost" className={compactButtonClassName} onClick={() => setIsRejectModalOpen(false)}>
               إلغاء
             </Button>
-            <Button variant="danger" onClick={confirmReject} disabled={isSubmitting}>
+            <Button variant="danger" className={compactButtonClassName} onClick={confirmReject} disabled={isSubmitting}>
               تأكيد الرفض
             </Button>
           </div>

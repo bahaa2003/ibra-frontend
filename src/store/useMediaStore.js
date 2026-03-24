@@ -3,8 +3,12 @@ import { persist } from 'zustand/middleware';
 import { mockProducts, mockCategories } from '../data/mockData';
 import apiClient from '../services/client';
 
+const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase();
+const isRealProvider = dataProvider === 'real';
+
 const PRODUCTS_CACHE_TTL = 5 * 60 * 1000;
 let productsRequest = null;
+let hasFetchedFromBackendThisSession = false;
 
 const asNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -12,12 +16,19 @@ const asNumber = (value, fallback) => {
 };
 
 const resolveCategoryId = (value, categories) => {
-  const raw = String(value || '').trim();
+  const raw = (() => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return String(value._id || value.id || value.name || value.nameAr || '').trim();
+    }
+    return String(value || '').trim();
+  })();
   const matched = (categories || []).find(
     (c) => c.id === raw || c.name === raw || c.nameAr === raw
   );
   return matched?.id || raw || categories?.[0]?.id || '';
 };
+
+const looksLikeObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || '').trim());
 
 const buildProductSearchIndex = (product = {}) => String([
   product?.name,
@@ -31,12 +42,99 @@ const buildProductSearchIndex = (product = {}) => String([
   .trim()
   .toLowerCase();
 
+const pickDefinedProductValue = (incomingValue, fallbackValue) => {
+  if (incomingValue === undefined || incomingValue === null) return fallbackValue;
+
+  if (typeof incomingValue === 'string') {
+    return incomingValue.trim() ? incomingValue : fallbackValue;
+  }
+
+  if (Array.isArray(incomingValue)) {
+    return incomingValue.length ? incomingValue : fallbackValue;
+  }
+
+  return incomingValue;
+};
+
+const mergeSavedProductSnapshot = (baseProduct = {}, apiProduct = {}) => ({
+  ...baseProduct,
+  ...apiProduct,
+  providerId: pickDefinedProductValue(apiProduct.providerId ?? apiProduct.supplierId, baseProduct.providerId || baseProduct.supplierId || ''),
+  supplierId: pickDefinedProductValue(apiProduct.supplierId ?? apiProduct.providerId, baseProduct.supplierId || baseProduct.providerId || ''),
+  providerProductId: pickDefinedProductValue(apiProduct.providerProductId ?? apiProduct.externalProductId, baseProduct.providerProductId || baseProduct.externalProductId || ''),
+  externalProductId: pickDefinedProductValue(apiProduct.externalProductId ?? apiProduct.providerProductId, baseProduct.externalProductId || baseProduct.providerProductId || ''),
+  externalProductName: pickDefinedProductValue(apiProduct.externalProductName, baseProduct.externalProductName || ''),
+  externalPricingMode: pickDefinedProductValue(apiProduct.externalPricingMode, baseProduct.externalPricingMode || 'use_local_price'),
+  supplierMarginType: pickDefinedProductValue(apiProduct.supplierMarginType, baseProduct.supplierMarginType || 'fixed'),
+  supplierMarginValue: pickDefinedProductValue(apiProduct.supplierMarginValue, baseProduct.supplierMarginValue ?? 0),
+  fallbackSupplierId: pickDefinedProductValue(apiProduct.fallbackSupplierId, baseProduct.fallbackSupplierId || ''),
+  supplierNotes: pickDefinedProductValue(apiProduct.supplierNotes, baseProduct.supplierNotes || ''),
+  supplierFieldMappings: pickDefinedProductValue(apiProduct.supplierFieldMappings, baseProduct.supplierFieldMappings || []),
+  syncPriceWithProvider: apiProduct.syncPriceWithProvider !== undefined
+    ? Boolean(apiProduct.syncPriceWithProvider)
+    : Boolean(baseProduct.syncPriceWithProvider),
+  enableManualPrice: apiProduct.enableManualPrice !== undefined
+    ? Boolean(apiProduct.enableManualPrice)
+    : Boolean(baseProduct.enableManualPrice),
+  manualPriceAdjustment: pickDefinedProductValue(apiProduct.manualPriceAdjustment, baseProduct.manualPriceAdjustment ?? ''),
+  syncedProviderBasePrice: apiProduct.syncedProviderBasePrice ?? baseProduct.syncedProviderBasePrice ?? null,
+});
+
+const splitProductStatusUpdate = (currentProduct = {}, updates = {}) => {
+  const currentStatus = String(
+    currentProduct.status
+    || (currentProduct.isActive === false ? 'inactive' : 'active')
+    || 'active'
+  ).trim().toLowerCase();
+
+  const nextStatusRaw = updates?.status !== undefined
+    ? updates.status
+    : updates?.isActive !== undefined
+      ? (updates.isActive ? 'active' : 'inactive')
+      : '';
+  const nextStatus = String(nextStatusRaw || '').trim().toLowerCase();
+
+  const nonStatusUpdates = { ...(updates || {}) };
+  delete nonStatusUpdates.status;
+  delete nonStatusUpdates.isActive;
+
+  return {
+    statusChanged: ['active', 'inactive'].includes(nextStatus) && nextStatus !== currentStatus,
+    nonStatusUpdates,
+  };
+};
+
+const hasOwnKeys = (value) => Object.keys(value || {}).length > 0;
+
 const normalizeProductRecord = (product = {}, categories = mockCategories) => {
   const minimumOrderQty = asNumber(product.minimumOrderQty ?? product.minQty, 1);
   const maximumOrderQtyRaw = asNumber(product.maximumOrderQty ?? product.maxQty, 999);
   const maximumOrderQty = Math.max(maximumOrderQtyRaw, minimumOrderQty);
   const trackInventory = Boolean(product.trackInventory);
   const lowStockThreshold = asNumber(product.lowStockThreshold, 50);
+  const providerId = String(product.providerId || product.supplierId || product.provider || '').trim();
+  const providerProductId = String(
+    product.providerProductId
+    || product.providerProduct
+    || product.externalProductId
+    || ''
+  ).trim();
+  const externalProductId = String(
+    product.externalProductId
+    || product.providerProductId
+    || product.providerProduct
+    || ''
+  ).trim();
+  const manualPriceAdjustment = product.manualPriceAdjustment ?? '';
+  const syncPriceWithProvider = product.syncPriceWithProvider !== undefined
+    ? Boolean(product.syncPriceWithProvider)
+    : Boolean(providerId && providerProductId && (
+      product.externalPricingMode === 'use_supplier_price'
+      || product.externalPricingMode === 'supplier_price_plus_margin'
+      || product.pricingMode === 'sync'
+    ));
+  const externalPricingMode = product.externalPricingMode
+    || (syncPriceWithProvider ? 'use_supplier_price' : 'use_local_price');
 
   const normalized = {
     ...product,
@@ -60,16 +158,24 @@ const normalizeProductRecord = (product = {}, categories = mockCategories) => {
     lowStockThreshold: Math.max(lowStockThreshold, 0),
     hideWhenOutOfStock: Boolean(product.hideWhenOutOfStock),
     showOutOfStockLabel: product.showOutOfStockLabel !== false,
-    supplierId: product.supplierId || '',
-    externalProductId: product.externalProductId || '',
+    providerId,
+    providerProductId,
+    supplierId: providerId,
+    externalProductId,
     externalProductName: product.externalProductName || '',
     autoFulfillmentEnabled: product.autoFulfillmentEnabled !== false,
     fallbackSupplierId: product.fallbackSupplierId || '',
     supplierFieldMappings: Array.isArray(product.supplierFieldMappings) ? product.supplierFieldMappings : [],
-    externalPricingMode: product.externalPricingMode || 'use_local_price',
+    externalPricingMode,
     supplierMarginType: product.supplierMarginType || 'fixed',
     supplierMarginValue: asNumber(product.supplierMarginValue, 0),
     supplierNotes: product.supplierNotes || '',
+    syncPriceWithProvider,
+    enableManualPrice: product.enableManualPrice !== undefined
+      ? Boolean(product.enableManualPrice)
+      : Number(manualPriceAdjustment || 0) !== 0,
+    manualPriceAdjustment,
+    syncedProviderBasePrice: product.syncedProviderBasePrice ?? null,
     searchIndex: product.searchIndex || buildProductSearchIndex(product),
   };
 
@@ -107,6 +213,71 @@ const normalizeProducts = (products, categories = mockCategories) => {
   return products.map((p) => normalizeProductRecord(p, categories));
 };
 
+const deriveCategoriesFromProducts = (products = []) => {
+  const safeProducts = Array.isArray(products) ? products : [];
+  const unique = new Map();
+
+  safeProducts.forEach((product) => {
+    const rawCategory = product?.category;
+    const hasCategoryObject = rawCategory && typeof rawCategory === 'object' && !Array.isArray(rawCategory);
+
+    const categoryId = String(
+      (hasCategoryObject ? (rawCategory?._id || rawCategory?.id) : rawCategory) ||
+      product?.categoryId ||
+      ''
+    ).trim();
+    if (!categoryId) return;
+
+    if (unique.has(categoryId)) return;
+
+    const fallbackNameFromProduct = String(
+      product?.categoryName
+      || product?.categoryTitle
+      || product?.categoryLabel
+      || product?.categoryAr
+      || ''
+    ).trim();
+    const fallbackNameArFromProduct = String(
+      product?.categoryNameAr
+      || product?.categoryTitleAr
+      || product?.categoryLabelAr
+      || product?.categoryAr
+      || ''
+    ).trim();
+
+    const categoryName = String(
+      (hasCategoryObject
+        ? (rawCategory?.name || rawCategory?.title)
+        : (looksLikeObjectId(categoryId) ? fallbackNameFromProduct : categoryId)
+      ) ||
+      categoryId
+    ).trim() || categoryId;
+    const categoryNameAr = String(
+      (hasCategoryObject
+        ? (rawCategory?.nameAr || rawCategory?.titleAr)
+        : (looksLikeObjectId(categoryId) ? (fallbackNameArFromProduct || fallbackNameFromProduct || categoryName) : categoryName)
+      ) ||
+      categoryName
+    ).trim() || categoryName;
+
+    const categoryImage = String(
+      (hasCategoryObject ? (rawCategory?.image || rawCategory?.icon) : '') ||
+      product?.categoryImage ||
+      product?.image ||
+      ''
+    ).trim() || null;
+
+    unique.set(categoryId, {
+      id: categoryId,
+      name: categoryName,
+      nameAr: categoryNameAr,
+      ...(categoryImage ? { image: categoryImage } : {}),
+    });
+  });
+
+  return Array.from(unique.values());
+};
+
 const useMediaStore = create(
   persist(
     (set, get) => ({
@@ -128,7 +299,11 @@ const useMediaStore = create(
         const state = get();
         const hasProducts = Array.isArray(state.products);
         const hasCategories = Array.isArray(state.categories) && state.categories.length > 0;
-        const isFresh = hasProducts && hasCategories && (Date.now() - Number(state.lastLoadedAt || 0) < PRODUCTS_CACHE_TTL);
+        const shouldBypassHydratedCache = isRealProvider && !hasFetchedFromBackendThisSession;
+        const isFresh = !shouldBypassHydratedCache
+          && hasProducts
+          && hasCategories
+          && (Date.now() - Number(state.lastLoadedAt || 0) < PRODUCTS_CACHE_TTL);
 
         if (!force && isFresh) {
           return Promise.resolve({
@@ -144,10 +319,52 @@ const useMediaStore = create(
         set({ isLoading: true, error: null });
 
         productsRequest = Promise.all([apiClient.products.list(), apiClient.categories.list()])
-          .then(([products, categories]) => {
-            const safeCategories = Array.isArray(categories) && categories.length
-              ? categories
-              : mockCategories;
+          .then(async ([products, categories]) => {
+            const resolvedCategories = Array.isArray(categories) && categories.length ? categories : [];
+
+            let safeCategories = isRealProvider
+              ? (resolvedCategories.length ? resolvedCategories : deriveCategoriesFromProducts(products))
+              : (() => {
+                const persistedCategories = get().categories;
+                if (resolvedCategories.length) return resolvedCategories;
+                if (Array.isArray(persistedCategories) && persistedCategories.length) return persistedCategories;
+                return mockCategories;
+              })();
+
+            if (isRealProvider && !resolvedCategories.length && typeof apiClient?.categories?.get === 'function') {
+              const unresolved = (Array.isArray(safeCategories) ? safeCategories : []).filter((category) => {
+                const id = String(category?.id || '').trim();
+                if (!looksLikeObjectId(id)) return false;
+                const name = String(category?.name || '').trim();
+                const nameAr = String(category?.nameAr || '').trim();
+                const missingName = !name || name === id || looksLikeObjectId(name);
+                const missingNameAr = !nameAr || nameAr === id || looksLikeObjectId(nameAr);
+                return missingName && missingNameAr;
+              });
+
+              if (unresolved.length) {
+                const results = await Promise.allSettled(unresolved.map((category) => apiClient.categories.get(category.id)));
+                const resolvedById = new Map();
+                results.forEach((result, index) => {
+                  if (result.status === 'fulfilled' && result.value) {
+                    resolvedById.set(String(unresolved[index].id).trim(), result.value);
+                  }
+                });
+
+                if (resolvedById.size) {
+                  safeCategories = safeCategories.map((category) => {
+                    const id = String(category?.id || '').trim();
+                    if (!resolvedById.has(id)) return category;
+                    const resolvedCategory = resolvedById.get(id);
+                    return {
+                      ...category,
+                      ...resolvedCategory,
+                      id,
+                    };
+                  });
+                }
+              }
+            }
 
             set({
               products: normalizeProducts(products, safeCategories),
@@ -156,6 +373,10 @@ const useMediaStore = create(
               error: null,
               lastLoadedAt: Date.now(),
             });
+
+            if (isRealProvider) {
+              hasFetchedFromBackendThisSession = true;
+            }
           })
           .catch((error) => {
             const { products, categories } = get();
@@ -187,7 +408,10 @@ const useMediaStore = create(
 
         const created = await apiClient.products.create(newProduct);
         set((state) => ({
-          products: [...state.products, normalizeProductRecord(created || newProduct, state.categories)],
+          products: [
+            ...state.products,
+            normalizeProductRecord(mergeSavedProductSnapshot(newProduct, created || {}), state.categories),
+          ],
           lastLoadedAt: Date.now(),
         }));
         return created || newProduct;
@@ -196,21 +420,66 @@ const useMediaStore = create(
       updateProduct: async (id, updates) => {
         const categories = get().categories || [];
         const current = get().products.find((p) => p.id === id) || {};
-        const safeUpdates = normalizeProductRecord(
-          { ...current, ...updates, id },
+        const { statusChanged, nonStatusUpdates } = splitProductStatusUpdate(current, updates);
+        const hasNonStatusChanges = hasOwnKeys(nonStatusUpdates);
+
+        if (!hasNonStatusChanges && !statusChanged) {
+          return current;
+        }
+
+        let nextSnapshot = current;
+
+        if (hasNonStatusChanges) {
+          const safeUpdates = normalizeProductRecord(
+            { ...current, ...nonStatusUpdates, id },
+            categories
+          );
+          const updated = await apiClient.products.update(id, safeUpdates);
+          nextSnapshot = mergeSavedProductSnapshot(safeUpdates, updated || {});
+        }
+
+        if (statusChanged) {
+          const toggled = await apiClient.products.toggleStatus(id);
+          nextSnapshot = mergeSavedProductSnapshot(nextSnapshot, toggled || {});
+        }
+
+        const normalizedProduct = normalizeProductRecord(
+          { ...current, ...nextSnapshot, id },
           categories
         );
 
-        const updated = await apiClient.products.update(id, safeUpdates);
         set((state) => ({
           products: state.products.map((p) => (
-            p.id === id
-              ? normalizeProductRecord(updated || safeUpdates, state.categories)
-              : p
+            p.id === id ? normalizedProduct : p
           )),
           lastLoadedAt: Date.now(),
         }));
-        return updated || safeUpdates;
+
+        return normalizedProduct;
+      },
+
+      toggleProductStatus: async (id) => {
+        const categories = get().categories || [];
+        const current = get().products.find((p) => p.id === id);
+
+        if (!current) {
+          throw new Error('Product not found');
+        }
+
+        const toggled = await apiClient.products.toggleStatus(id);
+        const normalizedProduct = normalizeProductRecord(
+          mergeSavedProductSnapshot(current, toggled || {}),
+          categories
+        );
+
+        set((state) => ({
+          products: state.products.map((p) => (
+            p.id === id ? normalizedProduct : p
+          )),
+          lastLoadedAt: Date.now(),
+        }));
+
+        return normalizedProduct;
       },
 
       deleteProduct: (id) => {
@@ -223,36 +492,85 @@ const useMediaStore = create(
       },
 
       // Category Actions
-      addCategory: (category) => {
+      addCategory: async (category) => {
         const newCategory = {
           ...category,
-          id: category.id || `c${Date.now()}`
+          id: category?.id || `c${Date.now()}`,
         };
-        apiClient.categories.create(newCategory).then((created) => {
-          set((state) => ({
-            categories: [...state.categories, created || newCategory],
+
+        const created = await apiClient.categories.create(newCategory);
+        const nextCategory = created || newCategory;
+
+        set((state) => ({
+          categories: [...(Array.isArray(state.categories) ? state.categories : []), nextCategory],
+          lastLoadedAt: Date.now(),
+        }));
+
+        return nextCategory;
+      },
+
+      updateCategory: async (id, updates) => {
+        const normalizedId = String(id || '').trim();
+        if (!normalizedId) throw new Error('Category id is required');
+
+        const current = (get().categories || []).find((c) => String(c?.id || '').trim() === normalizedId) || null;
+        if (!current) throw new Error('Category not found');
+
+        const safeUpdates = { ...(updates || {}) };
+        delete safeUpdates.id;
+
+        const updated = await apiClient.categories.update(normalizedId, safeUpdates);
+        const nextCategory = updated || { ...current, ...safeUpdates, id: current.id };
+
+        const oldName = String(current?.name || '').trim();
+        const oldNameAr = String(current?.nameAr || '').trim();
+        const shouldMigrateCategoryField = (value) => {
+          const raw = String(value || '').trim();
+          if (!raw) return false;
+          return raw === oldName || raw === oldNameAr;
+        };
+
+        set((state) => {
+          const nextCategories = (Array.isArray(state.categories) ? state.categories : []).map((c) => (
+            String(c?.id || '').trim() === normalizedId ? nextCategory : c
+          ));
+
+          const nextProducts = (Array.isArray(state.products) ? state.products : []).map((product) => {
+            if (!shouldMigrateCategoryField(product?.category)) return product;
+            return { ...product, category: normalizedId };
+          });
+
+          return {
+            categories: nextCategories,
+            products: normalizeProducts(nextProducts, nextCategories),
             lastLoadedAt: Date.now(),
-          }));
+          };
         });
+
+        return nextCategory;
       },
       
-      deleteCategory: (id) => {
-        apiClient.categories.delete(id).then(() => {
-          set((state) => {
-            const toDelete = state.categories.find((c) => c.id === id);
-            const shouldDeleteProduct = (p) => {
-              const raw = String(p.category || '').trim();
-              if (!toDelete) return raw === id;
-              return raw === id || raw === toDelete.name || raw === toDelete.nameAr;
-            };
+      deleteCategory: async (id) => {
+        await apiClient.categories.delete(id);
 
-            return {
-              categories: state.categories.filter((c) => c.id !== id),
-              products: state.products.filter((p) => !shouldDeleteProduct(p)),
-              lastLoadedAt: Date.now(),
-            };
-          });
+        set((state) => {
+          const safeCategories = Array.isArray(state.categories) ? state.categories : [];
+          const safeProducts = Array.isArray(state.products) ? state.products : [];
+          const toDelete = safeCategories.find((c) => c.id === id);
+          const shouldDeleteProduct = (p) => {
+            const raw = String(p?.category || '').trim();
+            if (!toDelete) return raw === id;
+            return raw === id || raw === String(toDelete.name || '').trim() || raw === String(toDelete.nameAr || '').trim();
+          };
+
+          return {
+            categories: safeCategories.filter((c) => c.id !== id),
+            products: safeProducts.filter((p) => !shouldDeleteProduct(p)),
+            lastLoadedAt: Date.now(),
+          };
         });
+
+        return { success: true };
       },
 
       fetchProducts: async () => get().loadProducts({ force: true })

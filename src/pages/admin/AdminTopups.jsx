@@ -49,7 +49,7 @@ const AdminTopups = () => {
   const handleConfirmApprove = async () => {
     if (!selectedTopup) return;
 
-    const finalAmount = parseInt(amount, 10);
+    const finalAmount = Number(amount);
     if (!finalAmount || finalAmount <= 0) {
       addToast('المبلغ غير صالح', 'error');
       return;
@@ -243,6 +243,8 @@ const AdminTopups = () => {
           <Input
             label={t('coins')}
             type="number"
+            min="0.01"
+            step="0.01"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />

@@ -85,7 +85,7 @@ const OtpInput = ({ value, onChange, length = 6, disabled = false, className }) 
           onChange={(event) => handleChange(index, event.target.value)}
           onKeyDown={(event) => handleKeyDown(index, event)}
           className={cn(
-            'h-12 w-11 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.94)] text-center text-base font-bold text-[var(--color-text)] outline-none transition-colors focus:border-[color:rgb(var(--color-primary-rgb)/0.48)] focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.2)] disabled:opacity-55',
+            'h-11 w-10 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] text-center text-[15px] font-bold text-[var(--color-text)] shadow-[var(--shadow-subtle)] outline-none transition-all focus:border-[color:rgb(var(--color-primary-rgb)/0.48)] focus:ring-2 focus:ring-[color:rgb(var(--color-primary-rgb)/0.2)] focus:shadow-[var(--shadow-subtle),var(--shadow-focus)] disabled:opacity-55 sm:h-12 sm:w-11 sm:text-base',
             disabled && 'cursor-not-allowed'
           )}
         />

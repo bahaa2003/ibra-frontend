@@ -4,15 +4,23 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import FloatingWhatsApp from './components/ui/FloatingWhatsApp';
 import Loader from './components/ui/Loader';
 import RouteWarmup from './components/app/RouteWarmup';
+import SessionBootstrap from './components/app/SessionBootstrap';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
 import { ADMIN_ROLES } from './utils/authRoles';
+import {
+  ACCOUNT_PENDING_ROUTE,
+  ACCOUNT_REJECTED_ROUTE,
+  ACCOUNT_VERIFICATION_ROUTE,
+} from './utils/accountStatus';
 
 const Layout = lazy(() => import('./components/layout/Layout'));
 const Auth = lazy(() => import('./pages/Auth'));
 const AccountPending = lazy(() => import('./pages/AccountPending'));
 const AccountRejected = lazy(() => import('./pages/AccountRejected'));
+const AccountVerificationRequired = lazy(() => import('./pages/AccountVerificationRequired'));
+const EmailVerified = lazy(() => import('./pages/EmailVerified'));
 const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -28,6 +36,7 @@ const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminGroups = lazy(() => import('./pages/admin/AdminGroups'));
 const AdminProducts = lazy(() => import('./pages/admin/AdminProducts'));
+const AdminWallet = lazy(() => import('./pages/admin/AdminWallet'));
 const AdminCurrencies = lazy(() => import('./pages/admin/AdminCurrencies'));
 const AdminPayments = lazy(() => import('./pages/admin/AdminPayments'));
 const AdminPaymentMethods = lazy(() => import('./pages/admin/AdminPaymentMethods'));
@@ -55,20 +64,25 @@ function App() {
     <ThemeProvider>
       <LanguageProvider>
         <ToastProvider>
+          <SessionBootstrap />
           <RouteWarmup />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={renderSuspended(<Landing />)} />
               <Route path="/auth" element={renderSuspended(<Auth />)} />
               <Route path="/login" element={renderSuspended(<Auth />)} />
-              <Route path="/account-pending" element={renderSuspended(<AccountPending />)} />
-              <Route path="/account-rejected" element={renderSuspended(<AccountRejected />)} />
+              <Route path="/email-verified" element={renderSuspended(<EmailVerified />)} />
+              <Route path={ACCOUNT_PENDING_ROUTE} element={renderSuspended(<AccountPending />)} />
+              <Route path={ACCOUNT_REJECTED_ROUTE} element={renderSuspended(<AccountRejected />)} />
+              <Route path={ACCOUNT_VERIFICATION_ROUTE} element={renderSuspended(<AccountVerificationRequired />)} />
+              <Route path="/account-pending" element={<Navigate to={ACCOUNT_PENDING_ROUTE} replace />} />
+              <Route path="/account-rejected" element={<Navigate to={ACCOUNT_REJECTED_ROUTE} replace />} />
 
               <Route element={renderSuspended(<Layout />)}>
                 <Route
                   path="/dashboard"
                   element={(
-                    <ProtectedRoute roles={['customer']}>
+                    <ProtectedRoute roles={['customer', 'admin']}>
                       {renderSuspended(<Dashboard />)}
                     </ProtectedRoute>
                   )}
@@ -214,6 +228,14 @@ function App() {
                   element={(
                     <ProtectedRoute roles={ADMIN_ROLES}>
                       {renderSuspended(<AdminProducts />)}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/admin/wallet"
+                  element={(
+                    <ProtectedRoute roles={ADMIN_ROLES}>
+                      {renderSuspended(<AdminWallet />)}
                     </ProtectedRoute>
                   )}
                 />

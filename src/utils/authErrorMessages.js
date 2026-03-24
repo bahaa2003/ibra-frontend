@@ -41,6 +41,10 @@ const COPY = {
     ar: 'الحساب مسجل لكنه ما زال بانتظار موافقة الإدارة.',
     en: 'The account is registered but still waiting for admin approval.',
   },
+  verifyEmail: {
+    ar: 'يجب تأكيد البريد الإلكتروني قبل تسجيل الدخول.',
+    en: 'You need to verify your email before signing in.',
+  },
   accountRejected: {
     ar: 'تم تقييد هذا الحساب. يرجى التواصل مع الإدارة.',
     en: 'This account is restricted. Please contact the administrator.',
@@ -150,14 +154,9 @@ export const formatAuthErrorMessage = (error, { action = 'login' } = {}) => {
   }
 
   if (
-    includesAny(message, ['invalid email or password', 'invalid credentials', 'wrong password', 'incorrect password'])
-    || (status === 401 && action !== 'register')
+    includesAny(message, ['verify your email', 'verify your email address', 'please verify your email', 'confirm your email', 'verification email'])
   ) {
-    return pick('invalidCredentials');
-  }
-
-  if (includesAny(message, ['user not found', 'account not found', 'no user found'])) {
-    return pick('accountNotFound');
+    return pick('verifyEmail');
   }
 
   if (includesAny(message, ['pending approval', 'awaiting approval', 'under review', 'await admin approval'])) {
@@ -166,6 +165,17 @@ export const formatAuthErrorMessage = (error, { action = 'login' } = {}) => {
 
   if (includesAny(message, ['rejected', 'denied', 'access denied', 'blocked', 'disabled', 'forbidden'])) {
     return pick('accountRejected');
+  }
+
+  if (
+    includesAny(message, ['invalid email or password', 'invalid credentials', 'wrong password', 'incorrect password'])
+    || (status === 401 && action !== 'register')
+  ) {
+    return pick('invalidCredentials');
+  }
+
+  if (includesAny(message, ['user not found', 'account not found', 'no user found'])) {
+    return pick('accountNotFound');
   }
 
   if (includesAny(message, ['too many requests', 'rate limit', 'too many attempts'])) {
@@ -189,4 +199,3 @@ export const formatAuthErrorMessage = (error, { action = 'login' } = {}) => {
     ? withPeriod(cleanupMessage(raw))
     : pick(genericKey);
 };
-

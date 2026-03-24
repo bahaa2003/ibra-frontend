@@ -2,10 +2,8 @@ import React from 'react';
 import { Package } from 'lucide-react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/Table';
-import { cn } from '../ui/Button';
+import Button, { cn } from '../ui/Button';
 import EmptyState from './EmptyState';
-import StatusBadge from './StatusBadge';
 
 const getOrderEmail = (order, isArabic) => (
   order?.userEmail
@@ -21,27 +19,30 @@ const getOrderProduct = (order, isArabic) => (
 );
 
 const getOrderCustomer = (order) => order?.userName || order?.userId || '-';
+const getOrderQuantity = (order) => {
+  const quantity = Number(order?.quantity ?? order?.qty ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+};
 
 const RecentOrdersSection = ({
   orders,
   isArabic,
-  formatDate,
-  formatAmount,
+  onViewOrder = null,
 }) => {
   return (
-    <Card variant="elevated" className="mx-auto w-[calc(100vw-1.5rem)] max-w-[42rem] p-4 sm:w-full sm:p-6 xl:max-w-none">
+    <Card variant="elevated" className="mx-auto flex max-h-[23rem] w-[calc(100vw-1.5rem)] max-w-[42rem] flex-col overflow-hidden p-3 sm:w-full sm:p-4 xl:max-w-none">
       <div className={cn(
-        'mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
+        'mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between',
         isArabic ? 'items-end text-right sm:flex-row-reverse' : 'items-start text-left'
       )}>
         <div className="min-w-0">
-          <h2 className="text-lg font-bold text-[var(--color-text)] sm:text-xl">
+          <h2 className="text-base font-bold text-[var(--color-text)] sm:text-lg">
             {isArabic ? 'آخر الطلبات' : 'Recent Orders'}
           </h2>
-          <p className="mt-1.5 text-xs leading-6 text-[var(--color-text-secondary)] sm:text-sm">
+          <p className="mt-1 text-[11px] leading-5 text-[var(--color-text-secondary)] sm:text-xs">
             {isArabic
-              ? 'آخر الطلبات التي دخلت النظام مع حالة التنفيذ والمبلغ الأساسي.'
-              : 'The newest orders in the system with status and primary amount details.'}
+              ? 'عرض مختصر للعميل والمنتج والعدد فقط.'
+              : 'A compact view with customer, product, and quantity only.'}
           </p>
         </div>
         <Badge variant="premium" className="shrink-0 text-[10px] sm:text-[11px]">
@@ -58,96 +59,50 @@ const RecentOrdersSection = ({
             : 'The latest orders will appear here once new purchases start coming in.'}
         />
       ) : (
-        <>
-          <div className="space-y-3 lg:hidden">
-            {orders.map((order) => {
-              const amount = Number(
-                order?.financialSnapshot?.finalAmountAtExecution
-                ?? order?.priceCoins
-                ?? order?.totalAmount
-                ?? 0
-              );
+        <div className="flex-1 overflow-y-auto pe-1">
+          <div className="space-y-2">
+            {orders.map((order) => (
+              <article
+                key={order.id}
+                className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.76)] px-2.5 py-2"
+              >
+                <div className={cn('flex items-start gap-2', isArabic && 'flex-row-reverse text-right')}>
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]" />
 
-              return (
-                <article
-                  key={order.id}
-                  className="rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-card-rgb)/0.78)] p-3.5 sm:p-4"
-                >
-                  <div className={cn('flex items-start justify-between gap-3', isArabic && 'flex-row-reverse text-right')}>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--color-text)]">
-                        {getOrderProduct(order, isArabic)}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-[var(--color-muted)]">
-                        {getOrderEmail(order, isArabic)}
-                      </p>
-                    </div>
-                    <StatusBadge status={order.status} isArabic={isArabic} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-[var(--color-text)]">
+                      {getOrderCustomer(order)}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-secondary)]">
+                      {getOrderProduct(order, isArabic)}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] text-[var(--color-muted)]">
+                      {getOrderEmail(order, isArabic)}
+                    </p>
                   </div>
 
-                  <div className={cn('mt-3 grid grid-cols-1 gap-2.5 text-sm sm:grid-cols-2 sm:gap-3', isArabic && 'text-right')}>
-                    <div>
-                      <p className="text-[var(--color-muted)]">{isArabic ? 'العميل' : 'Customer'}</p>
-                      <p className="mt-1 font-medium text-[var(--color-text)]">{getOrderCustomer(order)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--color-muted)]">{isArabic ? 'المبلغ' : 'Amount'}</p>
-                      <p className="mt-1 font-medium text-[var(--color-text)]">{formatAmount(amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--color-muted)]">{isArabic ? 'التاريخ' : 'Date'}</p>
-                      <p className="mt-1 font-medium text-[var(--color-text)]">{formatDate(order.createdAt)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[var(--color-muted)]">{isArabic ? 'المعرّف الخارجي' : 'External ID'}</p>
-                      <p className="mt-1 truncate font-medium text-[var(--color-text)]">{order.externalOrderId || '-'}</p>
-                    </div>
+                  <span className="shrink-0 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
+                    {isArabic ? `العدد ${getOrderQuantity(order)}` : `Qty ${getOrderQuantity(order)}`}
+                  </span>
+                </div>
+
+                {onViewOrder ? (
+                  <div className={cn('mt-1.5 flex', isArabic ? 'justify-start' : 'justify-end')}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-lg px-2 text-[10px]"
+                      onClick={() => onViewOrder(order)}
+                    >
+                      {isArabic ? 'مراجعة الطلب' : 'Review order'}
+                    </Button>
                   </div>
-                </article>
-              );
-            })}
+                ) : null}
+              </article>
+            ))}
           </div>
-
-          <div className="hidden lg:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{isArabic ? 'البريد الإلكتروني' : 'Email'}</TableHead>
-                  <TableHead>{isArabic ? 'العميل' : 'Customer'}</TableHead>
-                  <TableHead>{isArabic ? 'المنتج' : 'Product'}</TableHead>
-                  <TableHead>{isArabic ? 'المبلغ' : 'Amount'}</TableHead>
-                  <TableHead>{isArabic ? 'الحالة' : 'Status'}</TableHead>
-                  <TableHead>{isArabic ? 'التاريخ' : 'Date'}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((order) => {
-                  const amount = Number(
-                    order?.financialSnapshot?.finalAmountAtExecution
-                    ?? order?.priceCoins
-                    ?? order?.totalAmount
-                    ?? 0
-                  );
-
-                  return (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium text-[var(--color-text)]">{getOrderEmail(order, isArabic)}</TableCell>
-                      <TableCell>{getOrderCustomer(order)}</TableCell>
-                      <TableCell className="font-medium text-[var(--color-text)]">
-                        {getOrderProduct(order, isArabic)}
-                      </TableCell>
-                      <TableCell>{formatAmount(amount)}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={order.status} isArabic={isArabic} />
-                      </TableCell>
-                      <TableCell>{formatDate(order.createdAt)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </>
+        </div>
       )}
     </Card>
   );

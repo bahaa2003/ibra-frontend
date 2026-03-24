@@ -126,11 +126,13 @@ const OrdersFiltersBar = ({
           <Badge variant="premium" className={compact ? 'px-2 py-0.5 text-[11px]' : ''}>
             {isArabic ? `${resultCount} نتيجة` : `${resultCount} results`}
           </Badge>
-          <span className={cn('text-[var(--color-text-secondary)]', compact ? 'text-xs' : 'text-sm')}>
-            {helperText || (isArabic
-              ? 'ابحث بالمنتج، العميل، البريد الإلكتروني، أو رقم الطلب.'
-              : 'Search by product, customer, email, or order number.')}
-          </span>
+          {helperText !== null ? (
+            <span className={cn('text-[var(--color-text-secondary)]', compact ? 'text-xs' : 'text-sm')}>
+              {helperText || (isArabic
+                ? 'ابحث بالمنتج، العميل، البريد الإلكتروني، أو رقم الطلب.'
+                : 'Search by product, customer, email, or order number.')}
+            </span>
+          ) : null}
         </div>
       </div>
     </Card>

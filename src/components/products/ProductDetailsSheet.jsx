@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/useAuthStore';
+import useGroupStore from '../../store/useGroupStore';
 import useOrderStore from '../../store/useOrderStore';
 import { useToast } from '../ui/Toast';
 import Button from '../ui/Button';
@@ -9,10 +10,11 @@ import Input from '../ui/Input';
 import apiClient from '../../services/client';
 import {
   calculateProductPrice,
-  convertPriceByCurrency,
   formatCurrencyAmount,
   getCurrencyMeta,
+  resolveProductUnitPrice,
 } from '../../utils/pricing';
+import { normalizeMoneyAmount } from '../../utils/money';
 import { getProductStatus } from '../../utils/productStatus';
 import {
   clampProductQuantity,
@@ -49,6 +51,7 @@ const getSheetCopy = (language = 'ar') => (
         insufficientBalance: 'الرصيد الحالي لا يكفي لإتمام الطلب.',
         successMessage: 'تم استلام طلبك بنجاح.',
         failureMessage: 'تعذر تنفيذ الطلب حاليًا. حاول مرة أخرى.',
+        invalidAmountMessage: 'لا يمكن تنفيذ الطلب لأن قيمة الشراء غير صالحة.',
         fieldRequired: (label) => `يرجى إدخال ${label}`,
       }
     : {
@@ -75,13 +78,15 @@ const getSheetCopy = (language = 'ar') => (
         insufficientBalance: 'Your current balance is not enough for this order.',
         successMessage: 'Your order has been received successfully.',
         failureMessage: 'The order could not be completed right now. Please try again.',
+        invalidAmountMessage: 'Unable to place this order because the amount is invalid.',
         fieldRequired: (label) => `Please enter ${label}`,
       }
 );
 
-const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
+  const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
   const user = useAuthStore((state) => state.user);
   const updateUserSession = useAuthStore((state) => state.updateUserSession);
+  const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const addOrder = useOrderStore((state) => state.addOrder);
   const { addToast } = useToast();
   const { i18n } = useTranslation();
@@ -163,24 +168,40 @@ const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
     };
   }, [isOpen]);
 
+  const userCurrencyCode = String(user?.currency || 'USD').toUpperCase();
+  const pricingGroup = user?.groupId || user?.group || 'Normal';
+  const pricingGroupPercentage = user?.groupPercentage ?? null;
+  const pricingSnapshot = useMemo(() => {
+    if (!product) {
+      return { unitPriceBase: 0, unitPrice: 0 };
+    }
+
+    return {
+      unitPriceBase: calculateProductPrice(product, pricingGroup, pricingGroupPercentage),
+      unitPrice: resolveProductUnitPrice(product, userCurrencyCode, currencies, pricingGroup, pricingGroupPercentage),
+    };
+  }, [currencies, groupsLastLoadedAt, pricingGroup, pricingGroupPercentage, product, userCurrencyCode]);
+
   if (!isOpen || !product) {
     return null;
   }
 
-  const userCurrencyCode = String(user?.currency || 'USD').toUpperCase();
   const locale = language === 'ar' ? 'ar-EG' : 'en-US';
   const userCurrencyMeta = getCurrencyMeta(userCurrencyCode, currencies);
-  const unitPriceBase = calculateProductPrice(product, user?.group);
-  const unitPrice = convertPriceByCurrency(unitPriceBase, userCurrencyCode, currencies);
-  const totalPrice = Number((unitPrice * quantity).toFixed(2));
-  const balance = Number(user?.coins || 0);
-  const canAfford = balance >= totalPrice;
+  const unitPriceBase = pricingSnapshot.unitPriceBase;
+  const unitPrice = pricingSnapshot.unitPrice;
+  const totalPrice = normalizeMoneyAmount(unitPrice * quantity);
+  const hasValidAmount = Number.isFinite(totalPrice) && totalPrice > 0;
+  const balance = normalizeMoneyAmount(user?.coins || 0);
+  const creditLimit = normalizeMoneyAmount(Math.max(0, Number(user?.creditLimit || 0)));
+  const spendableBalance = normalizeMoneyAmount(balance + creditLimit);
+  const canAfford = spendableBalance >= totalPrice;
   const isPending = String(user?.status || '').toLowerCase() === 'pending';
   const productState = getProductStatus(product, language);
   const formattedUnitPrice = formatCurrencyAmount(unitPrice, userCurrencyCode, currencies, locale);
   const formattedTotalPrice = formatCurrencyAmount(totalPrice, userCurrencyCode, currencies, locale);
   const formattedBalance = formatCurrencyAmount(balance, userCurrencyCode, currencies, locale);
-  const canOrder = productState.isPurchasable && !isPending && canAfford && !isSubmitting;
+  const canOrder = productState.isPurchasable && !isPending && canAfford && hasValidAmount && !isSubmitting;
 
   const userIdentifier = String(
     fieldValues.playerId ||
@@ -226,6 +247,11 @@ const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
       return;
     }
 
+    if (!hasValidAmount) {
+      addToast(copy.invalidAmountMessage, 'error');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -235,6 +261,13 @@ const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
           sanitizeOrderFieldValue(fieldValues[field.key]).trim(),
         ])
       );
+      const fieldsSnapshot = Array.isArray(product?.orderFields) && product.orderFields.length > 0
+        ? product.orderFields.map((field) => ({ ...field }))
+        : orderFields.map((field) => ({
+          key: field.key,
+          label: field.label,
+          placeholder: field.placeholder,
+        }));
 
       const createResult = await addOrder({
         id: `ord-${Date.now()}`,
@@ -251,6 +284,12 @@ const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
         playerId: userIdentifier,
         orderFields: normalizedFields,
         orderFieldsValues: normalizedFields,
+        customerInput: {
+          values: normalizedFields,
+          fieldsSnapshot,
+          quantitySnapshot: quantityMeta,
+        },
+        quantitySnapshot: quantityMeta,
         status: 'pending',
         createdAt: new Date().toISOString(),
         idempotencyKey: `${user.id}-${product.id}-${userIdentifier}-${Date.now()}`,
@@ -258,15 +297,14 @@ const ProductDetailsSheet = ({ product, isOpen, onClose }) => {
 
       const nextBalance = Number(createResult?.updatedBalance);
       if (Number.isFinite(nextBalance)) {
-        updateUserSession({ coins: nextBalance });
+        updateUserSession({ coins: normalizeMoneyAmount(nextBalance) });
       } else {
-        updateUserSession({ coins: Number((balance - totalPrice).toFixed(2)) });
+        updateUserSession({ coins: normalizeMoneyAmount(balance - totalPrice) });
       }
 
       addToast(copy.successMessage, 'success');
       onClose();
     } catch (error) {
-      console.error(error);
       addToast(error?.message || copy.failureMessage, 'error');
     } finally {
       setIsSubmitting(false);

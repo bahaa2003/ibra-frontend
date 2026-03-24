@@ -12,10 +12,16 @@
 
 import axios from 'axios';
 import { devLogger } from '../utils/devLogger';
+import { normalizePaymentGroups } from '../utils/paymentSettings';
+import {
+  resolveWalletTransactionExecutionCurrency,
+  resolveWalletTransactionOriginalCurrency,
+} from '../utils/transactionCurrency';
 
 // ─── Axios instance ──────────────────────────────────────────────────────────
 
 import { resolveImageUrl } from '../utils/imageUrl';
+import { getAccountAccessRoute, normalizeAccountStatus } from '../utils/accountStatus';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -28,10 +34,13 @@ const http = axios.create({
 // ─── Token helpers ───────────────────────────────────────────────────────────
 
 const AUTH_STORAGE_KEY = 'auth-storage';
+const PAYMENT_SETTINGS_CACHE_KEY = 'payment-settings-cache';
 const SESSION_LOGOUT_REASON_KEY = 'auth:logout-reason';
 const SESSION_EXPIRED_REASON = 'expired';
 const LOGIN_REDIRECT_PATH = '/login';
 const REFRESH_ENDPOINT = '/auth/refresh';
+
+const AUTH_FORCE_LOGOUT_EVENT = 'auth:force-logout';
 
 
 const STORED_KEYS_TO_CLEAR_ON_LOGOUT = [
@@ -53,6 +62,60 @@ const safeParseJson = (raw, fallback = null) => {
 
 const getAuthPersistedRoot = () => safeParseJson(localStorage.getItem(AUTH_STORAGE_KEY), {});
 const getStoredAuthState = () => getAuthPersistedRoot()?.state || {};
+const getStoredRole = () => String(getStoredAuthState()?.user?.role || '').trim().toUpperCase();
+
+const readCachedPaymentSettings = () => safeParseJson(localStorage.getItem(PAYMENT_SETTINGS_CACHE_KEY), null);
+const writeCachedPaymentSettings = (settings) => {
+  try {
+    localStorage.setItem(PAYMENT_SETTINGS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignore storage failures and continue with live data only.
+  }
+};
+
+const normalizePaymentSettingsResponse = (settings) => {
+  const source = settings || {};
+  const normalizeAccount = (item = {}) => ({
+    countryCode: String(item?.countryCode || '').trim().toUpperCase(),
+    countryName: String(item?.countryName || '').trim(),
+    currencyCode: String(item?.currencyCode || '').trim().toUpperCase(),
+    cashWalletNumber: String(item?.cashWalletNumber || '').trim(),
+    bankAccountNumber: String(item?.bankAccountNumber || '').trim(),
+    bankAccountName: String(item?.bankAccountName || '').trim(),
+  });
+
+  return {
+    countryAccounts: Array.isArray(source?.countryAccounts)
+      ? source.countryAccounts.map((item) => normalizeAccount(item)).filter((item) => item.countryCode)
+      : [],
+    instructions: String(source?.instructions || '').trim(),
+    whatsappNumber: String(source?.whatsappNumber || '').trim(),
+    paymentGroups: normalizePaymentGroups(source?.paymentGroups, { fallbackToDefault: false }),
+  };
+};
+
+const serializePaymentGroupsForApi = (groups) => normalizePaymentGroups(groups, { fallbackToDefault: false }).map((group) => ({
+  id: group.id,
+  name: group.name,
+  description: group.description,
+  image: group.image,
+  imageName: group.imageName,
+  isActive: group.isActive !== false,
+  methods: group.methods.map((method) => ({
+    id: method.id,
+    name: method.name,
+    description: method.description,
+    type: method.type,
+    accountNumber: method.accountNumber,
+    bankName: method.bankName,
+    feePercent: method.feePercent,
+    instructions: method.instructions,
+    image: method.image,
+    imageName: method.imageName,
+    isActive: method.isActive !== false,
+    fields: Array.isArray(method.fields) ? method.fields : [],
+  })),
+}));
 
 const writeAuthState = (nextState) => {
   const root = getAuthPersistedRoot() || {};
@@ -110,10 +173,12 @@ const setSessionLogoutReason = (reason = SESSION_EXPIRED_REASON) => {
   sessionStorage.setItem(SESSION_LOGOUT_REASON_KEY, reason);
 };
 
-const redirectToLogin = () => {
+const dispatchForceLogoutEvent = (reason) => {
   if (typeof window === 'undefined') return;
-  if (window.location.pathname !== LOGIN_REDIRECT_PATH) {
-    window.location.replace(LOGIN_REDIRECT_PATH);
+  try {
+    window.dispatchEvent(new CustomEvent(AUTH_FORCE_LOGOUT_EVENT, { detail: { reason } }));
+  } catch {
+    // Best-effort; the app can still rely on persisted storage changes.
   }
 };
 
@@ -123,7 +188,7 @@ const forceLogoutAndRedirect = (reason = SESSION_EXPIRED_REASON) => {
   isForceLogoutInProgress = true;
   clearStoredSession();
   setSessionLogoutReason(reason);
-  redirectToLogin();
+  dispatchForceLogoutEvent(reason);
 };
 
 const isPublicAuthRequest = (url = '') => {
@@ -181,7 +246,7 @@ const requestTokenRefresh = async (refreshToken) => {
   );
   const payload = res?.data?.data ?? res?.data ?? {};
   const nextAccessToken = payload?.token || payload?.accessToken;
-  const nextRefreshToken = payload?.refreshToken ?? refreshToken;
+  const nextRefreshToken = payload?.refreshToken ?? payload?.refresh_token ?? refreshToken;
 
   if (!nextAccessToken) {
     throw new Error('Unable to refresh session');
@@ -190,6 +255,8 @@ const requestTokenRefresh = async (refreshToken) => {
   setStoredAuthTokens(nextAccessToken, nextRefreshToken);
   return nextAccessToken;
 };
+
+let refreshUnsupported = false;
 
 let refreshInFlight = null;
 let refreshQueue = [];
@@ -230,7 +297,7 @@ http.interceptors.response.use(
 
     if (unauthorized && !skipAuthHandling) {
       const refreshToken = getStoredRefreshToken();
-      const canRetryWithRefresh = Boolean(refreshToken) && !originalRequest._retryWithRefresh;
+      const canRetryWithRefresh = !refreshUnsupported && Boolean(refreshToken) && !originalRequest._retryWithRefresh;
 
       if (canRetryWithRefresh) {
         originalRequest._retryWithRefresh = true;
@@ -262,6 +329,10 @@ http.interceptors.response.use(
           };
           return http(originalRequest);
         } catch (refreshError) {
+          const refreshStatus = Number(refreshError?.response?.status || refreshError?.status || 0);
+          if (refreshStatus === 404) {
+            refreshUnsupported = true;
+          }
           forceLogoutAndRedirect(SESSION_EXPIRED_REASON);
           return Promise.reject(wrapHttpError(refreshError));
         }
@@ -279,6 +350,62 @@ http.interceptors.response.use(
 /** Unwrap the standard BE envelope: { success, data } → data */
 const unwrap = (res) => res.data?.data ?? res.data;
 
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const resolveUserCreditLimit = (user) => {
+  const candidates = [
+    user?.creditLimit,
+    user?.walletCreditLimit,
+    user?.debtLimit,
+    user?.maxDebt,
+    user?.financialSnapshot?.creditLimit,
+    user?.financialSnapshot?.debtLimit,
+  ];
+
+  for (const entry of candidates) {
+    const parsed = Number(entry);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, parsed);
+    }
+  }
+
+  return 0;
+};
+
+const getProviderCatalogPriceValue = (product = {}) => (
+  product?.rawPayload?.product_price
+  ?? product?.rawPrice
+  ?? product?.price
+  ?? product?.basePrice
+  ?? product?.priceCoins
+  ?? ''
+);
+
+const getProviderCatalogMinQtyValue = (product = {}) => (
+  product?.minQty
+  ?? product?.minimumOrderQty
+  ?? product?.min
+  ?? product?.rawPayload?.minQty
+  ?? product?.rawPayload?.minimumOrderQty
+  ?? product?.rawPayload?.min_qty
+  ?? product?.rawPayload?.min
+  ?? null
+);
+
+const getProviderCatalogMaxQtyValue = (product = {}) => (
+  product?.maxQty
+  ?? product?.maximumOrderQty
+  ?? product?.max
+  ?? product?.rawPayload?.maxQty
+  ?? product?.rawPayload?.maximumOrderQty
+  ?? product?.rawPayload?.max_qty
+  ?? product?.rawPayload?.max
+  ?? null
+);
+
 /** Normalise a single user object from BE to FE shape */
 const normaliseUser = (u) => {
   if (!u) return null;
@@ -292,6 +419,12 @@ const normaliseUser = (u) => {
   const groupId = typeof rawGroup === 'object' && rawGroup !== null
     ? (rawGroup._id || rawGroup.id || '')
     : (rawGroup || '');
+  const groupPercentageRaw = typeof rawGroup === 'object' && rawGroup !== null
+    ? (rawGroup.percentage ?? rawGroup.discount)
+    : null;
+  const groupPercentage = groupPercentageRaw === undefined || groupPercentageRaw === null
+    ? null
+    : Number(groupPercentageRaw);
 
   // Flatten populated currency ref if it were ever an object
   const rawCurrency = u.currency;
@@ -311,10 +444,13 @@ const normaliseUser = (u) => {
     authProvider: (u.authProvider || u.signupMethod || u.provider || 'email').toLowerCase(),
     // FE uses "coins" for wallet balance
     coins: u.walletBalance ?? u.coins ?? 0,
+    // Financial controls
+    creditLimit: toFiniteNumber(resolveUserCreditLimit(u), 0),
     // Flattened group fields — never pass an object to React
     group: groupName,
     groupId: String(groupId),
     groupName,
+    groupPercentage: Number.isFinite(groupPercentage) ? groupPercentage : null,
     // Flattened currency
     currency,
     // joinDate aliasing
@@ -330,6 +466,128 @@ const normaliseUser = (u) => {
 /** Normalise an array of users */
 const normaliseUsers = (arr) =>
   (Array.isArray(arr) ? arr : []).map(normaliseUser);
+
+const normaliseWalletTransactionType = (value) => {
+  const token = String(value || '').trim().toLowerCase();
+  if (['credit', 'deposit', 'topup', 'top_up'].includes(token)) return 'credit';
+  if (['debit', 'purchase', 'charge', 'deduct', 'deduction'].includes(token)) return 'debit';
+  if (['refund', 'reversal'].includes(token)) return 'refund';
+  return token || 'credit';
+};
+
+const getSignedWalletAmount = (amount, type) => (
+  type === 'debit' ? -Math.abs(amount) : Math.abs(amount)
+);
+
+const normaliseWalletTransaction = (tx, fallbackUserId = '') => {
+  if (!tx) return null;
+
+  const rawUser = typeof tx.user === 'object' && tx.user !== null
+    ? tx.user
+    : (typeof tx.userId === 'object' && tx.userId !== null ? tx.userId : null);
+  const user = rawUser ? normaliseUser(rawUser) : null;
+  const type = normaliseWalletTransactionType(tx.type || tx.kind || tx.transactionType);
+  const amount = toFiniteNumber(tx.amount ?? tx.value ?? tx.total ?? 0);
+  const balanceAfterRaw = tx.balanceAfter ?? tx.balance ?? tx.walletBalance;
+  const originalTransactionCurrency = resolveWalletTransactionOriginalCurrency(tx);
+  const transactionCurrency = resolveWalletTransactionExecutionCurrency(
+    tx,
+    tx.walletCurrency || user?.currency || 'USD'
+  );
+  const rawUserId = typeof tx.userId === 'object' && tx.userId !== null
+    ? (tx.userId._id || tx.userId.id || '')
+    : tx.userId;
+
+  return {
+    ...tx,
+    id: tx._id || tx.id || tx.transactionId || tx.reference || `${fallbackUserId || 'wallet'}-${type}-${tx.createdAt || Date.now()}`,
+    _id: undefined,
+    userId: String(rawUserId || user?.id || fallbackUserId || ''),
+    user,
+    type,
+    amount: Math.abs(amount),
+    signedAmount: toFiniteNumber(tx.signedAmount, getSignedWalletAmount(amount, type)),
+    balanceAfter: balanceAfterRaw === undefined || balanceAfterRaw === null ? null : toFiniteNumber(balanceAfterRaw, 0),
+    currency: transactionCurrency,
+    originalCurrency: originalTransactionCurrency || null,
+    status: String(tx.status || 'completed').trim().toLowerCase(),
+    description: tx.description || tx.note || tx.title || '',
+    reference: tx.reference || tx.referenceId || tx.orderId || tx.depositId || tx.topupId || null,
+    sourceType: tx.sourceType || tx.targetType || null,
+    sourceId: tx.sourceId || tx.orderId || tx.depositId || tx.topupId || null,
+    createdAt: tx.createdAt || tx.date || tx.timestamp || null,
+  };
+};
+
+const normaliseWalletSummary = (wallet, fallbackUserId = '') => {
+  if (!wallet) return null;
+
+  const rawUser = typeof wallet.user === 'object' && wallet.user !== null
+    ? wallet.user
+    : (typeof wallet.userId === 'object' && wallet.userId !== null ? wallet.userId : null);
+  const user = rawUser ? normaliseUser(rawUser) : null;
+  const rawUserId = typeof wallet.userId === 'object' && wallet.userId !== null
+    ? (wallet.userId._id || wallet.userId.id || '')
+    : wallet.userId;
+  const recentTransactionsRaw = Array.isArray(wallet.recentTransactions)
+    ? wallet.recentTransactions
+    : (Array.isArray(wallet.transactions) ? wallet.transactions.slice(0, 5) : []);
+  const recentTransactions = recentTransactionsRaw
+    .map((entry) => normaliseWalletTransaction(entry, rawUserId || user?.id || fallbackUserId))
+    .filter(Boolean);
+  const balance = toFiniteNumber(
+    wallet.walletBalance ?? wallet.balance ?? wallet.currentBalance ?? wallet.coins ?? 0
+  );
+  const transactionsCount = toFiniteNumber(
+    wallet.transactionsCount ?? wallet.totalTransactions ?? wallet.transactionCount ?? recentTransactions.length,
+    recentTransactions.length
+  );
+
+  return {
+    ...wallet,
+    id: wallet._id || wallet.id || wallet.walletId || rawUserId || user?.id || fallbackUserId,
+    _id: undefined,
+    userId: String(rawUserId || user?.id || fallbackUserId || ''),
+    user,
+    userName: wallet.userName || user?.name || '',
+    userEmail: wallet.userEmail || user?.email || '',
+    currency: String(wallet.currency || wallet.currencyCode || wallet.walletCurrency || user?.currency || 'USD').toUpperCase(),
+    walletBalance: balance,
+    balance,
+    recentTransactions,
+    transactionsCount,
+    lastTransactionAt: wallet.lastTransactionAt || recentTransactions[0]?.createdAt || wallet.updatedAt || null,
+    updatedAt: wallet.updatedAt || recentTransactions[0]?.createdAt || wallet.createdAt || null,
+  };
+};
+
+const normaliseWalletSummaries = (arr) =>
+  (Array.isArray(arr) ? arr : []).map((entry) => normaliseWalletSummary(entry)).filter(Boolean);
+
+const looksLikeObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || '').trim());
+
+const productHasReadableCategory = (product) => {
+  const rawCategory = product?.category;
+  if (rawCategory && typeof rawCategory === 'object' && !Array.isArray(rawCategory)) {
+    return Boolean(rawCategory?.name || rawCategory?.nameAr || rawCategory?.title || rawCategory?.titleAr);
+  }
+
+  const categoryValue = String(rawCategory || '').trim();
+  if (!categoryValue) return false;
+  if (!looksLikeObjectId(categoryValue)) return true;
+
+  return Boolean(
+    product?.categoryName
+    || product?.categoryNameAr
+    || product?.categoryTitle
+    || product?.categoryTitleAr
+    || product?.categoryLabel
+    || product?.categoryLabelAr
+    || product?.categoryAr
+  );
+};
+
+const productsHaveReadableCategories = (products) => (Array.isArray(products) ? products : []).some(productHasReadableCategory);
 
 /** Normalise a group from BE to FE shape */
 const normaliseGroup = (g) => {
@@ -363,37 +621,71 @@ const normaliseProduct = (p) => {
   if (!p) return null;
   const id = p._id || p.id;
   const isActive = p.isActive !== false;
+  const productStatus = String(p.productStatus || '').trim();
 
   // Resolve populated provider reference
   const providerId = typeof p.provider === 'object' ? (p.provider?._id || p.provider?.id) : p.provider;
   // Resolve populated providerProduct reference
   const pp = typeof p.providerProduct === 'object' ? p.providerProduct : null;
+  const rawProviderProductId = typeof p.providerProduct === 'string' || typeof p.providerProduct === 'number'
+    ? p.providerProduct
+    : '';
+  const providerProductId = pp?._id || pp?.id || rawProviderProductId || p.providerProductId || p.externalProductId || '';
+  const externalProductId = pp?.externalProductId || p.externalProductId || p.providerProductId || rawProviderProductId || '';
+  const providerMapping = p.providerMapping || p.orderFieldsMapping || {};
+  const supplierFieldMappings = Array.isArray(providerMapping)
+    ? providerMapping
+    : Object.entries(providerMapping || {}).map(([internalField, externalField]) => ({
+      internalField,
+      externalField,
+    }));
+  const usesProviderPricing = Boolean(
+    p.syncPriceWithProvider
+    || p.pricingMode === 'sync'
+    || p.externalPricingMode === 'use_supplier_price'
+    || p.externalPricingMode === 'supplier_price_plus_margin'
+  );
+  const externalPricingMode = p.externalPricingMode || (usesProviderPricing ? 'use_supplier_price' : 'use_local_price');
+  const manualPriceAdjustment = p.manualPriceAdjustment ?? p.manualDelta ?? '';
+  const resolvedProviderId = providerId || p.providerId || p.supplierId || '';
 
   return {
     ...p,
     id,
     _id: undefined,
     // Status mapping
-    status: isActive ? 'active' : 'inactive',
-    productStatus: isActive ? 'available' : 'unavailable',
-    isVisibleInStore: isActive,
+    status: String(p.status || '').trim().toLowerCase() || (isActive ? 'active' : 'inactive'),
+    productStatus: productStatus || (isActive ? 'available' : 'unavailable'),
+    isVisibleInStore: p.isVisibleInStore !== undefined ? Boolean(p.isVisibleInStore) : isActive,
     // Pricing
     basePriceCoins: p.basePrice ?? p.basePriceCoins ?? 0,
     basePrice: p.basePrice ?? 0,
+    displayPrice: p.displayPrice ?? null,
+    markedUpPriceUSD: p.markedUpPriceUSD ?? p.finalPrice ?? null,
+    displayCurrency: p.displayCurrency ?? null,
     // Quantity
     minimumOrderQty: p.minQty ?? p.minimumOrderQty ?? 1,
     maximumOrderQty: p.maxQty ?? p.maximumOrderQty ?? 999,
     minQty: p.minQty ?? 1,
     maxQty: p.maxQty ?? 999,
     // Supplier/Provider mapping
-    supplierId: providerId || p.supplierId || '',
-    externalProductId: pp?.externalProductId || p.externalProductId || '',
+    supplierId: resolvedProviderId,
+    providerId: resolvedProviderId,
+    providerProductId,
+    externalProductId,
     externalProductName: pp?.rawName || p.externalProductName || '',
-    autoFulfillmentEnabled: (p.executionType === 'automatic'),
+    autoFulfillmentEnabled: p.autoFulfillmentEnabled !== undefined ? Boolean(p.autoFulfillmentEnabled) : (p.executionType === 'automatic'),
     // Markup → supplierMargin
     supplierMarginType: p.markupType || p.supplierMarginType || 'percentage',
     supplierMarginValue: p.markupValue ?? p.supplierMarginValue ?? 0,
-    externalPricingMode: p.pricingMode === 'sync' ? 'use_supplier_price' : (p.externalPricingMode || 'use_local_price'),
+    externalPricingMode,
+    syncPriceWithProvider: p.syncPriceWithProvider !== undefined ? Boolean(p.syncPriceWithProvider) : usesProviderPricing,
+    enableManualPrice: p.enableManualPrice !== undefined ? Boolean(p.enableManualPrice) : Number(manualPriceAdjustment || 0) !== 0,
+    manualPriceAdjustment,
+    syncedProviderBasePrice: p.syncedProviderBasePrice ?? p.rawPrice ?? null,
+    fallbackSupplierId: p.fallbackSupplierId || '',
+    supplierFieldMappings,
+    supplierNotes: p.supplierNotes || '',
     // Category stays as-is (string in both BE and FE)
     category: p.category || '',
   };
@@ -415,6 +707,15 @@ const normaliseProduct = (p) => {
 const normaliseOrder = (o) => {
   if (!o) return null;
   const id = o._id || o.id;
+  const resolvedOrderNumber = String(o.orderNumber || o.internalOrderNumber || id || '').trim();
+  const resolvedSupplierOrderNumber = String(
+    o.externalOrderId
+    || o.supplierOrderNumber
+    || o.providerOrderId
+    || o.supplierResponseSnapshot?.data?.orderId
+    || o.supplierResponseSnapshot?.orderId
+    || ''
+  ).trim();
 
   // Resolve populated refs
   const product = typeof o.productId === 'object' ? o.productId : null;
@@ -429,6 +730,11 @@ const normaliseOrder = (o) => {
     // Core IDs
     productId: productIdStr,
     userId: userIdStr,
+    orderNumber: resolvedOrderNumber,
+    internalOrderNumber: resolvedOrderNumber,
+    siteOrderNumber: resolvedOrderNumber,
+    externalOrderId: resolvedSupplierOrderNumber || null,
+    supplierOrderNumber: resolvedSupplierOrderNumber || null,
     // Resolved names from populated refs
     productName: product?.name || o.productName || '',
     userName: user?.name || o.userName || '',
@@ -440,6 +746,22 @@ const normaliseOrder = (o) => {
     unitPriceBase: o.basePriceSnapshot ?? o.unitPriceBase ?? 0,
     unitPrice: o.finalPriceCharged ?? o.unitPrice ?? 0,
     quantity: o.quantity || 1,
+    playerId: o.playerId
+      || o.customerInput?.values?.playerId
+      || o.customerInput?.values?.player_id
+      || o.orderFieldsValues?.playerId
+      || o.orderFieldsValues?.player_id
+      || o.orderFields?.playerId
+      || o.orderFields?.player_id
+      || '',
+    orderFieldsValues: o.orderFieldsValues
+      || o.customerInput?.values
+      || o.orderFields
+      || {},
+    orderFields: o.orderFields
+      || o.orderFieldsValues
+      || o.customerInput?.values
+      || {},
     // Financial snapshot for FE store's deduction logic
     financialSnapshot: o.financialSnapshot || {
       originalCurrency: o.currency || 'USD',
@@ -466,10 +788,14 @@ const normaliseOrder = (o) => {
  * BE deposit model fields → FE useTopupStore fields:
  *   _id                   → id
  *   status (UPPERCASE)     → status (lowercase)
- *   amountRequested       → requestedAmount, requestedCoins, amount
- *   amountApproved        → actualPaidAmount, creditedCoins
- *   transferImageUrl      → proofImage
- *   transferredFromNumber → senderWalletNumber
+ *   requestedAmount       → requestedAmount, requestedCoins, amount
+ *   amountUsd             → amountUsd, creditedCoins
+ *   receiptImage          → proofImage
+ *   paymentMethodId       → paymentMethodId
+ *   currency              → currency
+ *   exchangeRate          → exchangeRate
+ *   notes                 → notes
+ *   adminNotes            → adminNotes
  *   userId (populated)    → userId (string), userName
  *   reviewedBy (populated)→ reviewedBy (string), reviewerName
  */
@@ -484,11 +810,13 @@ const normaliseDeposit = (d) => {
   const reviewerIdStr = reviewer?._id || reviewer?.id || d.reviewedBy;
 
   const status = (d.status || 'pending').toLowerCase();
-  const amountRequested = d.amountRequested ?? d.requestedAmount ?? d.amount ?? 0;
-  const amountApproved = d.amountApproved ?? d.actualPaidAmount ?? null;
+  const requestedAmount = d.requestedAmount ?? d.amountRequested ?? d.amount ?? 0;
+  const amountUsd = d.amountUsd ?? d.amountApproved ?? d.actualPaidAmount ?? null;
+  const currency = d.currency || 'USD';
+  const exchangeRate = d.exchangeRate ?? 1;
 
-  // Resolve proof image URL — prepend server origin for relative paths (e.g. /uploads/deposits/...)
-  const rawProof = d.transferImageUrl || d.proofImage || '';
+  // Resolve proof image URL — handle both new receiptImage and legacy transferImageUrl
+  const rawProof = d.receiptImage || d.transferImageUrl || d.proofImage || '';
   const proofImage = resolveImageUrl(rawProof);
 
   return {
@@ -505,11 +833,18 @@ const normaliseDeposit = (d) => {
     reviewedBy: reviewerIdStr || null,
     reviewerName: reviewer?.name || d.reviewerName || '',
     // Amount aliases (FE uses many field names for the same concept)
-    requestedAmount: amountRequested,
-    requestedCoins: amountRequested,
-    amount: amountRequested,
-    actualPaidAmount: amountApproved,
-    creditedCoins: amountApproved || (status === 'approved' ? amountRequested : null),
+    requestedAmount,
+    requestedCoins: requestedAmount,
+    amount: requestedAmount,
+    amountUsd,
+    actualPaidAmount: amountUsd,
+    creditedCoins: amountUsd || (status === 'approved' ? requestedAmount : null),
+    // Multi-currency fields
+    currency,
+    exchangeRate,
+    paymentMethodId: d.paymentMethodId || '',
+    notes: d.notes || '',
+    adminNotes: d.adminNotes || '',
     // Transfer proof
     proofImage,
     senderWalletNumber: d.transferredFromNumber || d.senderWalletNumber || '',
@@ -518,12 +853,12 @@ const normaliseDeposit = (d) => {
     reviewedAt: d.reviewedAt || null,
     // Financial snapshot for FE store's credit logic
     financialSnapshot: d.financialSnapshot || (status === 'approved' ? {
-      originalCurrency: 'USD',
-      originalAmount: amountApproved || amountRequested,
-      exchangeRateAtExecution: 1,
-      convertedAmountAtExecution: amountApproved || amountRequested,
-      finalAmountAtExecution: amountApproved || amountRequested,
-      pricingSnapshot: { baseRate: 1, fees: 0, discount: 0, finalRate: 1 },
+      originalCurrency: currency,
+      originalAmount: requestedAmount,
+      exchangeRateAtExecution: exchangeRate,
+      convertedAmountAtExecution: amountUsd || requestedAmount,
+      finalAmountAtExecution: amountUsd || requestedAmount,
+      pricingSnapshot: { baseRate: exchangeRate, fees: 0, discount: 0, finalRate: exchangeRate },
       feesSnapshot: { processingFee: 0, transferFee: 0, totalFees: 0 },
     } : null),
   };
@@ -708,11 +1043,29 @@ const productToBE = (fe) => {
 
   // Direct pass-through fields
   if (fe.name !== undefined) body.name = fe.name;
+  if (fe.nameAr !== undefined) body.nameAr = fe.nameAr;
   if (fe.description !== undefined) body.description = fe.description;
+  if (fe.descriptionAr !== undefined) body.descriptionAr = fe.descriptionAr;
   if (fe.image !== undefined) body.image = fe.image;
   if (fe.category !== undefined) body.category = fe.category;
+  if (fe.category !== undefined) body.categoryId = fe.category;
   if (fe.displayOrder !== undefined) body.displayOrder = fe.displayOrder;
   if (fe.orderFields !== undefined) body.orderFields = fe.orderFields;
+  if (fe.productStatus !== undefined) body.productStatus = fe.productStatus;
+  if (fe.isVisibleInStore !== undefined) body.isVisibleInStore = Boolean(fe.isVisibleInStore);
+  if (fe.showWhenUnavailable !== undefined) body.showWhenUnavailable = Boolean(fe.showWhenUnavailable);
+  if (fe.pauseSales !== undefined) body.pauseSales = Boolean(fe.pauseSales);
+  if (fe.pauseReason !== undefined) body.pauseReason = fe.pauseReason;
+  if (fe.internalNotes !== undefined) body.internalNotes = fe.internalNotes;
+  if (fe.enableSchedule !== undefined) body.enableSchedule = Boolean(fe.enableSchedule);
+  if (fe.scheduledStartAt !== undefined) body.scheduledStartAt = fe.scheduledStartAt;
+  if (fe.scheduledEndAt !== undefined) body.scheduledEndAt = fe.scheduledEndAt;
+  if (fe.scheduleVisibilityMode !== undefined) body.scheduleVisibilityMode = fe.scheduleVisibilityMode;
+  if (fe.trackInventory !== undefined) body.trackInventory = Boolean(fe.trackInventory);
+  if (fe.stockQuantity !== undefined) body.stockQuantity = Number(fe.stockQuantity);
+  if (fe.lowStockThreshold !== undefined) body.lowStockThreshold = Number(fe.lowStockThreshold);
+  if (fe.hideWhenOutOfStock !== undefined) body.hideWhenOutOfStock = Boolean(fe.hideWhenOutOfStock);
+  if (fe.showOutOfStockLabel !== undefined) body.showOutOfStockLabel = Boolean(fe.showOutOfStockLabel);
 
   // Pricing: FE uses basePriceCoins, BE uses basePrice
   if (fe.basePriceCoins !== undefined) body.basePrice = Number(fe.basePriceCoins);
@@ -745,9 +1098,16 @@ const productToBE = (fe) => {
 
   // Pricing mode: FE uses externalPricingMode, BE uses pricingMode
   if (fe.externalPricingMode !== undefined) {
-    body.pricingMode = fe.externalPricingMode === 'use_supplier_price' ? 'sync' : 'manual';
+    body.pricingMode = ['use_supplier_price', 'supplier_price_plus_margin'].includes(fe.externalPricingMode) ? 'sync' : 'manual';
   } else if (fe.pricingMode !== undefined) {
     body.pricingMode = fe.pricingMode;
+  }
+
+  const providerId = String(fe.providerId || fe.supplierId || '').trim();
+  if (providerId) {
+    body.provider = providerId;
+    body.providerId = providerId;
+    body.supplierId = providerId;
   }
 
   // Provider mapping (for auto-fulfilled products)
@@ -757,17 +1117,61 @@ const productToBE = (fe) => {
     if (Array.isArray(fe.supplierFieldMappings)) {
       body.providerMapping = {};
       fe.supplierFieldMappings.forEach((m) => {
-        if (m.key && m.providerKey) body.providerMapping[m.key] = m.providerKey;
+        const internalField = m.key || m.internalField;
+        const externalField = m.providerKey || m.externalField;
+        if (internalField && externalField) body.providerMapping[internalField] = externalField;
       });
     }
   }
 
   // Provider product linkage (for publish-from-provider flow)
   if (fe.providerProductId || fe.externalProductId) {
-    body.providerProductId = fe.providerProductId || fe.externalProductId;
+    const providerProductId = String(fe.providerProductId || fe.externalProductId || '').trim();
+    body.providerProductId = providerProductId;
+    body.providerProduct = providerProductId;
   }
 
+  if (fe.externalProductId !== undefined) body.externalProductId = fe.externalProductId;
+  if (fe.externalProductName !== undefined) body.externalProductName = fe.externalProductName;
+  if (fe.syncPriceWithProvider !== undefined) {
+    const shouldSyncWithProvider = Boolean(fe.syncPriceWithProvider);
+    body.syncPriceWithProvider = shouldSyncWithProvider;
+    if (fe.externalPricingMode === undefined && fe.pricingMode === undefined) {
+      body.pricingMode = shouldSyncWithProvider ? 'sync' : 'manual';
+    }
+  }
+  if (fe.enableManualPrice !== undefined) body.enableManualPrice = Boolean(fe.enableManualPrice);
+  if (fe.manualPriceAdjustment !== undefined) {
+    const manualAdjustment = Number(fe.manualPriceAdjustment || 0);
+    body.manualPriceAdjustment = manualAdjustment;
+    body.manualDelta = manualAdjustment;
+  }
+  if (fe.supplierNotes !== undefined) body.supplierNotes = fe.supplierNotes;
+  if (fe.fallbackSupplierId !== undefined) body.fallbackSupplierId = fe.fallbackSupplierId;
+
   return body;
+};
+
+const normaliseProductMutationResponse = (response) => normaliseProduct(
+  unwrap(response)?.product
+  || unwrap(response)
+);
+
+const runProductMutationPlan = async (plan, fallbackMessage = 'Unable to save product.') => {
+  let lastError = null;
+
+  for (const [method, endpoint, payload] of plan) {
+    try {
+      const response = method === 'patch'
+        ? await http.patch(endpoint, payload)
+        : await http.post(endpoint, payload);
+      return normaliseProductMutationResponse(response);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error(fallbackMessage);
 };
 
 // ─── Determine if current user is admin ──────────────────────────────────────
@@ -794,7 +1198,7 @@ const realApi = {
       const data = unwrap(res);
       const user = normaliseUser(data.user);
       const token = data.token || data.accessToken || null;
-      const refreshToken = data.refreshToken ?? null;
+      const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
       // Persist tokens for subsequent requests
       setStoredAuthTokens(token, refreshToken);
       return { user, token };
@@ -802,10 +1206,21 @@ const realApi = {
 
     loginWithGoogle: async () => {
       // Google OAuth uses redirect flow — open the BE endpoint in the browser.
-      // The BE redirects back w/ ?token= in the URL.
+      // The BE redirects back either with ?token= or ?status=pending.
       // This method is called from FE after capturing the token from the redirect.
       // We keep it compatible by parsing the token from the current URL if present.
       const params = new URLSearchParams(window.location.search);
+      const callbackStatus = normalizeAccountStatus(params.get('status'));
+      if (callbackStatus && !params.get('token')) {
+        return {
+          user: null,
+          token: null,
+          status: callbackStatus,
+          redirectTo: getAccountAccessRoute(callbackStatus),
+          canAccessApp: false,
+        };
+      }
+
       const token = params.get('token');
       if (!token) {
         // Initiate the redirect
@@ -818,6 +1233,17 @@ const realApi = {
       const res = await http.get('/users/me');
       const user = normaliseUser(unwrap(res));
       return { user, token };
+    },
+
+    resendVerification: async (email) => {
+      const res = await http.post('/auth/resend-verification', {
+        email: String(email || '').trim(),
+      });
+      const data = unwrap(res);
+      return {
+        success: true,
+        message: data?.message || res?.data?.message || 'If that email exists, a verification link has been sent.',
+      };
     },
 
     register: async (userData) => {
@@ -836,25 +1262,63 @@ const realApi = {
     },
 
     getProfile: async (_userId) => {
-      // BE route: GET /api/me → me.getProfile (resolves user from JWT)
-      const res = await http.get('/me');
+      // Prefer the self-profile endpoint used elsewhere in this adapter.
+      // Some deployments don't expose `/me` but do expose `/users/me`.
+      const res = await http.get('/users/me');
       return normaliseUser(unwrap(res));
+    },
+
+    refreshSession: async () => {
+      const refreshToken = getStoredRefreshToken();
+      if (!refreshToken) return null;
+
+      try {
+        const token = await requestTokenRefresh(refreshToken);
+        return { token };
+      } catch {
+        return null;
+      }
     },
   },
 
   // ── Products ─────────────────────────────────────────────────────────────
   products: {
     /**
-     * GET /admin/products (admin) or GET /me/products (customer)
+     * GET /admin/products (admin) or GET /products (customer)
      *
-     * Both use sendPaginated — products array in `data` directly.
+     * Both return products array in `data`.
      */
     list: async () => {
-      const endpoint = isAdmin() ? '/admin/products' : '/me/products';
-      const res = await http.get(endpoint);
-      const data = unwrap(res);
-      const products = Array.isArray(data) ? data : (data?.products || []);
-      return (Array.isArray(products) ? products : []).map(normaliseProduct);
+      const requestPlan = isAdmin()
+        ? ['/admin/products']
+        : [
+          // Documented endpoint for customers.
+          '/products',
+          // Fallback for deployments that expose customer-scoped products.
+          '/me/products',
+        ];
+
+      let fallback = null;
+
+      for (const endpoint of requestPlan) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          const products = Array.isArray(data) ? data : (data?.products || []);
+          const normalised = (Array.isArray(products) ? products : []).map(normaliseProduct);
+
+          if (!fallback) fallback = normalised;
+
+          // Prefer the endpoint that returns readable category values (name/object vs ObjectId).
+          if (productsHaveReadableCategories(normalised)) {
+            return normalised;
+          }
+        } catch {
+          // Silent fallback across endpoints.
+        }
+      }
+
+      return fallback || [];
     },
 
     /**
@@ -862,11 +1326,31 @@ const realApi = {
      * Product is placed directly in data (no wrapping object).
      */
     get: async (id) => {
-      const endpoint = isAdmin() ? `/products/${id}` : `/me/products/${id}`;
-      const res = await http.get(endpoint);
-      const data = unwrap(res);
-      // sendSuccess puts the product directly in data (or inside data.product for admin catalog)
-      return normaliseProduct(data?.product || data);
+      const requestPlan = isAdmin()
+        ? [`/products/${id}`]
+        : [
+          `/products/${id}`,
+          `/me/products/${id}`,
+        ];
+
+      let fallback = null;
+
+      for (const endpoint of requestPlan) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          const normalised = normaliseProduct(data?.product || data);
+          if (!fallback) fallback = normalised;
+
+          if (productHasReadableCategory(normalised)) {
+            return normalised;
+          }
+        } catch {
+          // Silent fallback across endpoints.
+        }
+      }
+
+      return fallback;
     },
 
     /**
@@ -878,12 +1362,21 @@ const realApi = {
      */
     create: async (productData) => {
       const body = productToBE(productData);
-      // Route to the correct endpoint based on provider linkage
       const hasProvider = Boolean(body.providerProductId);
-      const url = hasProvider ? '/admin/products/from-provider' : '/admin/products';
-      const res = await http.post(url, body);
-      const createdProduct = normaliseProduct(unwrap(res));
-      return createdProduct;
+      const requestPlan = hasProvider
+        ? [
+          ['post', '/admin/products/from-provider', body],
+          ['post', '/providers/products/publish', body],
+          ['post', '/products/publish', body],
+          ['post', '/admin/products', body],
+          ['post', '/products', body],
+        ]
+        : [
+          ['post', '/admin/products', body],
+          ['post', '/products', body],
+        ];
+
+      return runProductMutationPlan(requestPlan, 'Unable to create product.');
     },
 
     /**
@@ -893,9 +1386,27 @@ const realApi = {
      */
     update: async (id, updates) => {
       const body = productToBE(updates);
-      const res = await http.patch(`/admin/products/${id}`, body);
-      const updatedProduct = normaliseProduct(unwrap(res));
-      return updatedProduct;
+      const requestPlan = [
+        ['patch', `/admin/products/${id}`, body],
+        ['patch', `/products/${id}`, body],
+      ];
+
+      if (String(body.providerProductId || body.externalProductId || '').trim()) {
+        requestPlan.splice(1, 0, ['patch', `/providers/products/${id}`, body]);
+      }
+
+      return runProductMutationPlan(requestPlan, 'Unable to update product.');
+    },
+
+    /**
+     * PATCH /products/:id/toggle-status — activate or deactivate product.
+     */
+    toggleStatus: async (id) => {
+      return runProductMutationPlan([
+        ['patch', `/products/${id}/toggle-status`],
+        ['patch', `/admin/products/${id}/toggle`],
+        ['patch', `/products/${id}/toggle`],
+      ], 'Unable to toggle product status.');
     },
 
     /**
@@ -932,8 +1443,13 @@ const realApi = {
         _id: undefined,
         // Human-readable name for dropdowns — fallback chain
         name: pp.translatedName || pp.rawName || pp.rawPayload?.product_name || pp.rawPayload?.product_name_translated || pp.externalProductId,
-        // Ensure rawPrice is populated even if sync stored 0
-        rawPrice: pp.rawPrice || pp.rawPayload?.product_price || 0,
+        // Preserve provider price exactly as returned whenever possible.
+        rawPrice: getProviderCatalogPriceValue(pp),
+        priceCoins: getProviderCatalogPriceValue(pp),
+        minQty: getProviderCatalogMinQtyValue(pp),
+        minimumOrderQty: getProviderCatalogMinQtyValue(pp),
+        maxQty: getProviderCatalogMaxQtyValue(pp),
+        maximumOrderQty: getProviderCatalogMaxQtyValue(pp),
       }));
     },
 
@@ -945,15 +1461,23 @@ const realApi = {
       try {
         const res = await http.get(`/admin/provider-products/item/${providerProductId}/price`);
         const data = unwrap(res);
+        const rawPrice = getProviderCatalogPriceValue(data || {});
+        const minQty = getProviderCatalogMinQtyValue(data || {});
+        const maxQty = getProviderCatalogMaxQtyValue(data || {});
         return {
-          basePriceCoins: data?.rawPrice ?? 0,
+          basePriceCoins: rawPrice || 0,
+          rawPrice: rawPrice || 0,
+          minQty,
+          minimumOrderQty: minQty,
+          maxQty,
+          maximumOrderQty: maxQty,
           found: data?.found ?? false,
           rawName: data?.rawName || '',
           provider: data?.provider || '',
         };
       } catch (err) {
         devLogger.warnUnlessBenign('[realApi] getSyncedPrice failed:', err);
-        return { basePriceCoins: 0, found: false };
+        return { basePriceCoins: 0, rawPrice: 0, minQty: null, maxQty: null, found: false };
       }
     },
   },
@@ -964,21 +1488,59 @@ const realApi = {
      * GET /admin/categories → sendSuccess(res, { categories }, ...)
      */
     list: async () => {
-      const raw = localStorage.getItem('auth-storage');
-      const role = raw ? JSON.parse(raw)?.state?.user?.role?.toUpperCase() : 'CUSTOMER';
-      if (role !== 'ADMIN') return []; // No public categories endpoint — skip for customers
-      const res = await http.get('/admin/categories');
-      const data = unwrap(res);
-      const items = Array.isArray(data) ? data : (data?.categories || []);
-      return items.map(normaliseCategory);
+      const requestPlan = isAdmin()
+        ? ['/admin/categories']
+        : [
+          // Not documented in API_DOCS, but try if the backend exposes it.
+          '/categories',
+          '/public/categories',
+          '/storefront/categories',
+          '/me/categories',
+          // Some deployments allow reading categories from the admin route.
+          // Keep this as a late fallback (and rely on server auth).
+          '/admin/categories',
+        ];
+
+      for (const endpoint of requestPlan) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          const items = Array.isArray(data) ? data : (data?.categories || []);
+          return items.map(normaliseCategory);
+        } catch {
+          // Silent fallback across endpoints.
+        }
+      }
+      return [];
     },
 
     /**
      * GET /admin/categories/:id → sendSuccess(res, { category }, ...)
      */
     get: async (id) => {
-      const res = await http.get(`/admin/categories/${id}`);
-      return normaliseCategory(unwrap(res)?.category || unwrap(res));
+      if (!id) return null;
+
+      const requestPlan = isAdmin()
+        ? [`/admin/categories/${id}`]
+        : [
+          `/categories/${id}`,
+          `/public/categories/${id}`,
+          `/storefront/categories/${id}`,
+          `/me/categories/${id}`,
+          // Late fallback: some deployments allow read access here.
+          `/admin/categories/${id}`,
+        ];
+
+      for (const endpoint of requestPlan) {
+        try {
+          const res = await http.get(endpoint);
+          return normaliseCategory(unwrap(res)?.category || unwrap(res));
+        } catch {
+          // Silent fallback across endpoints.
+        }
+      }
+
+      return null;
     },
 
     /**
@@ -1159,6 +1721,18 @@ const realApi = {
     },
 
     /**
+     * GET /admin/users/:id → fetch a single user profile by ID.
+     */
+    getById: async (userId) => {
+      const normalizedUserId = String(userId || '').trim();
+      if (!normalizedUserId) return null;
+
+      const res = await http.get(`/admin/users/${normalizedUserId}`);
+      const data = unwrap(res);
+      return normaliseUser(data?.user || data);
+    },
+
+    /**
      * Map FE status strings to BE approve / reject / generic-update endpoints.
      *
      * BE response shape (single user): { success, data: { user } }
@@ -1181,7 +1755,7 @@ const realApi = {
     /**
      * Wallet operations: POST /admin/wallets/:userId/add | /deduct
      *
-     * BE Joi schema: { amount: number (positive, required), reason: string (min 3, required) }
+     * API docs show { amount, description }. Some BE builds still accept { reason }.
      * BE response: { success, data: { transaction } } — NOT a user object.
      *
      * Since the BE returns a transaction (not the updated user), we just return the
@@ -1191,12 +1765,14 @@ const realApi = {
       if (amount >= 0) {
         const res = await http.post(`/admin/wallets/${userId}/add`, {
           amount: Math.abs(amount),
+          description: 'Admin balance top-up',
           reason: 'Admin balance top-up',
         });
         return unwrap(res)?.transaction || unwrap(res);
       }
       const res = await http.post(`/admin/wallets/${userId}/deduct`, {
         amount: Math.abs(amount),
+        description: 'Admin balance deduction',
         reason: 'Admin balance deduction',
       });
       return unwrap(res)?.transaction || unwrap(res);
@@ -1284,6 +1860,31 @@ const realApi = {
       return normaliseUser(unwrap(res)?.user || unwrap(res));
     },
 
+    updateCreditLimit: async (userId, creditLimit, _actorContext) => {
+      const normalizedUserId = String(userId || '').trim();
+      if (!normalizedUserId) return null;
+
+      const normalizedCreditLimit = Math.max(0, toFiniteNumber(creditLimit, 0));
+      const requestPlan = [
+        [`/admin/users/${normalizedUserId}/credit-limit`, { creditLimit: normalizedCreditLimit }],
+        [`/admin/users/${normalizedUserId}/credit-limit`, { limit: normalizedCreditLimit }],
+        [`/admin/users/${normalizedUserId}`, { creditLimit: normalizedCreditLimit }],
+        [`/admin/users/${normalizedUserId}`, { maxDebt: normalizedCreditLimit }],
+      ];
+
+      let lastError = null;
+      for (const [endpoint, payload] of requestPlan) {
+        try {
+          const res = await http.patch(endpoint, payload);
+          return normaliseUser(unwrap(res)?.user || unwrap(res));
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to update credit limit.');
+    },
+
     /**
      * PATCH /admin/users/:id/currency → update user's wallet currency.
      * BE Joi: { currency: 'USD' | 'SAR' | ... (3-letter ISO 4217) }
@@ -1313,9 +1914,82 @@ const realApi = {
     },
   },
 
+  // ── Admin Wallets ─────────────────────────────────────────────────────────
+  adminWallets: {
+    /**
+     * GET /admin/wallets → list all wallets for admin use.
+     */
+    list: async () => {
+      const res = await http.get('/admin/wallets');
+      const data = unwrap(res);
+      const items = Array.isArray(data) ? data : (data?.wallets || data?.items || data?.data || []);
+      return normaliseWalletSummaries(items);
+    },
+
+    /**
+     * GET /admin/wallets/:userId → fetch a single wallet summary.
+     */
+    getByUserId: async (userId) => {
+      const normalizedUserId = String(userId || '').trim();
+      if (!normalizedUserId) return null;
+
+      const res = await http.get(`/admin/wallets/${normalizedUserId}`);
+      const data = unwrap(res);
+      return normaliseWalletSummary(data?.wallet || data, normalizedUserId);
+    },
+
+    /**
+     * GET /admin/wallets/:userId/transactions
+     * GET /wallet/users/:userId/transactions (fallback)
+     */
+    getTransactionsByUserId: async (userId, { page = 1, limit = 50, from, to } = {}) => {
+      const normalizedUserId = String(userId || '').trim();
+      if (!normalizedUserId) return [];
+
+      const endpoints = [
+        `/admin/wallets/${normalizedUserId}/transactions`,
+        `/wallet/users/${normalizedUserId}/transactions`,
+      ];
+      const params = {
+        page,
+        limit,
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+      };
+
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await http.get(endpoint, { params });
+          const data = unwrap(res);
+          const items = Array.isArray(data) ? data : (data?.transactions || data?.items || data?.data || []);
+          return items
+            .map((entry) => normaliseWalletTransaction(entry, normalizedUserId))
+            .filter(Boolean);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to load wallet transactions.');
+    },
+  },
+
   // ── Groups ───────────────────────────────────────────────────────────────
   groups: {
     list: async () => {
+      if (!isAdmin()) {
+        try {
+          const res = await http.get('/groups');
+          const data = unwrap(res);
+          const groups = Array.isArray(data) ? data : (data?.groups || []);
+          return groups.map(normaliseGroup);
+        } catch (_error) {
+          return [];
+        }
+      }
+
       const res = await http.get('/admin/groups');
       const data = unwrap(res);
       const groups = Array.isArray(data) ? data : (data?.groups || []);
@@ -1378,6 +2052,35 @@ const realApi = {
     },
 
     /**
+     * GET /api/orders/:id (admin)
+     * GET /api/admin/orders/:id (admin fallback)
+     * GET /api/me/orders/:id (customer)
+     * GET /api/orders/my/:id (customer fallback)
+     */
+    getById: async (orderId) => {
+      const normalizedOrderId = String(orderId || '').trim();
+      if (!normalizedOrderId) return null;
+
+      const endpoints = isAdmin()
+        ? [`/orders/${normalizedOrderId}`, `/admin/orders/${normalizedOrderId}`]
+        : [`/me/orders/${normalizedOrderId}`, `/orders/my/${normalizedOrderId}`];
+
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          return normaliseOrder(data?.order || data);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to load order details.');
+    },
+
+    /**
      * POST /me/orders — place a new order.
      *
      * BE accepts: { productId, quantity, orderFieldsValues }
@@ -1393,9 +2096,24 @@ const realApi = {
       if (orderData.orderFieldsValues) {
         body.orderFieldsValues = orderData.orderFieldsValues;
       }
-      const res = await http.post('/me/orders', body);
-      const data = unwrap(res);
-      return { order: normaliseOrder(data?.order || data) };
+
+      const endpoints = isAdmin() ? ['/orders', '/me/orders'] : ['/me/orders', '/orders'];
+      const requestConfig = orderData?.idempotencyKey
+        ? { headers: { 'Idempotency-Key': String(orderData.idempotencyKey) } }
+        : undefined;
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await http.post(endpoint, body, requestConfig);
+          const data = unwrap(res);
+          return { order: normaliseOrder(data?.order || data) };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to create order.');
     },
 
     /**
@@ -1413,37 +2131,55 @@ const realApi = {
      *   'processing' | 'retry' | 'pending'              → POST /admin/orders/:id/retry
      *   'completed' | 'approved'                        → POST /admin/orders/:id/complete
      */
-    updateStatus: async (orderId, status) => {
-      const normalised = (status || '').toLowerCase();
-      let res;
+    updateStatus: async (orderId, status, orderContext = null) => {
+      const normalizedOrderId = String(orderId || '').trim();
+      const normalised = String(status || '').trim().toLowerCase();
+      const body = { status: normalised };
+      const fulfillmentMode = String(orderContext?.fulfillmentMode || orderContext?.executionType || '').toLowerCase();
+      const isManualOrder = !orderContext?.supplierId && fulfillmentMode !== 'auto' && fulfillmentMode !== 'automatic';
+      const genericEndpoints = [
+        ['patch', `/admin/orders/${normalizedOrderId}`, body],
+        ['patch', `/orders/${normalizedOrderId}`, body],
+        ['patch', `/admin/orders/${normalizedOrderId}/status`, body],
+        ['patch', `/orders/${normalizedOrderId}/status`, body],
+      ];
 
-      if (['failed', 'rejected', 'denied', 'refunded'].includes(normalised)) {
-        // Refund action: marks order as FAILED and refunds wallet
-        res = await http.post(`/admin/orders/${orderId}/refund`);
-        return normaliseOrder(unwrap(res)?.order || unwrap(res));
-      }
-
-      if (['processing', 'retry', 'pending'].includes(normalised)) {
-        // Retry action: re-submits FAILED order to provider.
-        // Manual orders may not support retry, so we gracefully fall back to complete.
-        try {
-          res = await http.post(`/admin/orders/${orderId}/retry`);
-        } catch (_error) {
-          res = await http.post(`/admin/orders/${orderId}/complete`);
-        }
-        return normaliseOrder(unwrap(res)?.order || unwrap(res));
-      }
+      const actionEndpoints = [];
 
       if (['completed', 'approved'].includes(normalised)) {
-        // POST /admin/orders/:id/complete → manually mark order as COMPLETED
-        res = await http.post(`/admin/orders/${orderId}/complete`);
-        return normaliseOrder(unwrap(res)?.order || unwrap(res));
+        actionEndpoints.push(
+          ['patch', `/orders/${normalizedOrderId}/complete`],
+          ['post', `/admin/orders/${normalizedOrderId}/complete`],
+        );
+      } else if (['failed', 'rejected', 'denied', 'refunded', 'cancelled', 'canceled'].includes(normalised)) {
+        actionEndpoints.push(
+          ['patch', `/orders/${normalizedOrderId}/fail`],
+          ['post', `/admin/orders/${normalizedOrderId}/refund`],
+        );
+      } else if (!isManualOrder && ['processing', 'retry', 'pending', 'under_review', 'requested'].includes(normalised)) {
+        actionEndpoints.push(['post', `/admin/orders/${normalizedOrderId}/retry`]);
       }
 
-      // Unknown status — fallback to retry
-      devLogger.warn(`[realApi] updateStatus: Unknown status '${status}' - attempting retry.`);
-      res = await http.post(`/admin/orders/${orderId}/retry`);
-      return normaliseOrder(unwrap(res)?.order || unwrap(res));
+      const requestPlan = [...genericEndpoints, ...actionEndpoints];
+      let lastError = null;
+
+      for (const [method, endpoint, payload] of requestPlan) {
+        try {
+          const res = method === 'patch'
+            ? await http.patch(endpoint, payload)
+            : await http.post(endpoint, payload);
+          return normaliseOrder(unwrap(res)?.order || unwrap(res));
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      if (lastError) {
+        throw lastError;
+      }
+
+      devLogger.warn(`[realApi] updateStatus: No endpoint plan matched '${status}'.`);
+      throw new Error('Unable to update order status.');
     },
 
     /**
@@ -1467,7 +2203,7 @@ const realApi = {
      * GET /admin/deposits (admin) or GET /me/deposits (customer).
      * Both use sendPaginated — deposits array in `data` directly.
      */
- list: async () => {
+    list: async () => {
       const endpoint = isAdmin() ? '/admin/deposits' : '/me/deposits';
       const res = await http.get(endpoint);
       const data = unwrap(res);
@@ -1476,41 +2212,66 @@ const realApi = {
     },
 
     /**
-     * POST /me/deposits — create a deposit request.
+     * GET /api/admin/deposits/:id (admin)
+     * GET /api/me/deposits/:id (customer)
+     * GET /api/deposits/:id (fallback)
+     */
+    getById: async (topupId) => {
+      const normalizedTopupId = String(topupId || '').trim();
+      if (!normalizedTopupId) return null;
+
+      const endpoints = isAdmin()
+        ? [`/admin/deposits/${normalizedTopupId}`, `/deposits/${normalizedTopupId}`]
+        : [`/me/deposits/${normalizedTopupId}`, `/deposits/${normalizedTopupId}`];
+
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          return normaliseDeposit(data?.deposit || data);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to load deposit details.');
+    },
+
+    /**
+     * POST /deposits — create a deposit request (multi-currency).
      *
      * BE expects multipart/form-data with:
-     *   - amountRequested     (required, number)
-     *   - transferredFromNumber (required, string)
-     *   - screenshotProof     (file, required — multer field)
-     *   OR transferImageUrl   (fallback URL string for JSON-only clients)
+     *   - requestedAmount      (required, number)
+     *   - currency             (required, string — ISO 4217)
+     *   - paymentMethodId      (required, string)
+     *   - receipt              (file, required — multer field name)
+     *   - notes                (optional, string)
      *
-     * FE sends: { amount/requestedAmount, senderWalletNumber, proofImage }
-     * We map to the BE-expected shape.
+     * FE sends: { requestedAmount, currency, paymentMethodId, receipt (File), notes }
      */
     create: async (topupData) => {
       const amount = Number(
         topupData.requestedAmount ?? topupData.requestedCoins ?? topupData.amount ?? 0
       );
-      const senderNumber = topupData.senderWalletNumber || topupData.transferredFromNumber || 'N/A';
-      const proofImage = topupData.proofImage || topupData.transferImageUrl || '';
+      const currency = String(topupData.currency || 'USD').toUpperCase();
+      const paymentMethodId = String(topupData.paymentMethodId || '');
+      const notes = String(topupData.notes || '').trim();
+      const receiptFile = topupData.receipt || topupData.proofImage || null;
 
-      // If proofImage is a File/Blob, use FormData for multipart upload
-      if (proofImage instanceof Blob) {
-        const formData = new FormData();
-        formData.append('amountRequested', amount);
-        formData.append('transferredFromNumber', senderNumber);
-        formData.append('screenshotProof', proofImage);
-        const res = await http.post('/me/deposits', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        return normaliseDeposit(unwrap(res));
+      const formData = new FormData();
+      formData.append('requestedAmount', amount);
+      formData.append('currency', currency);
+      formData.append('paymentMethodId', paymentMethodId);
+      if (notes) formData.append('notes', notes);
+
+      if (receiptFile instanceof Blob) {
+        formData.append('receipt', receiptFile);
       }
 
-      // Otherwise send as JSON with transferImageUrl fallback
-      const res = await http.post('/me/deposits', {
-        amountRequested: amount,
-        transferredFromNumber: senderNumber,
-        transferImageUrl: proofImage || 'pending-upload',
+      const res = await http.post('/deposits', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       return normaliseDeposit(unwrap(res));
     },
@@ -1706,22 +2467,68 @@ const realApi = {
      *   { countryAccounts, instructions, whatsappNumber, paymentGroups }
      */
     paymentSettings: async () => {
-      const raw = localStorage.getItem('auth-storage');
-      const role = raw ? JSON.parse(raw)?.state?.user?.role?.toUpperCase() : 'CUSTOMER';
-      if (role !== 'ADMIN') {
-        // No public settings endpoint — return defaults for customers
-        return { countryAccounts: [], instructions: '', whatsappNumber: '', paymentGroups: [] };
+      const role = getStoredRole() || 'CUSTOMER';
+      const cachedSettings = normalizePaymentSettingsResponse(readCachedPaymentSettings());
+
+      if (role !== 'ADMIN' && cachedSettings.paymentGroups.length) {
+        return cachedSettings;
       }
-      const res = await http.get('/admin/settings');
-      const data = unwrap(res);
-      const settings = Array.isArray(data) ? data : (data?.settings || []);
-      const find = (key) => settings.find((s) => s.key === key)?.value;
-      return {
-        countryAccounts: find('paymentCountryAccounts') || [],
-        instructions: find('paymentInstructions') || '',
-        whatsappNumber: find('whatsappNumber') || '',
-        paymentGroups: find('paymentGroups') || [],
-      };
+
+      // Customer sessions: try the public payment settings endpoint.
+      if (role !== 'ADMIN') {
+        try {
+          const res = await http.get('/settings/payment');
+          const data = unwrap(res);
+          const normalized = normalizePaymentSettingsResponse(data);
+          writeCachedPaymentSettings(normalized);
+          return normalized;
+        } catch (_publicErr) {
+          // Fallback to cached or built-in defaults
+          if (cachedSettings.paymentGroups.length) return cachedSettings;
+          return {
+            countryAccounts: [],
+            instructions: '',
+            whatsappNumber: '',
+            paymentGroups: normalizePaymentGroups(null, { fallbackToDefault: true }),
+          };
+        }
+      }
+
+      try {
+        const res = await http.get('/admin/settings');
+        const data = unwrap(res);
+        const settings = Array.isArray(data) ? data : (data?.settings || []);
+        const find = (key) => settings.find((item) => item.key === key)?.value;
+        const normalized = normalizePaymentSettingsResponse({
+          countryAccounts: find('paymentCountryAccounts'),
+          instructions: find('paymentInstructions'),
+          whatsappNumber: find('whatsappNumber'),
+          paymentGroups: find('paymentGroups'),
+        });
+        writeCachedPaymentSettings(normalized);
+        return normalized;
+      } catch (error) {
+        const status = Number(error?.response?.status || error?.status || 0);
+        if (status === 403) {
+          // Token is valid but role isn't actually admin — treat as customer.
+          if (cachedSettings.paymentGroups.length) return cachedSettings;
+          return {
+            countryAccounts: [],
+            instructions: '',
+            whatsappNumber: '',
+            paymentGroups: normalizePaymentGroups(null, { fallbackToDefault: true }),
+          };
+        }
+        if (cachedSettings.paymentGroups.length || cachedSettings.countryAccounts.length || cachedSettings.instructions || cachedSettings.whatsappNumber) {
+          return cachedSettings;
+        }
+
+        if (role !== 'ADMIN') {
+          return { countryAccounts: [], instructions: '', whatsappNumber: '', paymentGroups: [] };
+        }
+
+        throw error;
+      }
     },
 
     /**
@@ -1734,6 +2541,21 @@ const realApi = {
      * parallel PATCH requests for each changed value.
      */
     updatePaymentSettings: async (payload, _actorContext) => {
+      const currentCachedSettings = normalizePaymentSettingsResponse(readCachedPaymentSettings());
+      const normalizedPayload = {
+        ...(payload?.countryAccounts !== undefined ? {
+          countryAccounts: normalizePaymentSettingsResponse({ countryAccounts: payload.countryAccounts }).countryAccounts,
+        } : {}),
+        ...(payload?.instructions !== undefined ? {
+          instructions: String(payload.instructions || '').trim(),
+        } : {}),
+        ...(payload?.whatsappNumber !== undefined ? {
+          whatsappNumber: String(payload.whatsappNumber || '').trim(),
+        } : {}),
+        ...(payload?.paymentGroups !== undefined ? {
+          paymentGroups: serializePaymentGroupsForApi(payload.paymentGroups),
+        } : {}),
+      };
       const keyMap = {
         countryAccounts: 'paymentCountryAccounts',
         instructions: 'paymentInstructions',
@@ -1741,11 +2563,16 @@ const realApi = {
         paymentGroups: 'paymentGroups',
       };
       const updates = Object.entries(keyMap)
-        .filter(([feKey]) => payload[feKey] !== undefined)
-        .map(([feKey, beKey]) => http.patch(`/admin/settings/${beKey}`, { value: payload[feKey] }));
+        .filter(([feKey]) => normalizedPayload[feKey] !== undefined)
+        .map(([feKey, beKey]) => http.patch(`/admin/settings/${beKey}`, { value: normalizedPayload[feKey] }));
 
       if (updates.length > 0) await Promise.all(updates);
-      return payload;
+      const nextSettings = normalizePaymentSettingsResponse({
+        ...currentCachedSettings,
+        ...normalizedPayload,
+      });
+      writeCachedPaymentSettings(nextSettings);
+      return nextSettings;
     },
 
     /**
@@ -1851,7 +2678,10 @@ const realApi = {
     getTransactions: async ({ page = 1, limit = 50 } = {}) => {
       const res = await http.get('/wallet/transactions', { params: { page, limit } });
       const data = unwrap(res);
-      return Array.isArray(data) ? data : (data?.transactions || data?.data || []);
+      const items = Array.isArray(data) ? data : (data?.transactions || data?.data || []);
+      return items
+        .map((entry) => normaliseWalletTransaction(entry))
+        .filter(Boolean);
     },
   },
 };

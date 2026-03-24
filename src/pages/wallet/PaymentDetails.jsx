@@ -1,80 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Header from '../../components/Header';
 import UploadReceiptBox from '../../components/payment/UploadReceiptBox';
 import useAuthStore from '../../store/useAuthStore';
+import useSystemStore from '../../store/useSystemStore';
+import { useToast } from '../../components/ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
+import { findPaymentMethodById } from '../../utils/paymentSettings';
+import apiClient from '../../services/client';
 
 const PaymentDetails = () => {
   const { methodId } = useParams();
   const { user } = useAuthStore();
+  const { paymentSettings, currencies, loadPaymentSettings, loadCurrencies } = useSystemStore();
+  const { addToast } = useToast();
   const { t, dir } = useLanguage();
   const navigate = useNavigate();
   const isRTL = dir === 'rtl';
 
+  // ── Resolve selected payment method from global state ──────────────────
+  const resolved = useMemo(
+    () => findPaymentMethodById(paymentSettings, methodId),
+    [paymentSettings, methodId]
+  );
+  const selectedMethod = resolved?.method ?? null;
+  const selectedGroup = resolved?.group ?? null;
+
+  // ── Build currency dropdown options from system store ──────────────────
+  const currencyOptions = useMemo(() => {
+    if (Array.isArray(currencies) && currencies.length > 0) {
+      return currencies
+        .filter((c) => c.isActive !== false)
+        .map((c) => c.code || c.symbol || 'USD');
+    }
+    return ['EGP', 'USD', 'SAR'];
+  }, [currencies]);
+
+  // ── Form state ─────────────────────────────────────────────────────────
+  const defaultCurrency =
+    (user?.currency && currencyOptions.includes(user.currency.toUpperCase()))
+      ? user.currency.toUpperCase()
+      : currencyOptions[0] || 'EGP';
+
   const [formData, setFormData] = useState({
     amount: '',
-    currency: 'EGP',
-    notes: ''
+    currency: defaultCurrency,
+    notes: '',
   });
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null); // 'success', 'error', or null
 
-  // Mock payment method data
-  const paymentMethods = {
-    vodafone: {
-      id: 'vodafone',
-      name: 'فودافون كاش',
-      icon: '📱',
-      accountNumber: '01012345678',
-      accountName: 'IBRA Store',
-      instructions: 'أرسل المبلغ المطلوب إلى الرقم أعلاه مع كتابة "شحن محفظة" في رسالة التحويل'
-    },
-    etisalat: {
-      id: 'etisalat',
-      name: 'اتصالات كاش',
-      icon: '📱',
-      accountNumber: '01112345678',
-      accountName: 'IBRA Store',
-      instructions: 'أرسل المبلغ المطلوب إلى الرقم أعلاه مع كتابة "شحن محفظة" في رسالة التحويل'
-    },
-    orange: {
-      id: 'orange',
-      name: 'أورانج كاش',
-      icon: '📱',
-      accountNumber: '01212345678',
-      accountName: 'IBRA Store',
-      instructions: 'أرسل المبلغ المطلوب إلى الرقم أعلاه مع كتابة "شحن محفظة" في رسالة التحويل'
-    },
-    bank: {
-      id: 'bank',
-      name: 'تحويل بنكي',
-      icon: '🏦',
-      accountNumber: '123456789012345',
-      accountName: 'IBRA Store Ltd',
-      bankName: 'البنك الأهلي المصري',
-      instructions: 'قم بالتحويل البنكي إلى الحساب أعلاه مع كتابة "شحن محفظة" في سبب التحويل'
-    },
-    western: {
-      id: 'western',
-      name: 'ويسترن يونيون',
-      icon: '💰',
-      accountNumber: 'WU123456789',
-      accountName: 'IBRA Store',
-      instructions: 'قم بإرسال المبلغ عبر ويسترن يونيون إلى الاسم أعلاه'
-    }
-  };
+  // ── Ensure payment settings & currencies are loaded ────────────────────
+  useEffect(() => {
+    loadPaymentSettings();
+    loadCurrencies();
+  }, [loadPaymentSettings, loadCurrencies]);
 
-  const selectedMethod = paymentMethods[methodId];
+  // ── Handlers ───────────────────────────────────────────────────────────
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -90,6 +81,7 @@ const PaymentDetails = () => {
     e.preventDefault();
 
     if (!formData.amount || !selectedFile) {
+      addToast('يرجى إدخال المبلغ ورفع إيصال التحويل', 'error');
       setSubmitStatus('error');
       return;
     }
@@ -97,22 +89,30 @@ const PaymentDetails = () => {
     setIsSubmitting(true);
     setSubmitStatus(null);
 
-    // Mock API call
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // In real app, this would send the data to backend
-      console.log('Submitting payment request:', {
-        method: selectedMethod,
-        amount: formData.amount,
+      await apiClient.topups.create({
+        requestedAmount: Number(formData.amount),
         currency: formData.currency,
-        notes: formData.notes,
-        receipt: selectedFile
+        paymentMethodId: methodId,
+        receipt: selectedFile,
+        notes: formData.notes || '',
       });
 
       setSubmitStatus('success');
+      addToast('تم إرسال طلبك بنجاح! سيتم مراجعته خلال 24 ساعة', 'success');
+
+      // Reset form
+      setFormData({ amount: '', currency: defaultCurrency, notes: '' });
+      setSelectedFile(null);
+
+      // Redirect back to wallet after a short delay
+      setTimeout(() => {
+        navigate('/wallet');
+      }, 2500);
     } catch (error) {
+      const msg = error?.message || 'حدث خطأ في إرسال الطلب. يرجى المحاولة مرة أخرى.';
       setSubmitStatus('error');
+      addToast(msg, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -126,13 +126,7 @@ const PaymentDetails = () => {
     // Handle mobile menu
   };
 
-  const handleNotificationsClick = () => {
-    // Handle notifications
-  };
-
-  const handleSettingsClick = () => {
-    navigate('/settings');
-  };
+  // ── Not found ──────────────────────────────────────────────────────────
 
   if (!selectedMethod) {
     return (
@@ -150,6 +144,8 @@ const PaymentDetails = () => {
       </div>
     );
   }
+
+  // ── Render ─────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900" dir={dir}>
@@ -191,10 +187,17 @@ const PaymentDetails = () => {
           className="bg-gradient-to-r from-orange-400/20 to-pink-500/20 backdrop-blur-xl border border-orange-400/30 rounded-xl p-6 mb-8"
         >
           <div className={`flex items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-            <div className="text-3xl">{selectedMethod.icon}</div>
+            <div className="text-3xl">
+              {selectedMethod.image
+                ? <img src={selectedMethod.image} alt={selectedMethod.name} className="w-10 h-10 rounded-lg object-cover" />
+                : (selectedMethod.type === 'bank_transfer' ? '🏦' : '📱')
+              }
+            </div>
             <div>
               <h3 className="text-white font-semibold text-lg">{selectedMethod.name}</h3>
-              <p className="text-gray-400">طريقة الدفع المختارة</p>
+              {selectedGroup && (
+                <p className="text-gray-400">{selectedGroup.name}</p>
+              )}
             </div>
           </div>
         </motion.div>
@@ -226,9 +229,9 @@ const PaymentDetails = () => {
                 onChange={handleInputChange}
                 className={`w-24 bg-black/50 border border-white/20 rounded-lg px-3 py-3 text-white focus:outline-none focus:border-orange-400 transition-colors ${isRTL ? 'text-right' : 'text-left'}`}
               >
-                <option value="EGP">EGP</option>
-                <option value="USD">USD</option>
-                <option value="SAR">SAR</option>
+                {currencyOptions.map((code) => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -237,25 +240,31 @@ const PaymentDetails = () => {
           <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl p-6">
             <h3 className="text-white font-semibold mb-4">بيانات التحويل</h3>
             <div className="space-y-4">
-              <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <span className="text-gray-400">رقم الحساب:</span>
-                <span className="text-white font-mono">{selectedMethod.accountNumber}</span>
-              </div>
-              <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <span className="text-gray-400">اسم المستلم:</span>
-                <span className="text-white">{selectedMethod.accountName}</span>
-              </div>
+              {selectedMethod.accountNumber && (
+                <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-400">رقم الحساب:</span>
+                  <span className="text-white font-mono">{selectedMethod.accountNumber}</span>
+                </div>
+              )}
+              {selectedMethod.name && (
+                <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-400">اسم المستلم:</span>
+                  <span className="text-white">{selectedMethod.name}</span>
+                </div>
+              )}
               {selectedMethod.bankName && (
                 <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
                   <span className="text-gray-400">اسم البنك:</span>
                   <span className="text-white">{selectedMethod.bankName}</span>
                 </div>
               )}
-              <div className="pt-4 border-t border-white/10">
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  {selectedMethod.instructions}
-                </p>
-              </div>
+              {selectedMethod.instructions && (
+                <div className="pt-4 border-t border-white/10">
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {selectedMethod.instructions}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

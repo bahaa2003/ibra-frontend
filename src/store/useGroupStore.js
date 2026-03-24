@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware';
 import { mockGroups } from '../data/mockData';
 import apiClient from '../services/client';
 
+const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase();
+const isRealProvider = dataProvider === 'real';
+let hasFetchedGroupsFromBackendThisSession = false;
+
 const GROUPS_CACHE_TTL = 5 * 60 * 1000;
 let groupsRequest = null;
 
@@ -14,7 +18,10 @@ const useGroupStore = create(
       loadGroups: async ({ force = false } = {}) => {
         const { groups, groupsLastLoadedAt } = get();
         const hasGroups = Array.isArray(groups) && groups.length > 0;
-        const hasFreshGroups = hasGroups && (Date.now() - Number(groupsLastLoadedAt || 0) < GROUPS_CACHE_TTL);
+        const shouldBypassHydratedCache = isRealProvider && !hasFetchedGroupsFromBackendThisSession;
+        const hasFreshGroups = !shouldBypassHydratedCache
+          && hasGroups
+          && (Date.now() - Number(groupsLastLoadedAt || 0) < GROUPS_CACHE_TTL);
 
         if (!force && hasFreshGroups) {
           return groups;
@@ -31,6 +38,10 @@ const useGroupStore = create(
               groups: nextGroups,
               groupsLastLoadedAt: Date.now(),
             });
+
+            if (isRealProvider) {
+              hasFetchedGroupsFromBackendThisSession = true;
+            }
             return nextGroups;
           })
           .catch((_error) => {
@@ -51,20 +62,23 @@ const useGroupStore = create(
           groups: [...state.groups, created || { ...group, id: Date.now() }],
           groupsLastLoadedAt: Date.now(),
         }));
+        return created;
       },
       updateGroup: async (id, updatedGroup) => {
-        await apiClient.groups.update(id, updatedGroup);
+        const updated = await apiClient.groups.update(id, updatedGroup);
         set((state) => ({
-          groups: state.groups.map((g) => (g.id === id ? { ...g, ...updatedGroup } : g)),
+          groups: state.groups.map((g) => (String(g.id) === String(id) ? { ...g, ...updatedGroup, ...(updated || {}) } : g)),
           groupsLastLoadedAt: Date.now(),
         }));
+        return updated;
       },
       deleteGroup: async (id) => {
         await apiClient.groups.delete(id);
         set((state) => ({
-          groups: state.groups.filter((g) => g.id !== id),
+          groups: state.groups.filter((g) => String(g.id) !== String(id)),
           groupsLastLoadedAt: Date.now(),
         }));
+        return { success: true };
       },
     }),
     {

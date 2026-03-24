@@ -19,6 +19,9 @@ import {
 const defaultGroupForm = {
   name: '',
   description: '',
+  currency: '',
+  image: '',
+  imageName: '',
   isActive: true,
 };
 
@@ -56,7 +59,14 @@ const getMethodBadge = (method) => {
 
 const AdminPaymentMethods = () => {
   const { user } = useAuthStore();
-  const { paymentSettings, loadPaymentSettings, savePaymentSettings } = useSystemStore();
+  const {
+    currencies,
+    isLoadingCurrencies,
+    loadCurrencies,
+    paymentSettings,
+    loadPaymentSettings,
+    savePaymentSettings,
+  } = useSystemStore();
   const { addToast } = useToast();
   const { dir, language } = useLanguage();
   const isRTL = dir === 'rtl';
@@ -76,6 +86,10 @@ const AdminPaymentMethods = () => {
   useEffect(() => {
     loadPaymentSettings();
   }, [loadPaymentSettings]);
+
+  useEffect(() => {
+    loadCurrencies();
+  }, [loadCurrencies]);
 
   useEffect(() => {
     setPaymentGroups(normalizePaymentGroups(paymentSettings?.paymentGroups));
@@ -111,10 +125,7 @@ const AdminPaymentMethods = () => {
     try {
       const normalizedGroups = normalizePaymentGroups(nextGroups);
       await savePaymentSettings(
-        {
-          ...paymentSettings,
-          paymentGroups: normalizedGroups,
-        },
+        { paymentGroups: normalizedGroups },
         user
       );
       setPaymentGroups(normalizedGroups);
@@ -137,26 +148,88 @@ const AdminPaymentMethods = () => {
     setGroupForm({
       name: group.name,
       description: group.description || '',
+      currency: group.currency || '',
+      image: group.image || '',
+      imageName: group.imageName || '',
       isActive: group.isActive !== false,
     });
     setGroupModalOpen(true);
   };
 
+  const handleGroupImageChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!paymentImageTypes.includes(file.type)) {
+      addToast(tx('صيغة الصورة غير مدعومة', 'Unsupported image format'), 'error');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > paymentImageMaxSize) {
+      addToast(tx('حجم الصورة يجب أن يكون أقل من 2MB', 'Image size must be smaller than 2MB'), 'error');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      const path = await uploadImage('payments', file);
+      setGroupForm((prev) => ({
+        ...prev,
+        image: path,
+        imageName: file.name,
+      }));
+    } catch (_error) {
+      addToast(tx('تعذر رفع الصورة', 'Unable to upload image'), 'error');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveGroupImage = () => {
+    setGroupForm((prev) => ({
+      ...prev,
+      image: '',
+      imageName: '',
+    }));
+  };
+
   const handleSaveGroup = async (event) => {
     event.preventDefault();
+    const trimmedName = String(groupForm.name || '').trim();
+    const currencyCode = String(groupForm.currency || '').trim();
+
+    if (!trimmedName) {
+      addToast(tx('اسم المجموعة مطلوب', 'Group name is required'), 'error');
+      return;
+    }
+
+    if (!currencyCode) {
+      addToast(tx('حدد العملة الخاصة بالمجموعة', 'Select the group currency'), 'error');
+      return;
+    }
 
     const nextGroups = editingGroupId
       ? paymentGroups.map((group) => (
           group.id === editingGroupId
-            ? { ...group, ...groupForm }
+            ? {
+                ...group,
+                ...groupForm,
+                currency: currencyCode,
+                name: trimmedName,
+                description: String(groupForm.description || '').trim(),
+              }
             : group
         ))
       : [
           ...paymentGroups,
           {
-            id: createPaymentEntityId('group', groupForm.name),
-            name: groupForm.name.trim(),
-            description: groupForm.description.trim(),
+            id: createPaymentEntityId('group', trimmedName),
+            name: trimmedName,
+            description: String(groupForm.description || '').trim(),
+            currency: currencyCode,
+            image: groupForm.image,
+            imageName: groupForm.imageName,
             isActive: groupForm.isActive,
             methods: [],
           },
@@ -260,9 +333,15 @@ const AdminPaymentMethods = () => {
 
   const handleSaveMethod = async (event) => {
     event.preventDefault();
+    const trimmedName = String(methodForm.name || '').trim();
 
     if (!methodForm.groupId) {
       addToast(tx('اختر مجموعة الدفع أولاً', 'Select a payment group first'), 'error');
+      return;
+    }
+
+    if (!trimmedName) {
+      addToast(tx('اسم طريقة الدفع مطلوب', 'Payment method name is required'), 'error');
       return;
     }
 
@@ -288,9 +367,9 @@ const AdminPaymentMethods = () => {
     }
 
     const normalizedMethod = normalizePaymentMethod({
-      id: oldMethodId || createPaymentEntityId('method', methodForm.name),
-      name: methodForm.name,
-      description: methodForm.description,
+      id: oldMethodId || createPaymentEntityId('method', trimmedName),
+      name: trimmedName,
+      description: String(methodForm.description || '').trim(),
       type: methodForm.type,
       feePercent: methodForm.feePercent,
       accountNumber: methodForm.accountNumber,
@@ -407,9 +486,17 @@ const AdminPaymentMethods = () => {
           >
             <div className={`flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between ${isRTL ? 'lg:flex-row-reverse' : ''}`}>
               <div className={`flex min-w-0 items-start gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-soft))] text-[var(--color-button-text)]">
-                  <Building2 className="h-6 w-6" />
-                </div>
+                {group.image ? (
+                  <img
+                    src={resolveImageUrl(group.image)}
+                    alt={group.name}
+                    className="h-12 w-12 shrink-0 rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.8)] object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-soft))] text-[var(--color-button-text)]">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className={`flex flex-wrap items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
                     <h2 className="truncate text-lg font-semibold text-[var(--color-text)] sm:text-xl">{group.name}</h2>
@@ -426,6 +513,16 @@ const AdminPaymentMethods = () => {
                   <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
                     {group.description || tx('لا يوجد وصف مضاف لهذه المجموعة بعد.', 'No description has been added for this group yet.')}
                   </p>
+                  {group.currency ? (
+                    <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-primary)]">
+                      {tx('العملة:', 'Currency:')} {group.currency}
+                    </p>
+                  ) : null}
+                  {group.imageName ? (
+                    <p className="mt-1 text-xs text-[var(--color-muted)]">
+                      {tx('الصورة:', 'Image:')} {group.imageName}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-primary)]">
                     {tx(`${group.methods.length} طرق دفع`, `${group.methods.length} payment methods`)}
                   </p>
@@ -571,6 +668,26 @@ const AdminPaymentMethods = () => {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-secondary)]">
+              {tx('تحديد العملة', 'Select Currency')}
+            </label>
+            <select
+              className={selectClassName}
+              value={groupForm.currency}
+              onChange={(event) => setGroupForm((prev) => ({ ...prev, currency: event.target.value }))}
+              required
+              disabled={isLoadingCurrencies}
+            >
+              <option value="">{isLoadingCurrencies ? tx('جاري تحميل العملات...', 'Loading currencies...') : tx('اختر العملة', 'Select a currency')}</option>
+              {(currencies || []).map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code}{currency.name ? ` — ${currency.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-secondary)]">
               {tx('وصف المجموعة', 'Group Description')}
             </label>
             <textarea
@@ -579,6 +696,48 @@ const AdminPaymentMethods = () => {
               onChange={(event) => setGroupForm((prev) => ({ ...prev, description: event.target.value }))}
               placeholder={tx('اكتب وصفًا مختصرًا لما تحتويه هذه المجموعة', 'Write a short description of what this group contains')}
             />
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-surface-rgb)/0.75)] p-4">
+            <div className={`flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[var(--color-text)]">{tx('صورة المجموعة', 'Group Image')}</p>
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                  {tx('ارفع صورة أو شعار يظهر للعملاء مع مجموعة الدفع.', 'Upload an image or logo that appears to customers with this payment group.')}
+                </p>
+              </div>
+              {groupForm.image ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveGroupImage}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[color:rgb(var(--color-error-rgb)/0.22)] bg-[color:rgb(var(--color-error-rgb)/0.08)] text-[var(--color-error)] transition-colors hover:bg-[color:rgb(var(--color-error-rgb)/0.14)]"
+                  aria-label={tx('حذف الصورة', 'Remove image')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+
+            <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-dashed border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-4 transition-colors hover:border-[color:rgb(var(--color-primary-rgb)/0.35)]">
+              <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" className="hidden" onChange={handleGroupImageChange} />
+              <div className={`flex items-center gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--color-primary),var(--color-primary-soft))] text-[var(--color-button-text)]">
+                  <ImagePlus className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">{tx('رفع صورة جديدة', 'Upload a new image')}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {groupForm.imageName || tx('PNG, JPG, WEBP أو GIF', 'PNG, JPG, WEBP, or GIF')}
+                  </p>
+                </div>
+              </div>
+            </label>
+
+            {groupForm.image ? (
+              <div className="overflow-hidden rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-card-rgb)/0.96)] p-3">
+                <img src={resolveImageUrl(groupForm.image)} alt={groupForm.name || 'Payment group'} decoding="async" referrerPolicy="no-referrer" className="h-44 w-full rounded-xl object-cover" />
+              </div>
+            ) : null}
           </div>
 
           <label className={`flex items-center gap-3 text-sm text-[var(--color-text)] ${isRTL ? 'flex-row-reverse' : ''}`}>

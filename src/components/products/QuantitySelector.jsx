@@ -38,7 +38,7 @@ const QuantitySelector = ({
           type="button"
           onClick={() => changeBy(-1)}
           disabled={disabled || Number(value || minQty) <= minQty}
-          className="inline-flex h-12 items-center justify-center rounded-[1rem] border border-white/10 bg-black/20 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-11 items-center justify-center rounded-[1rem] border border-white/10 bg-black/20 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45 sm:h-12"
           aria-label={copy.decreaseLabel}
         >
           <Minus className="h-4 w-4" />
@@ -54,7 +54,7 @@ const QuantitySelector = ({
           onChange={handleInputChange}
           disabled={disabled}
           className={cn(
-            'h-12 rounded-[1rem] border border-white/10 bg-black/20 px-4 text-center text-lg font-semibold text-white outline-none transition-colors focus:border-red-400/60 focus:bg-black/30',
+            'h-11 rounded-[1rem] border border-white/10 bg-black/20 px-4 text-center text-base font-semibold text-white outline-none transition-colors focus:border-red-400/60 focus:bg-black/30 sm:h-12 sm:text-lg',
             disabled && 'cursor-not-allowed opacity-55'
           )}
         />
@@ -63,7 +63,7 @@ const QuantitySelector = ({
           type="button"
           onClick={() => changeBy(1)}
           disabled={disabled || Number(value || minQty) >= maxQty}
-          className="inline-flex h-12 items-center justify-center rounded-[1rem] border border-white/10 bg-black/20 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-11 items-center justify-center rounded-[1rem] border border-white/10 bg-black/20 text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45 sm:h-12"
           aria-label={copy.increaseLabel}
         >
           <Plus className="h-4 w-4" />

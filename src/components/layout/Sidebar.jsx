@@ -7,7 +7,6 @@ import {
   Code2,
   Coins,
   CreditCard,
-  Gamepad2,
   Home,
   LayoutDashboard,
   LogOut,
@@ -27,21 +26,17 @@ import useAuthStore from '../../store/useAuthStore';
 import { cn } from '../ui/Button';
 import { useLanguage } from '../../context/LanguageContext';
 import LanguageSwitcher from '../ui/LanguageSwitcher';
+import WalletSidebarCard from './WalletSidebarCard';
 import brandIconImage from '../../assets/logo.png';
 import brandWordmarkImage from '../../assets/ibra.png';
 import { buildWhatsAppLink, getAdminWhatsAppNumber } from '../../utils/whatsapp';
-import { getDefaultRouteForRole, hasRequiredRole } from '../../utils/authRoles';
+import { hasRequiredRole } from '../../utils/authRoles';
 
 const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const { user, logout } = useAuthStore();
-  const { paymentSettings, loadPaymentSettings } = useSystemStore();
   const navigate = useNavigate();
   const { dir } = useLanguage();
   const { t } = useTranslation();
-
-  useEffect(() => {
-    loadPaymentSettings();
-  }, [loadPaymentSettings]);
 
   const closeSidebarOnMobile = () => {
     if (isMobile) {
@@ -70,37 +65,49 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
 
   const navItems = [
     {
-      icon: user?.role === 'customer' ? Home : LayoutDashboard,
-      label: user?.role === 'customer'
-        ? t('header.home')
-        : t('sidebar.dashboard', { defaultValue: dir === 'rtl' ? 'لوحة التحكم' : 'Dashboard' }),
-      path: getDefaultRouteForRole(user?.role),
-      roles: ['customer', 'manager', 'admin']
+      icon: Home,
+      label: t('header.home', { defaultValue: dir === 'rtl' ? 'الرئيسية' : 'Home' }),
+      path: '/dashboard',
+      roles: ['customer', 'admin']
+    },
+    {
+      icon: Wallet,
+      label: t('sidebar.adminWallet', { defaultValue: dir === 'rtl' ? 'محفظة الأدمن' : 'Admin Wallet' }),
+      path: '/admin/wallet',
+      roles: ['admin']
+    },
+    {
+      icon: LayoutDashboard,
+      label: t('sidebar.dashboard', { defaultValue: dir === 'rtl' ? 'لوحة التحكم' : 'Dashboard' }),
+      path: '/manager/dashboard',
+      roles: ['manager']
+    },
+    {
+      icon: LayoutDashboard,
+      label: t('sidebar.adminDashboard', { defaultValue: dir === 'rtl' ? 'لوحة تحكم الأدمن' : 'Admin Dashboard' }),
+      path: '/admin/dashboard',
+      roles: ['admin']
     },
     { icon: User, label: t('sidebar.myAccount', { defaultValue: 'حسابي' }), path: '/account', roles: ['admin', 'customer', 'manager'] },
     { icon: ShieldCheck, label: t('sidebar.accountProtection', { defaultValue: 'حماية الحساب' }), path: '/account-security', roles: ['admin', 'customer', 'manager'] },
-    {
-      icon: Gamepad2,
-      label: user?.role === 'admin'
-        ? t('sidebar.storefront', { defaultValue: dir === 'rtl' ? 'المتجر' : 'Store' })
-        : t('sidebar.browseStore'),
-      path: '/products',
-      roles: ['admin', 'customer']
-    },
     { icon: Wallet, label: t('sidebar.wallet'), path: '/wallet', roles: ['customer'] },
     {
       icon: ShoppingCart,
-      label: user?.role === 'customer'
-        ? t('header.orders', { defaultValue: dir === 'rtl' ? 'طلباتي' : 'My Orders' })
-        : t('header.orders', { defaultValue: dir === 'rtl' ? 'الطلبات' : 'Orders' }),
-      path: user?.role === 'customer' ? '/orders' : '/admin/orders',
-      roles: ['admin', 'customer']
+      label: t('header.orders', { defaultValue: dir === 'rtl' ? 'طلباتي' : 'My Orders' }),
+      path: '/orders',
+      roles: ['customer']
     },
     { icon: Code2, label: t('sidebar.apiSandbox'), path: '/api-sandbox', roles: ['admin'] },
     { icon: Users, label: t('sidebar.users'), path: '/admin/users', roles: ['admin'] },
     { icon: UserCog, label: t('sidebar.supervisors'), path: '/admin/supervisors', roles: ['admin'] },
     { icon: Users, label: t('sidebar.groupsManager'), path: '/admin/groups', roles: ['admin'] },
     { icon: Package, label: t('sidebar.productsManager'), path: '/admin/products', roles: ['admin'] },
+    {
+      icon: ShoppingCart,
+      label: t('sidebar.ordersManager', { defaultValue: dir === 'rtl' ? 'إدارة الطلبات' : 'Orders Manager' }),
+      path: '/admin/orders',
+      roles: ['admin']
+    },
     { icon: Building2, label: t('sidebar.suppliersManager'), path: '/admin/suppliers', roles: ['admin'] },
     { icon: ShieldCheck, label: t('sidebar.paymentsManager'), path: '/admin/payments', roles: ['admin'] },
     { icon: CreditCard, label: t('sidebar.paymentMethods'), path: '/admin/payment-methods', roles: ['admin'] },
@@ -117,6 +124,7 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   ];
 
   const filteredNavItems = navItems.filter((item) => hasRequiredRole(user?.role || 'customer', item.roles));
+  const showWalletCard = String(user?.role || '').toLowerCase() === 'customer' && (isOpen || isMobile);
 
   return (
     <>
@@ -180,66 +188,76 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
           )}
         </div>
 
-        <div className="flex-1 space-y-1 overflow-y-auto px-3 py-4 scrollbar-hide">
-          {filteredNavItems.map((item) => (
-            item.isExternal ? (
-              <button
-                key={item.path}
-                type="button"
-                onClick={item.onClick}
-                className={cn(
-                  'group relative flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-[var(--color-text-secondary)] transition-all hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] hover:text-[var(--color-text)]'
-                )}
-              >
-                <item.icon className={cn('h-5 w-5 shrink-0', !isOpen && 'mx-auto')} />
-                {isOpen && <span className="truncate text-sm font-medium">{item.label}</span>}
-                {!isOpen && (
-                  <div
-                    className={cn(
-                      'pointer-events-none absolute whitespace-nowrap rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] opacity-0 shadow-[var(--shadow-subtle)] transition-opacity group-hover:opacity-100',
-                      dir === 'rtl' ? 'right-full mr-2' : 'left-full ml-2'
-                    )}
-                  >
-                    {item.label}
-                  </div>
-                )}
-              </button>
-            ) : (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={closeSidebarOnMobile}
-                className={({ isActive }) =>
-                  cn(
-                    'group relative flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 transition-all',
-                    isActive
-                      ? 'bg-[color:rgb(var(--color-primary-rgb)/0.12)] text-[var(--color-text)] shadow-[var(--shadow-subtle)]'
-                      : 'text-[var(--color-text-secondary)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] hover:text-[var(--color-text)]'
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <span className={cn('absolute inset-y-2 w-[3px] rounded-full bg-[var(--color-primary)]', dir === 'rtl' ? 'right-0' : 'left-0')} />
-                    )}
-                    <item.icon className={cn('h-5 w-5 shrink-0', !isOpen && 'mx-auto', isActive && 'text-[var(--color-primary)]')} />
-                    {isOpen && <span className="truncate text-sm font-medium">{item.label}</span>}
-                    {!isOpen && (
-                      <div
-                        className={cn(
-                          'pointer-events-none absolute whitespace-nowrap rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] opacity-0 shadow-[var(--shadow-subtle)] transition-opacity group-hover:opacity-100',
-                          dir === 'rtl' ? 'right-full mr-2' : 'left-full ml-2'
-                        )}
-                      >
-                        {item.label}
-                      </div>
-                    )}
-                  </>
-                )}
-              </NavLink>
-            )
-          ))}
+        <div className="flex-1 overflow-y-auto px-3 py-4 scrollbar-hide">
+          {showWalletCard && (
+            <WalletSidebarCard
+              className="mb-4"
+              isVisible={showWalletCard}
+              onNavigate={closeSidebarOnMobile}
+            />
+          )}
+
+          <div className="space-y-1">
+            {filteredNavItems.map((item) => (
+              item.isExternal ? (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={item.onClick}
+                  className={cn(
+                    'group relative flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 text-[var(--color-text-secondary)] transition-all hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] hover:text-[var(--color-text)]'
+                  )}
+                >
+                  <item.icon className={cn('h-5 w-5 shrink-0', !isOpen && 'mx-auto')} />
+                  {isOpen && <span className="truncate text-sm font-medium">{item.label}</span>}
+                  {!isOpen && (
+                    <div
+                      className={cn(
+                        'pointer-events-none absolute whitespace-nowrap rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] opacity-0 shadow-[var(--shadow-subtle)] transition-opacity group-hover:opacity-100',
+                        dir === 'rtl' ? 'right-full mr-2' : 'left-full ml-2'
+                      )}
+                    >
+                      {item.label}
+                    </div>
+                  )}
+                </button>
+              ) : (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={closeSidebarOnMobile}
+                  className={({ isActive }) =>
+                    cn(
+                      'group relative flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-3 transition-all',
+                      isActive
+                        ? 'bg-[color:rgb(var(--color-primary-rgb)/0.12)] text-[var(--color-text)] shadow-[var(--shadow-subtle)]'
+                        : 'text-[var(--color-text-secondary)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] hover:text-[var(--color-text)]'
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span className={cn('absolute inset-y-2 w-[3px] rounded-full bg-[var(--color-primary)]', dir === 'rtl' ? 'right-0' : 'left-0')} />
+                      )}
+                      <item.icon className={cn('h-5 w-5 shrink-0', !isOpen && 'mx-auto', isActive && 'text-[var(--color-primary)]')} />
+                      {isOpen && <span className="truncate text-sm font-medium">{item.label}</span>}
+                      {!isOpen && (
+                        <div
+                          className={cn(
+                            'pointer-events-none absolute whitespace-nowrap rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] opacity-0 shadow-[var(--shadow-subtle)] transition-opacity group-hover:opacity-100',
+                            dir === 'rtl' ? 'right-full mr-2' : 'left-full ml-2'
+                          )}
+                        >
+                          {item.label}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              )
+            ))}
+          </div>
         </div>
 
         <div className="border-t border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-card-rgb)/0.64)] p-4">

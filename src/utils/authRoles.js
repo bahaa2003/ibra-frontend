@@ -23,7 +23,7 @@ export const hasRequiredRole = (userRole, allowedRoles = []) => {
 
 export const getDefaultRouteForRole = (role) => {
   if (isAdminRole(role)) {
-    return '/admin/dashboard';
+    return '/dashboard';
   }
 
   if (String(role || '').trim().toLowerCase() === 'manager') {

@@ -13,15 +13,17 @@ import Badge from '../ui/Badge';
 import Input from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
+import useGroupStore from '../../store/useGroupStore';
 import useOrderStore from '../../store/useOrderStore';
 import useSystemStore from '../../store/useSystemStore';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   calculateProductPrice,
-  convertPriceByCurrency,
   formatCurrencyAmount,
   getCurrencyMeta,
+  resolveProductUnitPrice,
 } from '../../utils/pricing';
+import { normalizeMoneyAmount } from '../../utils/money';
 import { getProductStatus } from '../../utils/productStatus';
 import {
   clampProductQuantity,
@@ -64,6 +66,7 @@ const getCopy = (language = 'ar') => {
       successMessage: 'Your order has been submitted successfully.',
       failedTitle: 'Unable to complete order',
       failedMessage: 'Something went wrong while placing this order.',
+      invalidAmountMessage: 'Unable to place this order because the amount is invalid.',
       invalidQuantity: 'Selected quantity is not valid for this product.',
       fieldRequired: (label) => `${label} is required.`,
       placeholder: (label) => `Enter ${label}`,
@@ -100,6 +103,7 @@ const getCopy = (language = 'ar') => {
     successMessage: 'تم تنفيذ طلبك بنجاح وسيظهر في طلباتك مباشرة.',
     failedTitle: 'تعذر تنفيذ الطلب',
     failedMessage: 'حدث خطأ أثناء تنفيذ الطلب. حاول مرة أخرى.',
+    invalidAmountMessage: 'لا يمكن تنفيذ الطلب لأن قيمة الشراء غير صالحة.',
     invalidQuantity: 'الكمية الحالية غير صالحة لهذا المنتج.',
     fieldRequired: (label) => `يرجى إدخال ${label}`,
     placeholder: (label) => `أدخل ${label}`,
@@ -132,6 +136,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
   const { addToast } = useToast();
   const user = useAuthStore((state) => state.user);
   const updateUserSession = useAuthStore((state) => state.updateUserSession);
+  const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const addOrder = useOrderStore((state) => state.addOrder);
   const currencies = useSystemStore((state) => state.currencies);
   const loadCurrencies = useSystemStore((state) => state.loadCurrencies);
@@ -238,21 +243,37 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     return () => window.clearTimeout(timeoutId);
   }, [isOpen, onClose, statusCard.tone]);
 
+  const userCurrencyCode = String(user?.currency || 'USD').toUpperCase();
+  const pricingGroup = user?.groupId || user?.group || 'Normal';
+  const pricingGroupPercentage = user?.groupPercentage ?? null;
+  const pricingSnapshot = useMemo(() => {
+    if (!product) {
+      return { unitPriceBase: 0, unitPrice: 0 };
+    }
+
+    return {
+      unitPriceBase: calculateProductPrice(product, pricingGroup, pricingGroupPercentage),
+      unitPrice: resolveProductUnitPrice(product, userCurrencyCode, currencies, pricingGroup, pricingGroupPercentage),
+    };
+  }, [currencies, groupsLastLoadedAt, pricingGroup, pricingGroupPercentage, product, userCurrencyCode]);
+
   if (!isOpen || !product) return null;
 
   const productState = getProductStatus(product, language);
   const isApproved = isApprovedAccountStatus(user?.status);
-  const userCurrencyCode = String(user?.currency || 'USD').toUpperCase();
   const userCurrency = getCurrencyMeta(userCurrencyCode, currencies);
-  const unitPriceBase = calculateProductPrice(product, user?.group);
-  const unitPrice = convertPriceByCurrency(unitPriceBase, userCurrencyCode, currencies);
-  const totalPrice = Number((unitPrice * quantity).toFixed(2));
-  const balance = Number(user?.coins || 0);
-  const canAfford = balance >= totalPrice;
+  const unitPriceBase = pricingSnapshot.unitPriceBase;
+  const unitPrice = pricingSnapshot.unitPrice;
+  const totalPrice = normalizeMoneyAmount(unitPrice * quantity);
+  const hasValidAmount = Number.isFinite(totalPrice) && totalPrice > 0;
+  const balance = normalizeMoneyAmount(user?.coins || 0);
+  const creditLimit = normalizeMoneyAmount(Math.max(0, Number(user?.creditLimit || 0)));
+  const spendableBalance = normalizeMoneyAmount(balance + creditLimit);
+  const canAfford = spendableBalance >= totalPrice;
 
   const formattedUnitPrice = formatCurrencyAmount(unitPrice, userCurrencyCode, currencies, locale);
   const formattedTotalPrice = formatCurrencyAmount(totalPrice, userCurrencyCode, currencies, locale);
-  const missingAmount = formatCurrencyAmount(Math.max(0, totalPrice - balance), userCurrencyCode, currencies, locale);
+  const missingAmount = formatCurrencyAmount(Math.max(0, totalPrice - spendableBalance), userCurrencyCode, currencies, locale);
 
   const hasQuantityInput = String(quantityInput ?? '').trim().length > 0;
   const selectedQuantityIsValid = (
@@ -264,6 +285,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     productState.isPurchasable
     && isApproved
     && canAfford
+    && hasValidAmount
     && selectedQuantityIsValid
     && !isPreparing
     && !isSubmitting
@@ -382,6 +404,11 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
       return;
     }
 
+    if (!hasValidAmount) {
+      addToast(copy.invalidAmountMessage, 'error');
+      return;
+    }
+
     setIsSubmitting(true);
     setStatusCard({ tone: 'info', title: copy.preparingTitle, message: copy.preparingMessage });
 
@@ -398,6 +425,13 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
         || normalizedFields.uid
         || ''
       ).trim();
+      const fieldsSnapshot = Array.isArray(product?.orderFields) && product.orderFields.length > 0
+        ? product.orderFields.map((field) => ({ ...field }))
+        : orderFields.map((field) => ({
+          key: field.key,
+          label: field.label,
+          placeholder: field.placeholder,
+        }));
 
       const createResult = await addOrder({
         id: `ord-${Date.now()}`,
@@ -414,6 +448,12 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
         playerId: userIdentifier,
         orderFields: normalizedFields,
         orderFieldsValues: normalizedFields,
+        customerInput: {
+          values: normalizedFields,
+          fieldsSnapshot,
+          quantitySnapshot: quantityMeta,
+        },
+        quantitySnapshot: quantityMeta,
         status: 'pending',
         createdAt: new Date().toISOString(),
         idempotencyKey: `${user.id}-${product.id}-${userIdentifier}-${Date.now()}`,
@@ -421,16 +461,18 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
 
       const nextBalance = Number(createResult?.updatedBalance);
       if (Number.isFinite(nextBalance)) {
-        updateUserSession({ coins: nextBalance });
+        updateUserSession({ coins: normalizeMoneyAmount(nextBalance) });
       } else {
-        updateUserSession({ coins: Number((balance - totalPrice).toFixed(2)) });
+        updateUserSession({ coins: normalizeMoneyAmount(balance - totalPrice) });
       }
 
       setStatusCard({ tone: 'success', title: copy.successTitle, message: copy.successMessage });
       addToast(copy.successMessage, 'success');
     } catch (error) {
       const message = '\u062a\u0639\u0630\u0631 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0637\u0644\u0628 \u0627\u062a\u0635\u0644 \u0628\u0627\u0644\u0645\u0633\u0624\u0648\u0644';
-      devLogger.warnUnlessBenign('Order submit error:', error);
+      if (String(error?.code || '').toUpperCase() !== 'INVALID_ORDER_AMOUNT') {
+        devLogger.warnUnlessBenign('Order submit error:', error);
+      }
       setStatusCard({ tone: 'danger', title: copy.failedTitle, message });
       addToast(message, 'error');
     } finally {

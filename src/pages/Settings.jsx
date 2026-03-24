@@ -140,6 +140,8 @@ const Settings = () => {
     addToast(text.simulatedActionDone, 'info');
   };
 
+  const openFromSettings = (to) => navigate(to, { state: { fromSettings: true } });
+
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <motion.header
@@ -160,35 +162,35 @@ const Settings = () => {
                 title={text.dashboardOverview}
                 description={text.dashboardOverviewDescription}
                 action={text.open}
-                onClick={() => navigate('/dashboard')}
+                onClick={() => openFromSettings('/dashboard')}
               />
               <SettingsItem
                 icon={Users}
                 title={text.usersManager}
                 description={text.usersManagerDescription}
                 action={text.open}
-                onClick={() => navigate('/admin/users')}
+                onClick={() => openFromSettings('/admin/users')}
               />
               <SettingsItem
                 icon={CreditCard}
                 title={text.paymentsManager}
                 description={text.paymentsManagerDescription}
                 action={text.open}
-                onClick={() => navigate('/admin/payment-methods')}
+                onClick={() => openFromSettings('/admin/payment-methods')}
               />
               <SettingsItem
                 icon={Bell}
                 title={text.topupsManager}
                 description={text.topupsManagerDescription}
                 action={text.open}
-                onClick={() => navigate('/admin/payments')}
+                onClick={() => openFromSettings('/admin/payments')}
               />
               <SettingsItem
                 icon={Coins}
                 title={text.currenciesManager}
                 description={text.currenciesManagerDescription}
                 action={text.open}
-                onClick={() => navigate('/admin/currencies')}
+                onClick={() => openFromSettings('/admin/currencies')}
               />
             </>
           )}
@@ -197,7 +199,7 @@ const Settings = () => {
             title={text.myAccount}
             description={text.myAccountDescription}
             action={text.open}
-            onClick={() => navigate('/account')}
+            onClick={() => openFromSettings('/account')}
           />
         </SettingsSection>
       </motion.section>
@@ -272,14 +274,14 @@ const Settings = () => {
             title={text.changePassword}
             description={text.changePasswordDescription}
             action={text.open}
-            onClick={() => navigate('/account#password')}
+            onClick={() => openFromSettings('/account#password')}
           />
           <SettingsItem
             icon={Shield}
             title={text.twoFactor}
             description={text.twoFactorDescription}
             action={text.open}
-            onClick={() => navigate('/account-security')}
+            onClick={() => openFromSettings('/account-security')}
           />
           <SettingsItem
             icon={LogOut}

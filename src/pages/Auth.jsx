@@ -178,6 +178,7 @@ const countryOptions = useMemo(() => {
 
   useEffect(() => {
     if (location.search.includes('token=')) return;
+    if (location.search.includes('status=')) return;
 
     const normalizedStatus = normalizeAccountStatus(user?.status || blockedStatus);
     const blockedRoute = getAccountAccessRoute(normalizedStatus);
@@ -193,8 +194,10 @@ const countryOptions = useMemo(() => {
   }, [blockedStatus, isAuthenticated, location.search, navigate, user]);
 
   useEffect(() => {
-    const token = new URLSearchParams(location.search).get('token');
-    if (!token || oauthHandledRef.current) return;
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    const callbackStatus = normalizeAccountStatus(params.get('status'));
+    if ((!token && !callbackStatus) || oauthHandledRef.current) return;
 
     oauthHandledRef.current = true;
 
@@ -204,6 +207,8 @@ const countryOptions = useMemo(() => {
       if (result?.redirectTo) {
         if (result?.status === 'pending') {
           addToast('تم إنشاء حساب Google وهو الآن بانتظار موافقة الإدارة.', 'warning');
+        } else if (result?.status === 'verification_required') {
+          addToast('يرجى تأكيد بريدك الإلكتروني أولاً ثم تسجيل الدخول.', 'warning');
         } else if (result?.status === 'rejected') {
           addToast('هذا الحساب مرفوض حاليًا. يرجى التواصل مع الإدارة.', 'error');
         } else {
@@ -257,7 +262,14 @@ const countryOptions = useMemo(() => {
     if (!result) return;
 
     if (result.redirectTo) {
-      if (result.status === 'pending') {
+      if (result.status === 'verification_required') {
+        addToast(
+          mode === 'signup'
+            ? 'أرسلنا رابط تأكيد إلى بريدك الإلكتروني. يرجى تأكيد البريد أولاً.'
+            : 'يجب تأكيد بريدك الإلكتروني قبل تسجيل الدخول.',
+          'warning'
+        );
+      } else if (result.status === 'pending') {
         addToast(
           source === 'google'
             ? 'تم إنشاء حساب Google وهو بانتظار تفعيل الإدارة.'

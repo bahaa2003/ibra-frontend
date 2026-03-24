@@ -4,6 +4,7 @@ import gamesChargingImage from '../assets/gamesCharging.webp';
 import brandIconImage from '../assets/logo.png';
 import { calculateProductPrice } from './pricing';
 import { formatNumber } from './intl';
+import { getMoneyFormatOptions, toFiniteMoneyNumber } from './money';
 import { getProductStatus } from './productStatus';
 
 const CATEGORY_DISPLAY_CONFIG = {
@@ -81,22 +82,43 @@ export const getCurrencySymbol = (currencyCode = 'USD') => {
   return currencySymbolMap[String(currencyCode || 'USD').toUpperCase()] || String(currencyCode || 'USD').toUpperCase();
 };
 
-export const formatDisplayNumber = (value, locale = 'en-US', compact = false) => {
+export const formatDisplayNumber = (value, locale = 'en-US', compact = false, options = {}) => {
+  const {
+    minimumFractionDigits,
+    maximumFractionDigits,
+    ...restOptions
+  } = options;
+  const fractionOptions = getMoneyFormatOptions(value, {
+    compact,
+    minimumFractionDigits,
+    maximumFractionDigits,
+  });
+
   return formatNumber(value, locale, {
     notation: compact ? 'compact' : 'standard',
-    maximumFractionDigits: compact ? 1 : 0,
+    ...fractionOptions,
+    ...restOptions,
   });
 };
 
-export const formatWalletNumber = (value, compact = false) => formatDisplayNumber(value, 'en-US', compact);
+export const formatWalletNumber = (value, compact = false, options = {}) => formatDisplayNumber(value, 'en-US', compact, options);
 
 export const formatWalletAmount = (value, currencyCode = 'USD', options = {}) => {
-  const { compact = false, signed = false } = options;
-  const amount = Number(value || 0);
+  const {
+    compact = false,
+    signed = false,
+    locale = 'en-US',
+    minimumFractionDigits,
+    maximumFractionDigits,
+  } = options;
+  const amount = toFiniteMoneyNumber(value, 0);
   const normalizedCurrency = String(currencyCode || 'USD').toUpperCase();
   const sign = signed ? (amount > 0 ? '+' : amount < 0 ? '-' : '') : '';
 
-  return `${sign}${normalizedCurrency} ${formatWalletNumber(Math.abs(amount), compact)}`;
+  return `${sign}${normalizedCurrency} ${formatDisplayNumber(Math.abs(amount), locale, compact, {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  })}`;
 };
 
 export const getCategoryDisplayKey = (category) => {
@@ -113,7 +135,7 @@ export const getCategoryDisplayKey = (category) => {
 
 const getCategoryDisplayConfig = (category) => CATEGORY_DISPLAY_CONFIG[getCategoryDisplayKey(category)] || CATEGORY_DISPLAY_CONFIG.all;
 
-export const getCategoryDisplayImage = (category) => getCategoryDisplayConfig(category).image || category?.image || brandIconImage;
+export const getCategoryDisplayImage = (category) => category?.image || getCategoryDisplayConfig(category).image || brandIconImage;
 
 export const getCategoryDisplayTitle = (category, language = 'ar') => {
   const config = getCategoryDisplayConfig(category);
@@ -128,7 +150,7 @@ export const getCategoryDisplaySubtitle = (category, language = 'ar') => {
   return language === 'ar' ? config.subtitleAr : config.subtitleEn;
 };
 
-export const createStorefrontProducts = (products, { language = 'ar', userGroup = 'Normal' } = {}) => (
+export const createStorefrontProducts = (products, { language = 'ar', userGroup = 'Normal', userGroupPercentage = null } = {}) => (
   Array.isArray(products) ? products : []
 ).map((product) => ({
   ...product,
@@ -141,7 +163,7 @@ export const createStorefrontProducts = (products, { language = 'ar', userGroup 
     product?.descriptionAr,
     product?.externalProductName,
   ].join(' ')),
-  storefrontPrice: calculateProductPrice(product, userGroup),
+  storefrontPrice: calculateProductPrice(product, userGroup, userGroupPercentage),
   storefrontStatus: getProductStatus(product, language),
 })).filter((product) => product.storefrontStatus.isVisible)
   .sort((left, right) => compareStorefrontProducts(left, right, language));
@@ -185,6 +207,7 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
       subtitle: language === 'ar' ? CATEGORY_DISPLAY_CONFIG.all.subtitleAr : CATEGORY_DISPLAY_CONFIG.all.subtitleEn,
       count: safeProducts.length,
       tone: 'all',
+      sortOrder: 0,
     },
     ...safeCategories.map((category) => ({
       id: String(category?.id || '').trim(),
@@ -193,8 +216,28 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
       subtitle: getCategoryDisplaySubtitle(category, language),
       count: countsByCategory.get(String(category?.id || '').trim()) || 0,
       tone: getCategoryDisplayKey(category),
+      sortOrder: Number(category?.sortOrder ?? category?.displayOrder),
     })),
   ];
 
-  return overview.sort((left, right) => (categoryOrder[left.tone] ?? 99) - (categoryOrder[right.tone] ?? 99));
+  return overview.sort((left, right) => {
+    if (left.id === 'all') return -1;
+    if (right.id === 'all') return 1;
+
+    const leftOrder = Number.isFinite(left.sortOrder) ? left.sortOrder : null;
+    const rightOrder = Number.isFinite(right.sortOrder) ? right.sortOrder : null;
+
+    if (leftOrder !== null && rightOrder !== null) {
+      const delta = leftOrder - rightOrder;
+      if (delta !== 0) return delta;
+      return String(left.title || '').localeCompare(String(right.title || ''), language === 'ar' ? 'ar' : 'en');
+    }
+
+    if (leftOrder !== null && rightOrder === null) return -1;
+    if (leftOrder === null && rightOrder !== null) return 1;
+
+    const toneDelta = (categoryOrder[left.tone] ?? 99) - (categoryOrder[right.tone] ?? 99);
+    if (toneDelta !== 0) return toneDelta;
+    return String(left.title || '').localeCompare(String(right.title || ''), language === 'ar' ? 'ar' : 'en');
+  });
 };

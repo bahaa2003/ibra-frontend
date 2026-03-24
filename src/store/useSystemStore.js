@@ -131,17 +131,29 @@ const useSystemStore = create((set, get) => ({
   },
 
   savePaymentSettings: async (payload, actor) => {
+    const currentSettings = get().paymentSettings || {};
+    const mergedPayload = {
+      ...currentSettings,
+      ...payload,
+      paymentGroups: payload?.paymentGroups !== undefined
+        ? normalizePaymentGroups(payload.paymentGroups)
+        : normalizePaymentGroups(currentSettings?.paymentGroups),
+    };
     const saved = await apiClient.system.updatePaymentSettings(payload, actor);
+    const mergedSettings = {
+      ...mergedPayload,
+      ...(saved || {}),
+    };
     set({
       paymentSettings: {
-        countryAccounts: Array.isArray(saved?.countryAccounts) ? saved.countryAccounts : [],
-        instructions: saved?.instructions || '',
-        whatsappNumber: saved?.whatsappNumber || getDefaultWhatsAppNumber(),
-        paymentGroups: normalizePaymentGroups(saved?.paymentGroups),
+        countryAccounts: Array.isArray(mergedSettings?.countryAccounts) ? mergedSettings.countryAccounts : [],
+        instructions: mergedSettings?.instructions || '',
+        whatsappNumber: mergedSettings?.whatsappNumber || getDefaultWhatsAppNumber(),
+        paymentGroups: normalizePaymentGroups(mergedSettings?.paymentGroups),
       },
       paymentSettingsLastLoadedAt: Date.now(),
     });
-    return saved;
+    return mergedSettings;
   },
 }));
 

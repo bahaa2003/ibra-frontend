@@ -49,23 +49,25 @@ const FilterBar = ({ onFilterChange }) => {
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.7 }}
-      className="bg-white/80 dark:bg-black/40 backdrop-blur-xl border border-gray-200/70 dark:border-white/10 rounded-xl p-4 mb-6"
+      className="mb-3 rounded-[0.95rem] border border-gray-200/70 bg-white/80 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-black/40 sm:p-3"
     >
-      <div className={`flex items-center gap-4 mb-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
-        <Filter className="w-5 h-5 text-orange-500 dark:text-orange-400" />
-        <h3 className="text-gray-900 dark:text-white font-semibold">{t('wallet.filters')}</h3>
+      <div className={`mb-2.5 flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <div className={`wallet-accent-chip px-2.5 py-1 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <Filter className="h-3.5 w-3.5 text-[#8c631f]" />
+          <h3 className="text-[13px] font-semibold text-[#8a6528]">{t('wallet.filters')}</h3>
+        </div>
       </div>
 
-      <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${isRTL ? 'text-right' : 'text-left'}`}>
+      <div className={`grid grid-cols-1 gap-2.5 md:grid-cols-3 ${isRTL ? 'text-right' : 'text-left'}`}>
         <div>
-          <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2 flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
+          <label className={`wallet-accent-chip mb-1.5 px-2.5 py-1 text-[10px] font-semibold ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <Calendar className="h-3 w-3 text-[#8c631f]" />
             {t('wallet.period')}
           </label>
           <select
             value={filters.period}
             onChange={(e) => handleFilterChange('period', e.target.value)}
-            className={`w-full bg-white dark:bg-black/50 border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 transition-colors ${isRTL ? 'text-right' : 'text-left'}`}
+            className={`h-9 w-full rounded-[0.8rem] border border-gray-300 bg-white px-2.5 py-1.5 text-[13px] text-gray-900 transition-colors focus:border-orange-500 focus:outline-none dark:border-white/20 dark:bg-black/50 dark:text-white dark:focus:border-orange-400 ${isRTL ? 'text-right' : 'text-left'}`}
           >
             {periodOptions.map((option) => (
               <option key={option.value} value={option.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
@@ -76,14 +78,14 @@ const FilterBar = ({ onFilterChange }) => {
         </div>
 
         <div>
-          <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2 flex items-center gap-2">
-            <Tag className="w-4 h-4" />
+          <label className={`wallet-accent-chip mb-1.5 px-2.5 py-1 text-[10px] font-semibold ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <Tag className="h-3 w-3 text-[#8c631f]" />
             {t('wallet.type')}
           </label>
           <select
             value={filters.type}
             onChange={(e) => handleFilterChange('type', e.target.value)}
-            className={`w-full bg-white dark:bg-black/50 border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 transition-colors ${isRTL ? 'text-right' : 'text-left'}`}
+            className={`h-9 w-full rounded-[0.8rem] border border-gray-300 bg-white px-2.5 py-1.5 text-[13px] text-gray-900 transition-colors focus:border-orange-500 focus:outline-none dark:border-white/20 dark:bg-black/50 dark:text-white dark:focus:border-orange-400 ${isRTL ? 'text-right' : 'text-left'}`}
           >
             {typeOptions.map((option) => (
               <option key={option.value} value={option.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
@@ -94,14 +96,14 @@ const FilterBar = ({ onFilterChange }) => {
         </div>
 
         <div>
-          <label className="block text-gray-600 dark:text-gray-400 text-sm mb-2 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4" />
+          <label className={`wallet-accent-chip mb-1.5 px-2.5 py-1 text-[10px] font-semibold ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <CheckCircle className="h-3 w-3 text-[#8c631f]" />
             {t('wallet.statusLabel')}
           </label>
           <select
             value={filters.status}
             onChange={(e) => handleFilterChange('status', e.target.value)}
-            className={`w-full bg-white dark:bg-black/50 border border-gray-300 dark:border-white/20 rounded-lg px-3 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-orange-500 dark:focus:border-orange-400 transition-colors ${isRTL ? 'text-right' : 'text-left'}`}
+            className={`h-9 w-full rounded-[0.8rem] border border-gray-300 bg-white px-2.5 py-1.5 text-[13px] text-gray-900 transition-colors focus:border-orange-500 focus:outline-none dark:border-white/20 dark:bg-black/50 dark:text-white dark:focus:border-orange-400 ${isRTL ? 'text-right' : 'text-left'}`}
           >
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white">

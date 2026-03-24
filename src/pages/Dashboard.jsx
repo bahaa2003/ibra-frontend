@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
+import useGroupStore from '../store/useGroupStore';
 import HeroSlider from '../components/home/HeroSlider';
 import AnnouncementTicker from '../components/home/AnnouncementTicker';
 import CategoryCard from '../components/home/CategoryCard';
@@ -20,10 +21,12 @@ import {
 const Dashboard = () => {
   const { user, refreshProfile } = useAuthStore();
   const { categories, products, loadProducts } = useMediaStore();
+  const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin' || String(user?.role || '').toLowerCase() === 'super_admin';
 
   useEffect(() => {
     if (refreshProfile) {
@@ -54,8 +57,12 @@ const Dashboard = () => {
   ]), [language]);
 
   const storefrontProducts = useMemo(
-    () => createStorefrontProducts(products, { language, userGroup: user?.group || 'Normal' }),
-    [language, products, user?.group]
+    () => createStorefrontProducts(products, {
+      language,
+      userGroup: user?.groupId || user?.group || 'Normal',
+      userGroupPercentage: user?.groupPercentage ?? null,
+    }),
+    [groupsLastLoadedAt, language, products, user?.group, user?.groupId, user?.groupPercentage]
   );
 
   const storefrontCategories = useMemo(
@@ -71,19 +78,19 @@ const Dashboard = () => {
   const tickerItems = useMemo(
     () => [
       {
-        id: 'ticker-welcome',
-        text: language === 'ar' ? 'مرحبًا بك في IBRA' : 'Welcome to IBRA',
+        id: 'ticker-basmala',
+        text: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ',
       },
       {
-        id: 'ticker-price',
-        text: language === 'ar' ? 'أسعار مناسبة كل يوم' : 'Fair prices every day',
+        id: 'ticker-verse',
+        text: 'رِجَالٌ لَّا تُلْهِيهِمْ تِجَارَةٌ وَلَا بَيْعٌ عَن ذِكْرِ اللَّهِ',
       },
       {
-        id: 'ticker-secure',
-        text: language === 'ar' ? 'شراء آمن وتنفيذ سريع' : 'Secure checkout and fast delivery',
+        id: 'ticker-closing',
+        text: 'صَدَقَ اللَّهُ العَظِيمُ',
       }
     ],
-    [language]
+    []
   );
 
   const handleCategorySelect = useCallback((categoryId) => {
@@ -100,34 +107,32 @@ const Dashboard = () => {
   }, [navigate]);
 
   return (
-    <div className="space-y-6 pb-4">
+    <div className="space-y-5 pb-4">
       <HeroSlider slides={heroSlides} />
 
       <section className="py-1">
         <AnnouncementTicker
           items={tickerItems}
-          durationMs={7000}
+          durationMs={5600}
           direction="ltr"
-          ariaLabel={language === 'ar' ? 'شريط ترحيبي متحرك' : 'Moving welcome strip'}
+          ariaLabel={language === 'ar' ? 'بطاقة قرآنية متحركة' : 'Animated verse card'}
         />
       </section>
 
-      <section id="categories" className="scroll-mt-28 space-y-4">
-        <div className="premium-card w-full max-w-[360px] p-2 sm:max-w-[460px] sm:p-2.5">
-          <div className="relative z-40">
-            <ProductSearchBar
-              products={storefrontProducts}
-              language={language}
-              onSelectProduct={handleProductSelect}
-              placeholder={language === 'ar' ? 'ابحث عن منتج وسيظهر مباشرة أسفل البحث...' : 'Search for a product and get direct matches...'}
-              noResultsLabel={language === 'ar' ? 'لا يوجد منتج مطابق' : 'No matching product found'}
-              className="w-full"
-              inputClassName="h-9 rounded-xl text-xs shadow-none sm:h-10 sm:text-sm"
-            />
-          </div>
+      <section id="categories" className="scroll-mt-28 space-y-3.5">
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl justify-center px-1 sm:px-2">
+          <ProductSearchBar
+            products={storefrontProducts}
+            language={language}
+            onSelectProduct={handleProductSelect}
+            placeholder={language === 'ar' ? 'ابحث عن منتج وسيظهر مباشرة أسفل البحث...' : 'Search for a product and get direct matches...'}
+            noResultsLabel={language === 'ar' ? 'لا يوجد منتج مطابق' : 'No matching product found'}
+            className="mx-auto w-full"
+            inputClassName="h-11 rounded-[1.25rem] border-[color:rgb(var(--color-border-rgb)/0.16)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] px-4 text-sm shadow-[0_14px_34px_-30px_rgba(15,23,42,0.5)] backdrop-blur-sm focus:border-[#efc86f] focus:bg-[color:rgb(var(--color-surface-rgb)/0.96)] focus:ring-0 focus:shadow-[0_0_0_1px_rgba(239,200,111,0.58),0_0_14px_rgba(239,200,111,0.16),0_18px_38px_-30px_rgba(15,23,42,0.52)] sm:h-12 sm:rounded-[1.45rem] sm:text-[15px]"
+          />
         </div>
 
-        <div className="relative z-0 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div className="relative z-0 grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4">
           {visibleHomepageCategories.map((category, index) => (
             <CategoryCard
               key={category.id}
@@ -146,7 +151,7 @@ const Dashboard = () => {
           ? 'أعدنا تنظيم الصفحة الرئيسية لتمنحك تنقلًا أسرع وقراءة أوضح، مع الحفاظ على الهوية الذهبية المميزة لـ IBRA.'
           : 'The homepage is now organized for faster navigation, clearer scanning, and better mobile comfort while keeping IBRA’s signature gold identity.'}
         chips={[
-          { label: language === 'ar' ? 'المحفظة' : 'Wallet', to: '/wallet' },
+          { label: language === 'ar' ? (isAdmin ? 'محفظة الأدمن' : 'المحفظة') : (isAdmin ? 'Admin Wallet' : 'Wallet'), to: isAdmin ? '/admin/wallet' : '/wallet' },
           { label: language === 'ar' ? 'المنتجات' : 'Products', to: '/products' },
           { label: language === 'ar' ? 'الإعدادات' : 'Settings', to: '/settings' },
         ]}

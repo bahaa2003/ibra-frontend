@@ -35,6 +35,15 @@ const buildBlockedOutcome = (status, user = null, error = null) => ({
   canAccessApp: false,
 });
 
+const buildVerificationRequiredOutcome = (user = null) => ({
+  ok: true,
+  status: normalizeAccountStatus('verification_required'),
+  user,
+  error: null,
+  redirectTo: getAccountAccessRoute('verification_required'),
+  canAccessApp: false,
+});
+
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -109,6 +118,29 @@ const useAuthStore = create(
         set({ isLoading: true, error: null });
         try {
           const response = await apiClient.auth.loginWithGoogle();
+          if (response?.redirectTo && !response?.user && !response?.token) {
+            const callbackStatus = normalizeAccountStatus(response?.status);
+
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+              isLoading: false,
+              blockedStatus: callbackStatus || null,
+              blockedUser: null,
+              profileLastLoadedAt: 0,
+            });
+
+            return {
+              ok: false,
+              status: callbackStatus,
+              user: null,
+              error: null,
+              redirectTo: response.redirectTo,
+              canAccessApp: false,
+            };
+          }
+
           const outcome = buildAuthOutcome(response.user);
 
           set({
@@ -155,6 +187,8 @@ const useAuthStore = create(
         try {
           const response = await apiClient.auth.register(userData);
           const status = normalizeAccountStatus(response?.user?.status);
+          const requiresEmailVerification = response?.user?.verified === false
+            && String(response?.user?.signupMethod || userData?.signupMethod || 'email').toLowerCase() !== 'google';
 
           await useAdminStore.getState().loadUsers({ force: true });
 
@@ -163,12 +197,19 @@ const useAuthStore = create(
             token: null,
             isAuthenticated: false,
             isLoading: false,
-            blockedStatus: status,
+            blockedStatus: requiresEmailVerification ? 'verification_required' : status,
             blockedUser: response?.user || {
               email: userData?.email,
               name: userData?.name || userData?.username,
             },
           });
+
+          if (requiresEmailVerification) {
+            return buildVerificationRequiredOutcome(response?.user || {
+              email: userData?.email,
+              name: userData?.name || userData?.username,
+            });
+          }
 
           return {
             ok: true,
