@@ -5,6 +5,7 @@ import {
   Eye,
   KeyRound,
   MailCheck,
+  RotateCcw,
   Search,
   UserCheck,
   UserX,
@@ -36,7 +37,7 @@ import {
   normalizeAccountStatus,
 } from '../../utils/accountStatus';
 
-const FILTER_OPTIONS = ['all', 'pending', 'approved', 'rejected'];
+const FILTER_OPTIONS = ['all', 'pending', 'approved', 'rejected', 'deleted'];
 
 const summaryCardClassName =
   'rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.8)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-2.5 shadow-[var(--shadow-subtle)]';
@@ -53,6 +54,12 @@ const balanceBadgeClassName = [
   'wallet-balance-shimmer relative isolate inline-flex items-center gap-1 overflow-hidden rounded-full border px-2 py-0.5 text-[10px] font-semibold',
   'border-[#e6c76b] bg-[linear-gradient(135deg,rgba(255,248,220,0.96),rgba(244,210,102,0.2))]',
   'text-[#8c6500] shadow-[0_10px_22px_-20px_rgba(191,149,27,0.95)]',
+].join(' ');
+
+const negativeBalanceBadgeClassName = [
+  'relative isolate inline-flex items-center gap-1 overflow-hidden rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+  'border-[rgba(220,38,38,0.26)] bg-[linear-gradient(135deg,rgba(254,226,226,0.96),rgba(248,113,113,0.16))]',
+  'text-[#b91c1c] shadow-[0_10px_22px_-20px_rgba(220,38,38,0.85)]',
 ].join(' ');
 
 const resolveInitialGroupValue = (entry, groups) => {
@@ -82,6 +89,22 @@ const buildWalletPreview = (entry, wallet = null) => {
   };
 };
 
+const getWalletBalanceValue = (entry, wallet = null) => toFiniteNumber(wallet?.walletBalance ?? wallet?.balance ?? entry?.coins, 0);
+
+const getBalanceBadgeTone = (value) => (
+  toFiniteNumber(value, 0) < 0 ? negativeBalanceBadgeClassName : balanceBadgeClassName
+);
+
+const getBalanceTextTone = (value) => (
+  toFiniteNumber(value, 0) < 0 ? 'text-[#b91c1c]' : 'text-[var(--color-text)]'
+);
+
+const getDetailsMetricTone = (value) => (
+  toFiniteNumber(value, 0) < 0
+    ? 'border-[rgba(220,38,38,0.18)] bg-[linear-gradient(135deg,rgba(254,242,242,0.92),rgba(255,255,255,0.82))]'
+    : ''
+);
+
 const AdminUsers = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -90,6 +113,7 @@ const AdminUsers = () => {
 
   const {
     users,
+    deletedUsers,
     loadUsers,
     getUserById,
     wallets,
@@ -101,6 +125,7 @@ const AdminUsers = () => {
     updateUserCurrency,
     updateUserCreditLimit,
     deleteUser,
+    restoreUser,
     resetUserPassword,
     resendUserVerification,
   } = useAdminStore();
@@ -174,14 +199,28 @@ const AdminUsers = () => {
     () => customerUsers.filter((entry) => isRejectedAccountStatus(entry?.status)).length,
     [customerUsers]
   );
+  const deletedCustomerUsers = useMemo(
+    () => (deletedUsers || []).filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer'),
+    [deletedUsers]
+  );
+  const deletedCount = useMemo(
+    () => deletedCustomerUsers.length,
+    [deletedCustomerUsers]
+  );
 
   const filteredUsers = useMemo(() => {
     const normalizedSearch = String(search || '').trim().toLowerCase();
+    const sourceUsers = filter === 'deleted' ? deletedCustomerUsers : customerUsers;
 
-    return [...customerUsers]
+    return [...sourceUsers]
       .filter((entry) => {
         const normalizedStatus = normalizeAccountStatus(entry?.status);
-        const matchesFilter = filter === 'all' ? true : normalizedStatus === filter;
+        const isDeletedEntry = Boolean(entry?.deletedAt) || Boolean(entry?.isDeleted) || normalizedStatus === 'deleted';
+        const matchesFilter = filter === 'all'
+          ? true
+          : filter === 'deleted'
+            ? isDeletedEntry
+            : normalizedStatus === filter;
         const haystack = [
           entry?.name,
           entry?.email,
@@ -196,7 +235,7 @@ const AdminUsers = () => {
         if (pendingDelta !== 0) return pendingDelta;
         return new Date(getUserRegistrationDate(right) || 0) - new Date(getUserRegistrationDate(left) || 0);
       });
-  }, [customerUsers, filter, search]);
+  }, [customerUsers, deletedCustomerUsers, filter, search]);
 
   const walletByUserId = useMemo(
     () => new Map((wallets || []).map((entry) => [String(entry?.userId || entry?.id || '').trim(), entry])),
@@ -213,6 +252,11 @@ const AdminUsers = () => {
     setManualPassword('');
     setIsDetailsOpen(true);
     setIsDetailsLoading(true);
+
+    if (filter === 'deleted') {
+      setIsDetailsLoading(false);
+      return;
+    }
 
     try {
       const [userResult] = await Promise.allSettled([
@@ -249,7 +293,10 @@ const AdminUsers = () => {
 
   const formatBalance = (entry) => {
     const walletPreview = resolveWalletForEntry(entry);
-    return formatWalletAmount((walletPreview?.walletBalance ?? entry?.coins) || 0, walletPreview?.currency || entry?.currency || 'USD');
+    return formatWalletAmount(
+      getWalletBalanceValue(entry, walletPreview),
+      walletPreview?.currency || entry?.currency || 'USD'
+    );
   };
 
   const handleFilterChange = (value) => {
@@ -514,6 +561,25 @@ const AdminUsers = () => {
     }
   };
 
+  const handleRestoreUser = async (entry = selectedUser) => {
+    if (!entry?.id) return;
+
+    try {
+      await restoreUser(entry.id, actor);
+      addToast('تم استرجاع المستخدم بنجاح.', 'success');
+      if (selectedUser?.id === entry.id) {
+        setIsDetailsOpen(false);
+        setSelectedUser(null);
+      }
+      await Promise.allSettled([
+        loadUsers({ force: true }),
+        getUserWallet(entry.id, { force: true }),
+      ]);
+    } catch (error) {
+      addToast(error?.message || 'تعذر استرجاع المستخدم.', 'error');
+    }
+  };
+
   const handleOpenUserTransactions = () => {
     if (!selectedUser?.id) return;
     setIsDetailsOpen(false);
@@ -558,11 +624,12 @@ const AdminUsers = () => {
             <option value="pending">بانتظار التفعيل</option>
             <option value="approved">مفعّل</option>
             <option value="rejected">مرفوض</option>
+            <option value="deleted">محذوفة</option>
           </select>
         </div>
       </div>
 
-      <div className="grid gap-1.5 md:grid-cols-3">
+      <div className="grid gap-1.5 md:grid-cols-4">
         <div className={summaryCardClassName}>
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -598,11 +665,27 @@ const AdminUsers = () => {
             </div>
           </div>
         </div>
+
+        <div className={summaryCardClassName}>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات محذوفة</p>
+              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(deletedCount, locale)}</p>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-text-rgb)/0.08)] text-[var(--color-text-secondary)]">
+              <RotateCcw className="h-3.5 w-3.5" />
+            </div>
+          </div>
+        </div>
       </div>
       </section>
 
       <div className="space-y-2.5 md:hidden">
-        {filteredUsers.map((entry) => (
+        {filteredUsers.map((entry) => {
+          const walletPreview = resolveWalletForEntry(entry);
+          const balanceValue = getWalletBalanceValue(entry, walletPreview);
+
+          return (
           <Card key={entry.id} variant="elevated" className="p-3">
             <div className="flex items-start gap-2.5">
               <img
@@ -615,13 +698,13 @@ const AdminUsers = () => {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-[var(--color-text)]">{entry.name}</p>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">{entry.email}</p>
-                    <span className={`mt-1.5 ${balanceBadgeClassName}`}>
+                    <span className={`mt-1.5 ${getBalanceBadgeTone(balanceValue)}`}>
                       <Wallet className="h-3 w-3" />
                       {formatBalance(entry)}
                     </span>
                   </div>
-                  <Badge variant={getAccountStatusBadgeVariant(entry.status)}>
-                    {getAccountStatusLabel(entry.status, isArabic)}
+                  <Badge variant={filter === 'deleted' ? 'secondary' : getAccountStatusBadgeVariant(entry.status)}>
+                    {filter === 'deleted' ? 'محذوف' : getAccountStatusLabel(entry.status, isArabic)}
                   </Badge>
                 </div>
 
@@ -643,7 +726,12 @@ const AdminUsers = () => {
             </div>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {isPendingAccountStatus(entry.status) && (
+              {filter === 'deleted' ? (
+                <Button size="sm" className={compactButtonClassName} onClick={() => handleRestoreUser(entry)} disabled={isSubmitting}>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  استرجاع
+                </Button>
+              ) : isPendingAccountStatus(entry.status) && (
                 <>
                   <Button size="sm" className={compactButtonClassName} onClick={() => askApprove(entry)} disabled={isSubmitting}>
                     موافقة
@@ -659,7 +747,7 @@ const AdminUsers = () => {
               </Button>
             </div>
           </Card>
-        ))}
+        )})}
 
         {!filteredUsers.length && (
           <Card variant="elevated" className="p-6 text-center">
@@ -682,7 +770,11 @@ const AdminUsers = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUsers.map((entry) => (
+            {filteredUsers.map((entry) => {
+              const walletPreview = resolveWalletForEntry(entry);
+              const balanceValue = getWalletBalanceValue(entry, walletPreview);
+
+              return (
               <TableRow key={entry.id}>
                 <TableCell className={compactTableCellClassName}>
                   <div className="flex items-center gap-2.5">
@@ -704,19 +796,24 @@ const AdminUsers = () => {
                 </TableCell>
                 <TableCell className={compactTableCellClassName}>{formatDate(getUserRegistrationDate(entry))}</TableCell>
                 <TableCell className={compactTableCellClassName}>
-                  <Badge variant={getAccountStatusBadgeVariant(entry.status)}>
-                    {getAccountStatusLabel(entry.status, isArabic)}
+                  <Badge variant={filter === 'deleted' ? 'secondary' : getAccountStatusBadgeVariant(entry.status)}>
+                    {filter === 'deleted' ? 'محذوف' : getAccountStatusLabel(entry.status, isArabic)}
                   </Badge>
                 </TableCell>
                 <TableCell className={compactTableCellClassName}>
-                  <span className={balanceBadgeClassName}>
+                  <span className={getBalanceBadgeTone(balanceValue)}>
                     <Wallet className="h-3 w-3" />
                     {formatBalance(entry)}
                   </span>
                 </TableCell>
                 <TableCell className={`text-end ${compactTableCellClassName}`}>
                   <div className="flex justify-end gap-1.5">
-                    {isPendingAccountStatus(entry.status) && (
+                    {filter === 'deleted' ? (
+                      <Button size="sm" className={compactButtonClassName} onClick={() => handleRestoreUser(entry)} disabled={isSubmitting}>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        استرجاع
+                      </Button>
+                    ) : isPendingAccountStatus(entry.status) && (
                       <>
                         <Button size="sm" className={compactButtonClassName} onClick={() => askApprove(entry)} disabled={isSubmitting}>
                           موافقة
@@ -732,7 +829,7 @@ const AdminUsers = () => {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </div>
@@ -759,8 +856,8 @@ const AdminUsers = () => {
                 </div>
               </div>
 
-              <Badge variant={getAccountStatusBadgeVariant(selectedUser?.status)}>
-                {getAccountStatusLabel(selectedUser?.status, isArabic)}
+              <Badge variant={filter === 'deleted' ? 'secondary' : getAccountStatusBadgeVariant(selectedUser?.status)}>
+                {filter === 'deleted' ? 'محذوف' : getAccountStatusLabel(selectedUser?.status, isArabic)}
               </Badge>
             </div>
 
@@ -771,9 +868,9 @@ const AdminUsers = () => {
             ) : null}
 
             <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
-              <div className={detailsMetricClassName}>
+              <div className={`${detailsMetricClassName} ${getDetailsMetricTone(selectedWallet?.walletBalance ?? selectedUser?.coins)}`.trim()}>
                 <p className="text-[11px] text-[var(--color-text-secondary)]">الرصيد الحالي</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">
+                <p className={`mt-1 text-sm font-semibold ${getBalanceTextTone(selectedWallet?.walletBalance ?? selectedUser?.coins)}`}>
                   {formatWalletAmount(selectedWallet?.walletBalance || 0, selectedWallet?.currency || selectedUser?.currency || 'USD')}
                 </p>
               </div>
@@ -815,7 +912,7 @@ const AdminUsers = () => {
                       {formatDate(selectedWallet.recentTransactions[0]?.createdAt)}
                     </p>
                   </div>
-                  <span className={balanceBadgeClassName}>
+                  <span className={getBalanceBadgeTone(selectedWallet.recentTransactions[0]?.signedAmount ?? selectedWallet.recentTransactions[0]?.amount ?? 0)}>
                     <Wallet className="h-3 w-3" />
                     {formatWalletAmount(
                       selectedWallet.recentTransactions[0]?.signedAmount ?? selectedWallet.recentTransactions[0]?.amount ?? 0,
@@ -882,7 +979,7 @@ const AdminUsers = () => {
             </div>
           </div>
 
-          {(isPendingAccountStatus(selectedUser?.status) || isApprovedAccountStatus(selectedUser?.status) || isRejectedAccountStatus(selectedUser?.status)) && (
+          {filter !== 'deleted' && (isPendingAccountStatus(selectedUser?.status) || isApprovedAccountStatus(selectedUser?.status) || isRejectedAccountStatus(selectedUser?.status)) && (
             <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-3.5">
               <p className="text-xs font-semibold text-[var(--color-text)]">قرار التفعيل</p>
               <p className="mt-1 text-xs leading-6 text-[var(--color-text-secondary)]">
@@ -1031,9 +1128,16 @@ const AdminUsers = () => {
             <Button variant="ghost" className={compactButtonClassName} onClick={() => setIsDetailsOpen(false)}>
               إغلاق
             </Button>
-            <Button variant="danger" className={compactButtonClassName} onClick={handleDeleteUser}>
-              حذف المستخدم
-            </Button>
+            {filter === 'deleted' ? (
+              <Button className={compactButtonClassName} onClick={() => handleRestoreUser(selectedUser)}>
+                <RotateCcw className="h-3.5 w-3.5" />
+                استرجاع الحساب
+              </Button>
+            ) : (
+              <Button variant="danger" className={compactButtonClassName} onClick={handleDeleteUser}>
+                حذف المستخدم
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

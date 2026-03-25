@@ -56,9 +56,6 @@ const AddBalance = () => {
 
     return groups
       .filter((group) => {
-        // Must match the user's current currency
-        const groupCurrency = String(group.currency || '').toUpperCase();
-        if (groupCurrency !== userCurrency) return false;
         // Must be active
         if (group.isActive === false) return false;
         return true;
@@ -70,7 +67,7 @@ const AddBalance = () => {
       }))
       // Remove groups with zero active methods after filtering
       .filter((group) => group.methods.length > 0);
-  }, [paymentSettings, userCurrency]);
+  }, [paymentSettings]);
 
   const hasAnyMethods = filteredGroups.length > 0;
   const isLoading = !paymentSettings?.paymentGroups;

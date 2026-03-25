@@ -50,6 +50,11 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     navigate('/auth');
   };
 
+  const handleOpenMyAccount = () => {
+    closeSidebarOnMobile();
+    navigate('/account');
+  };
+
   const handleContactClick = () => {
     const message = dir === 'rtl'
       ? 'مرحباً، أحتاج مساعدة من فريق IBRA Store'
@@ -262,25 +267,36 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
 
         <div className="border-t border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-card-rgb)/0.64)] p-4">
           <div className={cn('flex items-center gap-3', !isOpen && 'justify-center')}>
-            <img
-              src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
-              alt={user?.name}
-              className="h-11 w-11 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] object-cover"
-            />
-            {isOpen && (
-              <>
+            <button
+              type="button"
+              onClick={handleOpenMyAccount}
+              className={cn(
+                'group flex min-w-0 flex-1 items-center gap-3 rounded-[var(--radius-lg)] text-right transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]',
+                isOpen ? 'px-1.5 py-1.5' : 'max-w-[3.5rem] justify-center p-1'
+              )}
+              aria-label={t('sidebar.myAccount', { defaultValue: 'حسابي' })}
+            >
+              <img
+                src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name}`}
+                alt={user?.name}
+                className="h-11 w-11 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.9)] object-cover transition-transform group-hover:scale-[1.03]"
+              />
+              {isOpen && (
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[var(--color-text)]">{user?.name}</p>
                   <p className="truncate text-xs text-[var(--color-muted)]">{user?.email}</p>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[color:rgb(var(--color-error-rgb)/0.2)] bg-[color:rgb(var(--color-error-rgb)/0.08)] text-[var(--color-error)] transition-colors hover:bg-[color:rgb(var(--color-error-rgb)/0.14)]"
-                  aria-label={t('common.logout')}
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </>
+              )}
+            </button>
+            {isOpen && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[color:rgb(var(--color-error-rgb)/0.2)] bg-[color:rgb(var(--color-error-rgb)/0.08)] text-[var(--color-error)] transition-colors hover:bg-[color:rgb(var(--color-error-rgb)/0.14)]"
+                aria-label={t('common.logout')}
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>

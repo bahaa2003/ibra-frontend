@@ -197,14 +197,13 @@ export function validateProductForm(inputProductForm, options = {}) {
   const errors = [];
   const { requireImage = false } = options;
   const primaryName = String(inputProductForm.name || '').trim();
-  const secondaryName = String(inputProductForm.nameAr || '').trim();
   const rawImage = String(inputProductForm.image || '').trim();
   const rawMinimumOrderQty = inputProductForm.minimumOrderQty ?? inputProductForm.minQty;
   const rawMaximumOrderQty = inputProductForm.maximumOrderQty ?? inputProductForm.maxQty;
   const rawStepQty = inputProductForm.stepQty;
   const productForm = {
     ...inputProductForm,
-    name: primaryName || secondaryName,
+    name: primaryName,
     category: String(inputProductForm.category || 'optional').trim(),
     image: rawImage || '__missing_image__',
     minimumOrderQty: rawMinimumOrderQty === '' || rawMinimumOrderQty == null ? 1 : rawMinimumOrderQty,

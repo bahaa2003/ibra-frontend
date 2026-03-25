@@ -4,9 +4,18 @@ import { cn } from './Button';
 import { Search } from 'lucide-react';
 import { searchInputClassName } from './Input';
 
-const SearchBar = ({ value, onChange, placeholder, className, inputClassName, ...props }) => {
+const SearchBar = ({
+  value,
+  onChange,
+  placeholder,
+  className,
+  inputClassName,
+  forceIconRight = false,
+  ...props
+}) => {
   const { dir } = useLanguage();
   const isRTL = dir === 'rtl';
+  const isIconOnRight = forceIconRight || isRTL;
 
   const handleChange = (e) => {
     if (typeof onChange !== 'function') return;
@@ -19,7 +28,7 @@ const SearchBar = ({ value, onChange, placeholder, className, inputClassName, ..
         <Search
           className={cn(
             'pointer-events-none absolute top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-muted)]',
-            isRTL ? 'right-4' : 'left-4'
+            isIconOnRight ? 'right-4' : 'left-4'
           )}
         />
         <input
@@ -27,7 +36,7 @@ const SearchBar = ({ value, onChange, placeholder, className, inputClassName, ..
           className={cn(
             searchInputClassName,
             inputClassName,
-            isRTL ? 'pr-12 pl-4 text-right' : 'pl-12 pr-4 text-left'
+            isIconOnRight ? 'pr-12 pl-4 text-right' : 'pl-12 pr-4 text-left'
           )}
           placeholder={placeholder || ''}
           value={value}

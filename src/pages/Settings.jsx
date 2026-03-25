@@ -18,7 +18,7 @@ const Settings = () => {
   const { language, setLanguage } = useLanguage();
   const { isDark, toggleTheme } = useTheme();
   const { addToast } = useToast();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const isAdmin = user?.role === 'admin';
 
   const [notifications, setNotifications] = useState({
@@ -85,6 +85,9 @@ const Settings = () => {
             twoFactorDescription: 'Enable or disable email OTP protection',
             logoutAllDevices: 'Sign out from all devices',
             logoutAllDevicesDescription: 'Placeholder action until backend session APIs are connected',
+            logoutAccount: 'Log out',
+            logoutAccountDescription: 'Securely sign out from this account and return to the login screen',
+            logoutAccountAction: 'Sign out now',
             open: 'Open',
             active: 'Active',
             simulatedActionDone: 'Placeholder action executed. Connect backend endpoint later.',
@@ -127,6 +130,9 @@ const Settings = () => {
             twoFactorDescription: 'تفعيل أو تعطيل التحقق برمز البريد الإلكتروني',
             logoutAllDevices: 'تسجيل الخروج من كل الأجهزة',
             logoutAllDevicesDescription: 'إجراء تجريبي حتى يتم ربط واجهات الجلسات في الـ Backend',
+            logoutAccount: 'تسجيل الخروج',
+            logoutAccountDescription: 'الخروج الآمن من هذا الحساب والرجوع إلى صفحة تسجيل الدخول',
+            logoutAccountAction: 'تسجيل الخروج الآن',
             open: 'فتح',
             active: 'مفعل',
             simulatedActionDone: 'تم تنفيذ إجراء تجريبي. اربطه لاحقًا بواجهة الخلفية.',
@@ -138,6 +144,11 @@ const Settings = () => {
 
   const handlePlaceholderSecurityAction = () => {
     addToast(text.simulatedActionDone, 'info');
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/auth');
   };
 
   const openFromSettings = (to) => navigate(to, { state: { fromSettings: true } });
@@ -292,6 +303,30 @@ const Settings = () => {
             onClick={handlePlaceholderSecurityAction}
           />
         </SettingsSection>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="group relative w-full overflow-hidden rounded-2xl border border-rose-300/55 bg-gradient-to-br from-rose-500/14 via-[color:rgb(var(--color-card-rgb)/0.94)] to-orange-400/10 px-4 py-4 text-right shadow-[var(--shadow-subtle)] transition-all hover:-translate-y-0.5 hover:border-rose-400/70 hover:shadow-[var(--shadow-lg)]"
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(244,63,94,0.18),transparent_42%)] opacity-80" />
+          <div className="relative flex items-center gap-3">
+            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-rose-300/45 bg-rose-500/14 text-rose-600 dark:text-rose-200">
+              <LogOut className="h-5 w-5" />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-rose-700 dark:text-rose-100">{text.logoutAccount}</p>
+              <p className="mt-1 text-xs text-rose-600/90 dark:text-rose-100/75">{text.logoutAccountDescription}</p>
+            </div>
+
+            <span className="shrink-0 rounded-full border border-rose-300/45 bg-rose-500/10 px-3 py-1 text-[11px] font-semibold text-rose-700 transition-colors group-hover:bg-rose-500/16 dark:text-rose-100">
+              {text.logoutAccountAction}
+            </span>
+          </div>
+        </button>
       </motion.section>
     </div>
   );

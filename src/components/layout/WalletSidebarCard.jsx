@@ -62,6 +62,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
     }),
     [walletCurrency, walletValue]
   );
+  const isNegativeBalance = walletValue < 0;
 
   const statusMessage = hasRefreshError
     ? 'تعذر تحديث الرصيد الآن'
@@ -98,7 +99,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
                   <div className="h-5 w-28 animate-pulse rounded-full bg-[#cba665]/35" />
                 </div>
               ) : (
-                <p className="truncate text-[1.14rem] font-black tracking-[-0.02em] text-[#6f4f18] sm:text-[1.24rem]">
+                <p className={`truncate text-[1.14rem] font-black tracking-[-0.02em] sm:text-[1.24rem] ${isNegativeBalance ? 'text-[#b42323]' : 'text-[#6f4f18]'}`}>
                   {walletDisplayValue}
                 </p>
               )}

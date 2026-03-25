@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   CheckCircle2,
+  Copy,
   LoaderCircle,
   Package2,
   X,
@@ -64,6 +66,8 @@ const getCopy = (language = 'ar') => {
       preparingMessage: 'Loading pricing and currency details...',
       successTitle: 'Order placed',
       successMessage: 'Your order has been submitted successfully.',
+      successDone: 'Completed successfully',
+      successViewOrder: 'Order details',
       failedTitle: 'Unable to complete order',
       failedMessage: 'Something went wrong while placing this order.',
       invalidAmountMessage: 'Unable to place this order because the amount is invalid.',
@@ -101,6 +105,8 @@ const getCopy = (language = 'ar') => {
     preparingMessage: 'يتم تحميل تفاصيل السعر والعملة الآن...',
     successTitle: 'تم إرسال الطلب',
     successMessage: 'تم تنفيذ طلبك بنجاح وسيظهر في طلباتك مباشرة.',
+    successDone: 'تمت العملية بنجاح',
+    successViewOrder: 'تفاصيل الطلب',
     failedTitle: 'تعذر تنفيذ الطلب',
     failedMessage: 'حدث خطأ أثناء تنفيذ الطلب. حاول مرة أخرى.',
     invalidAmountMessage: 'لا يمكن تنفيذ الطلب لأن قيمة الشراء غير صالحة.',
@@ -132,6 +138,7 @@ const statusToneIcon = {
 };
 
 const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
+  const navigate = useNavigate();
   const { language, dir } = useLanguage();
   const { addToast } = useToast();
   const user = useAuthStore((state) => state.user);
@@ -153,6 +160,8 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
   const [quantityError, setQuantityError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusCard, setStatusCard] = useState({ tone: 'info', title: '', message: '' });
+  const [successfulOrderId, setSuccessfulOrderId] = useState(null);
+  const [successMeta, setSuccessMeta] = useState({ amount: '', identifier: '', orderNumber: '' });
 
   const orderFields = useMemo(
     () => resolveProductOrderFields(product, language),
@@ -177,6 +186,11 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     return '';
   }, [language, product, productTitle]);
 
+  const productDescription = useMemo(() => {
+    if (language === 'en') return String(product?.description || product?.descriptionAr || '').trim();
+    return String(product?.descriptionAr || product?.description || '').trim();
+  }, [language, product?.description, product?.descriptionAr]);
+
   useEffect(() => {
     if (!product) return;
 
@@ -192,6 +206,8 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     setQuantityError('');
     setIsSubmitting(false);
     setStatusCard({ tone: 'info', title: '', message: '' });
+    setSuccessfulOrderId(null);
+    setSuccessMeta({ amount: '', identifier: '', orderNumber: '' });
   }, [orderFields, product?.id, quantityMeta.minQty]);
 
   useEffect(() => {
@@ -234,14 +250,6 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
       active = false;
     };
   }, [currencies, isOpen, loadCurrencies]);
-
-  useEffect(() => {
-    if (!isOpen || statusCard.tone !== 'success') return undefined;
-    const timeoutId = window.setTimeout(() => {
-      onClose();
-    }, 900);
-    return () => window.clearTimeout(timeoutId);
-  }, [isOpen, onClose, statusCard.tone]);
 
   const userCurrencyCode = String(user?.currency || 'USD').toUpperCase();
   const pricingGroup = user?.groupId || user?.group || 'Normal';
@@ -301,7 +309,40 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
 
   const handleClose = () => {
     if (isSubmitting) return;
+    setSuccessfulOrderId(null);
+    setSuccessMeta({ amount: '', identifier: '', orderNumber: '' });
     onClose();
+  };
+
+  const handleSuccessDismiss = () => {
+    setSuccessfulOrderId(null);
+    setSuccessMeta({ amount: '', identifier: '', orderNumber: '' });
+    onClose();
+  };
+
+  const handleOpenOrderDetails = () => {
+    const orderId = String(successfulOrderId || '').trim();
+    if (!orderId) {
+      handleSuccessDismiss();
+      return;
+    }
+
+    setSuccessfulOrderId(null);
+    setSuccessMeta({ amount: '', identifier: '', orderNumber: '' });
+    onClose();
+    navigate(`/orders?orderId=${encodeURIComponent(orderId)}`);
+  };
+
+  const handleCopyOrderNumber = async () => {
+    const orderNumber = String(successMeta.orderNumber || successfulOrderId || '').trim();
+    if (!orderNumber) return;
+
+    try {
+      await navigator.clipboard.writeText(orderNumber);
+      addToast(language === 'en' ? 'Order number copied' : 'تم نسخ رقم الطلب', 'success');
+    } catch (_error) {
+      addToast(language === 'en' ? 'Unable to copy order number' : 'تعذر نسخ رقم الطلب', 'error');
+    }
   };
 
   const handleFieldChange = (fieldKey, value) => {
@@ -466,6 +507,20 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
         updateUserSession({ coins: normalizeMoneyAmount(balance - totalPrice) });
       }
 
+      const createdOrder = createResult?.order || createResult || {};
+      const createdOrderId = String(createdOrder?.id || createdOrder?.orderId || '').trim();
+      const createdOrderNumber = String(
+        createdOrder?.siteOrderNumber
+        || createdOrder?.orderNumber
+        || createdOrder?.id
+        || createdOrderId
+      ).trim();
+      setSuccessfulOrderId(createdOrderId || `ord-${Date.now()}`);
+      setSuccessMeta({
+        amount: formattedTotalPrice,
+        identifier: userIdentifier,
+        orderNumber: createdOrderNumber,
+      });
       setStatusCard({ tone: 'success', title: copy.successTitle, message: copy.successMessage });
       addToast(copy.successMessage, 'success');
     } catch (error) {
@@ -494,7 +549,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
             aria-label={copy.closeLabel}
           />
 
-          <div className="absolute inset-0 flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-5">
             <motion.section
               role="dialog"
               aria-modal="true"
@@ -503,10 +558,8 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 22, scale: 0.99 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="relative flex max-h-[100dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.4rem] border border-white/15 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.14),transparent_56%),linear-gradient(180deg,#0c1222_0%,#070c18_56%,#05080f_100%)] text-white shadow-[0_28px_85px_-35px_rgba(0,0,0,0.9)] sm:max-h-[97vh] sm:rounded-[2rem]"
+              className="relative flex max-h-[min(92vh,48rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.6rem] border border-white/15 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.14),transparent_56%),linear-gradient(180deg,#0c1222_0%,#070c18_56%,#05080f_100%)] text-white shadow-[0_28px_85px_-35px_rgba(0,0,0,0.9)] sm:rounded-[2rem]"
             >
-              <div className="mx-auto mt-1 h-1 w-10 rounded-full bg-white/30 sm:mt-3 sm:h-1.5 sm:w-14" />
-
               <button
                 type="button"
                 onClick={handleClose}
@@ -554,6 +607,11 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                     {productSubtitle ? (
                       <p className="mt-0.5 truncate text-[11px] text-white/65 sm:mt-1 sm:text-sm">
                         {productSubtitle}
+                      </p>
+                    ) : null}
+                    {productDescription ? (
+                      <p className="mt-2 line-clamp-3 max-w-[30rem] text-[11px] leading-5 text-white/78 sm:text-sm">
+                        {productDescription}
                       </p>
                     ) : null}
                   </div>
@@ -651,7 +709,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
               </div>
 
               <footer className="border-t border-white/12 bg-[#070d19]/94 px-2.5 py-2.5 sm:px-4 sm:py-3">
-                {statusCard.message ? (
+                {statusCard.message && !successfulOrderId ? (
                   <div className={`mb-2 flex items-start gap-2 rounded-lg border px-2.5 py-2 text-[11px] sm:mb-2.5 sm:gap-2.5 sm:rounded-xl sm:py-2 sm:text-xs ${statusToneStyles[statusCard.tone] || statusToneStyles.info}`}>
                     <StatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', statusCard.tone === 'info' && isSubmitting && 'animate-spin')} />
                     <div>
@@ -683,6 +741,109 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
               </footer>
             </motion.section>
           </div>
+
+          <AnimatePresence>
+            {successfulOrderId ? (
+              <div className="absolute inset-0 z-[90] flex items-center justify-center p-4">
+                <motion.button
+                  type="button"
+                  className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={handleSuccessDismiss}
+                  aria-label={copy.closeLabel}
+                />
+
+                <motion.section
+                  role="dialog"
+                  aria-modal="true"
+                  initial={{ opacity: 0, scale: 0.94, y: 18 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 14 }}
+                  className="relative z-10 w-full max-w-sm rounded-[1.6rem] border border-emerald-400/24 bg-[linear-gradient(180deg,rgba(9,20,18,0.98),rgba(7,14,13,0.98))] p-5 text-white shadow-[0_28px_80px_-36px_rgba(16,185,129,0.55)]"
+                >
+                  <button
+                    type="button"
+                    onClick={handleSuccessDismiss}
+                    className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-white/6 text-white/80 transition hover:bg-white/12"
+                    aria-label={copy.closeLabel}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex flex-col items-center text-center">
+                    <span className="inline-flex h-20 w-20 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/14 text-emerald-400 shadow-[0_18px_40px_-24px_rgba(16,185,129,0.72)]">
+                      <CheckCircle2 className="h-11 w-11" />
+                    </span>
+                    <h3 className="mt-4 text-xl font-bold text-white">{copy.successDone}</h3>
+                    <p className="mt-2 text-sm leading-6 text-white/70">{copy.successMessage}</p>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-3 py-2 text-start">
+                        <p className="text-[10px] font-semibold text-white/45">
+                          {language === 'en' ? 'Amount' : 'المبلغ'}
+                        </p>
+                        <p className="mt-0.5 text-[13px] font-bold text-emerald-300">{successMeta.amount || formattedTotalPrice}</p>
+                      </div>
+
+                      <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-3 py-2 text-start">
+                        <p className="text-[10px] font-semibold text-white/45">
+                          {language === 'en' ? 'User ID' : 'معرف المستخدم'}
+                        </p>
+                        <p className="mt-0.5 truncate text-[12px] font-semibold text-white/85" dir="ltr">
+                          {successMeta.identifier || '-'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-3 py-2 text-start">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold text-white/45">
+                            {language === 'en' ? 'Order No.' : 'رقم الطلب'}
+                          </p>
+                          <p className="mt-0.5 truncate text-[12px] font-semibold text-white/85" dir="ltr">
+                            {successMeta.orderNumber || successfulOrderId || '-'}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyOrderNumber}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.06] text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                          aria-label={language === 'en' ? 'Copy order number' : 'نسخ رقم الطلب'}
+                          title={language === 'en' ? 'Copy order number' : 'نسخ رقم الطلب'}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSuccessDismiss}
+                      className="h-11 rounded-[0.95rem] border-white/14 bg-white/6 text-white hover:bg-white/10"
+                    >
+                      {copy.cancel}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleOpenOrderDetails}
+                      className="h-11 rounded-[0.95rem] bg-[linear-gradient(135deg,#10b981,#22c55e)] text-white shadow-[0_20px_32px_-24px_rgba(34,197,94,0.8)] hover:brightness-[1.04]"
+                    >
+                      {copy.successViewOrder}
+                    </Button>
+                  </div>
+                </motion.section>
+              </div>
+            ) : null}
+          </AnimatePresence>
         </div>
       ) : null}
     </AnimatePresence>

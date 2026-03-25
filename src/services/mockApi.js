@@ -713,6 +713,13 @@ const mockApi = {
        return sanitizeUser(user);
     },
 
+    logout: async () => {
+      await new Promise(resolve => setTimeout(resolve, Math.min(DELAY, 250)));
+      localStorage.removeItem('refresh-token');
+      localStorage.removeItem('refreshToken');
+      return { success: true };
+    },
+
     refreshSession: async () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       return { token: 'mock-jwt-token-12345' };
@@ -1359,7 +1366,19 @@ const mockApi = {
           const data = getDB('admin-storage', { state: { users: mockUsers } });
         const migrated = await secureUsersInDb(data);
         if (migrated) saveDB('admin-storage', data);
-        return (data.state.users || mockUsers).map(sanitizeUser);
+        return (data.state.users || mockUsers)
+          .filter((entry) => !entry?.deletedAt && entry?.isDeleted !== true)
+          .map(sanitizeUser);
+      },
+
+      listDeleted: async () => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const data = getDB('admin-storage', { state: { users: mockUsers } });
+        const migrated = await secureUsersInDb(data);
+        if (migrated) saveDB('admin-storage', data);
+        return (data.state.users || mockUsers)
+          .filter((entry) => entry?.deletedAt || entry?.isDeleted === true || String(entry?.status || '').toLowerCase() === 'deleted')
+          .map(sanitizeUser);
       },
 
       getById: async (userId) => {
@@ -1549,6 +1568,22 @@ const mockApi = {
           return sanitizeUser(user);
         },
 
+        setBalance: async (userId, balance, actorContext) => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const db = getDB('admin-storage', { state: { users: mockUsers } });
+          const migrated = await secureUsersInDb(db);
+          if (migrated) saveDB('admin-storage', db);
+          const actor = resolveActor(actorContext);
+          const user = db.state.users.find(u => u.id === userId);
+          if (!user) return null;
+
+          ensureCanManageUser(actor, user, 'set balance for');
+
+          user.coins = normalizeMoneyAmount(toFiniteNumber(balance, 0));
+          saveDB('admin-storage', db);
+          return sanitizeUser(user);
+        },
+
         delete: async (userId, actorContext) => {
           await new Promise(resolve => setTimeout(resolve, DELAY));
           const db = getDB('admin-storage', { state: { users: mockUsers } });
@@ -1563,9 +1598,30 @@ const mockApi = {
           throw new Error('Cannot delete admin accounts');
           }
 
-          db.state.users = db.state.users.filter((u) => u.id !== userId);
+          target.deletedAt = new Date().toISOString();
+          target.isDeleted = true;
+          target.previousStatus = target.status || 'approved';
+          target.status = 'deleted';
           saveDB('admin-storage', db);
           return { success: true };
+        },
+
+        restore: async (userId, actorContext) => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const db = getDB('admin-storage', { state: { users: mockUsers } });
+          const migrated = await secureUsersInDb(db);
+          if (migrated) saveDB('admin-storage', db);
+          const actor = resolveActor(actorContext);
+          const target = db.state.users.find(u => u.id === userId);
+          if (!target) return null;
+
+          ensureCanManageUser(actor, target, 'restore');
+          target.isDeleted = false;
+          target.deletedAt = null;
+          target.status = normalizeAccountStatus(target.previousStatus || target.status || 'approved') || 'approved';
+          delete target.previousStatus;
+          saveDB('admin-storage', db);
+          return sanitizeUser(target);
         },
 
         updateAvatar: async (userId, avatar, actorContext) => {

@@ -95,13 +95,11 @@ const AddBalance = () => {
     const currentBalance = Number(user?.coins || 0);
     const currentCurrency = String(user?.currency || 'USD').toUpperCase();
     const balanceDisplayValue = formatWalletAmount(currentBalance, currentCurrency);
+    const isNegativeBalance = currentBalance < 0;
 
     const paymentGroups = useMemo(
-        () => getActivePaymentGroups(paymentSettings).filter((group) => {
-            const groupCurrency = String(group.currency || '').toUpperCase();
-            return groupCurrency === currentCurrency;
-        }),
-        [paymentSettings, currentCurrency]
+        () => getActivePaymentGroups(paymentSettings),
+        [paymentSettings]
     );
 
     useEffect(() => {
@@ -143,7 +141,7 @@ const AddBalance = () => {
                     <div className={`relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${isRTL ? 'sm:flex-row-reverse' : ''}`}>
                         <div className={isRTL ? 'text-right' : 'text-left'}>
                             <p className="text-[10px] font-bold tracking-[0.14em] text-[#fff1c9]">{t('wallet.currentBalance')}</p>
-                            <p className="mt-1 text-[1.35rem] font-black tracking-[-0.03em] text-[#fff8e8] sm:text-[1.55rem]">
+                            <p className={`mt-1 text-[1.35rem] font-black tracking-[-0.03em] sm:text-[1.55rem] ${isNegativeBalance ? 'text-[#ffb4b4]' : 'text-[#fff8e8]'}`}>
                                 {balanceDisplayValue}
                             </p>
                         </div>
@@ -194,7 +192,14 @@ const AddBalance = () => {
                                                 </div>
                                             )}
                                             <div className="min-w-0">
-                                                <h3 className="truncate text-base font-semibold text-[#6f4f18] sm:text-lg">{group.name}</h3>
+                                                <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+                                                    <h3 className="truncate text-base font-semibold text-[#6f4f18] sm:text-lg">{group.name}</h3>
+                                                    {group.currency && (
+                                                        <span className="shrink-0 rounded-md border border-[#c9a44e]/50 bg-[linear-gradient(180deg,rgba(255,248,225,0.95),rgba(245,220,160,0.6))] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-[#7a5a1e]">
+                                                            {String(group.currency).toUpperCase()}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-sm text-[#8f6e36]">
                                                     {group.description || (isRTL ? `يحتوي على ${group.methods.length} طرق دفع` : `Contains ${group.methods.length} payment methods`)}
                                                 </p>

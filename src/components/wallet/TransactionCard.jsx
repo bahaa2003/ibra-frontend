@@ -131,6 +131,10 @@ const TransactionCard = ({ transaction, index }) => {
   const originalCurrency = String(transaction.originalCurrency || '').trim().toUpperCase();
   const currentCurrency = String(transaction.currentCurrency || '').trim().toUpperCase();
   const showOriginalCurrency = Boolean(originalCurrency) && originalCurrency !== currentCurrency;
+  const hasBalanceSnapshot = transaction?.balanceBefore !== null
+    && transaction?.balanceBefore !== undefined
+    && transaction?.balanceAfter !== null
+    && transaction?.balanceAfter !== undefined;
 
   const Icon = getTransactionIcon(transaction.type);
   const StatusIcon = getStatusIcon(transaction.status);
@@ -218,6 +222,18 @@ const TransactionCard = ({ transaction, index }) => {
           </div>
 
           <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 ${isRTL ? 'justify-end' : 'justify-start'}`}>
+            {hasBalanceSnapshot ? (
+              <div className={`inline-flex items-center gap-1.5 rounded-full border border-white/55 bg-white/52 px-2 py-0.5 text-[10px] font-semibold ${isRTL ? 'flex-row-reverse' : ''}`}>
+                <span className="text-[#a54848] line-through">
+                  {formatWalletAmount(transaction.balanceBefore, transaction.currency)}
+                </span>
+                <span className="text-[#8b7345]">→</span>
+                <span className="text-[#2f7d3d]">
+                  {formatWalletAmount(transaction.balanceAfter, transaction.currency)}
+                </span>
+              </div>
+            ) : null}
+
             {referenceText && (
               <button
                 type="button"

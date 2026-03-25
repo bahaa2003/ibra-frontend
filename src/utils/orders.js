@@ -218,10 +218,11 @@ export const createOrderTypeOptions = (language = 'ar') => ([
 ]);
 
 export const createOrderDateOptions = (language = 'ar') => ([
-  { value: 'all', label: language === 'ar' ? 'كل الفترات' : 'All time' },
   { value: 'today', label: language === 'ar' ? 'اليوم' : 'Today' },
   { value: '7d', label: language === 'ar' ? 'آخر 7 أيام' : 'Last 7 days' },
   { value: '30d', label: language === 'ar' ? 'آخر 30 يوم' : 'Last 30 days' },
+  { value: 'all', label: language === 'ar' ? 'الكل' : 'All time' },
+  { value: 'custom', label: language === 'ar' ? 'من تاريخ إلى تاريخ' : 'Custom range' },
 ]);
 
 export const createOrderSortOptions = (language = 'ar') => ([

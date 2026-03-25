@@ -35,6 +35,7 @@ import SupplierBalancesSection from '../components/admin-dashboard/SupplierBalan
 import DashboardDateRangeFilter from '../components/admin-dashboard/DashboardDateRangeFilter';
 import OrderDetailsDrawer from '../components/orders/OrderDetailsDrawer';
 import Card from '../components/ui/Card';
+import { useToast } from '../components/ui/Toast';
 import { formatDateTime, formatNumber, getNumericLocale } from '../utils/intl';
 import { enrichOrders } from '../utils/orders';
 import { getUserRegistrationDate, isApprovedAccountStatus, isPendingAccountStatus } from '../utils/accountStatus';
@@ -246,7 +247,7 @@ const getDefaultDashboardRange = () => {
 
 const AdminDashboard = () => {
   const { user } = useAuthStore();
-  const { users, loadUsers } = useAdminStore();
+  const { users, loadUsers, updateUserStatus } = useAdminStore();
   const {
     orders,
     loadOrders,
@@ -259,6 +260,7 @@ const AdminDashboard = () => {
   const { currencies, loadCurrencies } = useSystemStore();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState(() => getDefaultDashboardRange().startDate);
   const [endDate, setEndDate] = useState(() => getDefaultDashboardRange().endDate);
@@ -267,6 +269,8 @@ const AdminDashboard = () => {
   const [loadingOrderActionId, setLoadingOrderActionId] = useState('');
   const [syncingOrderId, setSyncingOrderId] = useState('');
   const [approvingTopupId, setApprovingTopupId] = useState('');
+  const [approvingUserId, setApprovingUserId] = useState('');
+  const [rejectingUserId, setRejectingUserId] = useState('');
   const [supplierBalances, setSupplierBalances] = useState([]);
   const [isLoadingSupplierBalances, setIsLoadingSupplierBalances] = useState(false);
 
@@ -915,6 +919,46 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDashboardUserApprove = async (entry) => {
+    const targetId = String(entry?.id || '').trim();
+    if (!targetId) return;
+
+    try {
+      setApprovingUserId(targetId);
+      await updateUserStatus(targetId, 'approved', {
+        id: user?.id,
+        name: user?.name,
+        role: user?.role,
+      });
+      addToast(isArabic ? 'تم تفعيل الحساب بنجاح.' : 'Account approved successfully.', 'success');
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || (isArabic ? 'تعذر تفعيل الحساب.' : 'Failed to approve account.'), 'error');
+    } finally {
+      setApprovingUserId('');
+    }
+  };
+
+  const handleDashboardUserReject = async (entry) => {
+    const targetId = String(entry?.id || '').trim();
+    if (!targetId) return;
+
+    try {
+      setRejectingUserId(targetId);
+      await updateUserStatus(targetId, 'rejected', {
+        id: user?.id,
+        name: user?.name,
+        role: user?.role,
+      });
+      addToast(isArabic ? 'تم رفض الحساب بنجاح.' : 'Account rejected successfully.', 'success');
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || (isArabic ? 'تعذر رفض الحساب.' : 'Failed to reject account.'), 'error');
+    } finally {
+      setRejectingUserId('');
+    }
+  };
+
   return (
     <div className="min-w-0 space-y-4 pb-3 md:space-y-8 md:pb-4">
       <DashboardHeader
@@ -942,6 +986,10 @@ const AdminDashboard = () => {
             users={pendingApprovalUsers}
             isArabic={isArabic}
             formatDate={formatDate}
+            onApproveUser={handleDashboardUserApprove}
+            onRejectUser={handleDashboardUserReject}
+            approvingUserId={approvingUserId}
+            rejectingUserId={rejectingUserId}
           />
           <RecentOrdersSection
             orders={recentOrders}

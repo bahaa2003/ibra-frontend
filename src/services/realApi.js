@@ -1279,6 +1279,18 @@ const realApi = {
         return null;
       }
     },
+
+    logout: async () => {
+      clearStoredSession();
+
+      try {
+        await http.post('/auth/logout');
+      } catch {
+        // Some backend deployments do not expose a logout endpoint.
+      }
+
+      return { success: true };
+    },
   },
 
   // ── Products ─────────────────────────────────────────────────────────────
@@ -1720,6 +1732,37 @@ const realApi = {
       return normaliseUsers(users);
     },
 
+    listDeleted: async () => {
+      const endpointCandidates = [
+        ['/admin/users/deleted', {}],
+        ['/admin/users', { deleted: true }],
+        ['/admin/users', { status: 'deleted' }],
+      ];
+
+      for (const [endpoint, params] of endpointCandidates) {
+        try {
+          const res = await http.get(endpoint, { params });
+          const data = unwrap(res);
+          const users = Array.isArray(data) ? data : (data?.users || []);
+          const deleted = normaliseUsers(users).filter((entry) => (
+            Boolean(entry?.deletedAt)
+            || Boolean(entry?.isDeleted)
+            || String(entry?.status || '').trim().toLowerCase() === 'deleted'
+          ));
+          // Only accept if the dedicated endpoint returned results or if it's
+          // the dedicated endpoint (which returns [] legitimately when empty).
+          if (deleted.length > 0 || endpoint.endsWith('/deleted')) {
+            return deleted;
+          }
+          // Fallback endpoints returned 200 but no deleted entries — try next.
+        } catch (_error) {
+          // Try next candidate endpoint/params.
+        }
+      }
+
+      return [];
+    },
+
     /**
      * GET /admin/users/:id → fetch a single user profile by ID.
      */
@@ -1778,6 +1821,33 @@ const realApi = {
       return unwrap(res)?.transaction || unwrap(res);
     },
 
+    setBalance: async (userId, balance, _actorContext) => {
+      const normalizedUserId = String(userId || '').trim();
+      if (!normalizedUserId) return null;
+
+      const normalizedBalance = toFiniteNumber(balance, 0);
+
+      // Try the dedicated set-balance endpoint first
+      const requestPlan = [
+        { method: 'put', url: `/admin/wallets/${normalizedUserId}/set`, payload: { targetBalance: normalizedBalance, description: 'Admin set balance' } },
+        { method: 'patch', url: `/admin/wallets/${normalizedUserId}`, payload: { walletBalance: normalizedBalance } },
+        { method: 'patch', url: `/admin/users/${normalizedUserId}`, payload: { walletBalance: normalizedBalance } },
+      ];
+
+      let lastError = null;
+      for (const { method, url, payload } of requestPlan) {
+        try {
+          const res = await http[method](url, payload);
+          const data = unwrap(res);
+          return data?.user ? normaliseUser(data.user) : normaliseUser(data);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to set wallet balance.');
+    },
+
     /**
      * Update user's group.
      *
@@ -1811,6 +1881,29 @@ const realApi = {
     delete: async (userId, _actorContext) => {
       await http.delete(`/admin/users/${userId}`);
       return { success: true };
+    },
+
+    restore: async (userId, _actorContext) => {
+      const endpointCandidates = [
+        [`/admin/users/${userId}/restore`, {}],
+        [`/admin/users/${userId}/approve`, null],
+        [`/admin/users/${userId}`, { status: 'ACTIVE', deletedAt: null }],
+      ];
+
+      let lastError = null;
+
+      for (const [endpoint, payload] of endpointCandidates) {
+        try {
+          const res = payload === null
+            ? await http.patch(endpoint)
+            : await http.patch(endpoint, payload);
+          return normaliseUser(unwrap(res)?.user || unwrap(res));
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to restore deleted user.');
     },
 
     /**
@@ -1853,6 +1946,10 @@ const realApi = {
       // Admin-only fields
       if (updates.groupId !== undefined) body.groupId = updates.groupId;
       if (updates.verified !== undefined) body.verified = updates.verified;
+      if (updates.walletBalance !== undefined) body.walletBalance = Number(updates.walletBalance);
+      if (updates.coins !== undefined) body.coins = Number(updates.coins);
+      if (updates.balance !== undefined) body.balance = Number(updates.balance);
+      if (updates.currentBalance !== undefined) body.currentBalance = Number(updates.currentBalance);
 
       const isSelf = actorContext?.id === userId;
       const url = isSelf ? '/users/me' : `/admin/users/${userId}`;

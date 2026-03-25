@@ -58,6 +58,7 @@ const OrdersFiltersBar = ({
   showSort = true,
   panelClassName = '',
   compact = false,
+  customRange = null,
 }) => {
   const language = isArabic ? 'ar' : 'en';
   const statusOptions = createOrderStatusOptions(language);
@@ -130,10 +131,62 @@ const OrdersFiltersBar = ({
             <span className={cn('text-[var(--color-text-secondary)]', compact ? 'text-xs' : 'text-sm')}>
               {helperText || (isArabic
                 ? 'ابحث بالمنتج، العميل، البريد الإلكتروني، أو رقم الطلب.'
-                : 'Search by product, customer, email, or order number.')}
+              : 'Search by product, customer, email, or order number.')}
             </span>
           ) : null}
         </div>
+
+        {customRange ? (
+          <div className={cn(
+            'grid grid-cols-1 border-t border-[color:rgb(var(--color-border-rgb)/0.76)] pt-3 sm:grid-cols-2 xl:grid-cols-4',
+            compact ? 'gap-2' : 'gap-3'
+          )}>
+            <label className="min-w-0">
+              <span className={cn('block font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]', compact ? 'mb-1 text-[11px]' : 'mb-1.5 text-xs')}>
+                {isArabic ? 'من تاريخ' : 'From'}
+              </span>
+              <input
+                type="date"
+                value={customRange.startDate}
+                onChange={(event) => customRange.onStartDateChange(event.target.value)}
+                className={cn(
+                  selectClassName,
+                  compact
+                    ? 'h-10 rounded-xl bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs'
+                    : 'h-12 rounded-[1.1rem] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-4 text-sm'
+                )}
+              />
+            </label>
+
+            <label className="min-w-0">
+              <span className={cn('block font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]', compact ? 'mb-1 text-[11px]' : 'mb-1.5 text-xs')}>
+                {isArabic ? 'إلى تاريخ' : 'To'}
+              </span>
+              <input
+                type="date"
+                value={customRange.endDate}
+                onChange={(event) => customRange.onEndDateChange(event.target.value)}
+                className={cn(
+                  selectClassName,
+                  compact
+                    ? 'h-10 rounded-xl bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs'
+                    : 'h-12 rounded-[1.1rem] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-4 text-sm'
+                )}
+              />
+            </label>
+
+            {customRange.helperText ? (
+              <div className="sm:col-span-2 xl:col-span-2">
+                <div className={cn(
+                  'flex h-full items-center rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 text-[var(--color-text-secondary)]',
+                  compact ? 'min-h-10 text-xs' : 'min-h-12 text-sm'
+                )}>
+                  {customRange.helperText}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </Card>
   );

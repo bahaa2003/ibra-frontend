@@ -9,7 +9,7 @@ import {
   ShoppingCart,
   Wallet,
 } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAdminStore from '../../store/useAdminStore';
 import useOrderStore from '../../store/useOrderStore';
@@ -26,15 +26,40 @@ import { useToast } from '../../components/ui/Toast';
 import { formatDateTime, formatNumber, getNumericLocale } from '../../utils/intl';
 import { formatCurrencyAmount } from '../../utils/pricing';
 import { getOrderStatusMeta } from '../../utils/orders';
+import { getDashboardPathForRole, getPreviousVisitedPath } from '../../utils/navigation';
 import {
   resolveOrderExecutionCurrency,
   resolveTopupExecutionCurrency,
   resolveWalletTransactionExecutionCurrency,
+  resolveWalletTransactionOriginalCurrency,
 } from '../../utils/transactionCurrency';
 
 const asNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getCurrencyRate = (currencies, currencyCode) => {
+  const normalizedCode = String(currencyCode || 'USD').toUpperCase();
+  const matchedCurrency = (currencies || []).find(
+    (entry) => String(entry?.code || '').toUpperCase() === normalizedCode
+  );
+
+  return asNumber(matchedCurrency?.rate) || 1;
+};
+
+const convertAmountBetweenCurrencies = (amount, fromCurrencyCode, toCurrencyCode, currencies) => {
+  const numericAmount = asNumber(amount);
+  const sourceCurrency = String(fromCurrencyCode || 'USD').toUpperCase();
+  const targetCurrency = String(toCurrencyCode || 'USD').toUpperCase();
+
+  if (sourceCurrency === targetCurrency) return numericAmount;
+
+  const fromRate = getCurrencyRate(currencies, sourceCurrency);
+  const toRate = getCurrencyRate(currencies, targetCurrency);
+  if (!fromRate || !toRate) return numericAmount;
+
+  return asNumber((numericAmount / fromRate) * toRate);
 };
 
 const topupStatusMeta = (status, isArabic) => {
@@ -89,6 +114,27 @@ const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
     ? asNumber(transaction.signedAmount)
     : (type === 'debit' ? -Math.abs(amount) : Math.abs(amount));
   const typeMeta = walletTypeMeta(type, isArabic);
+  const snapshotOriginalAmount = asNumber(transaction?.financialSnapshot?.originalAmount);
+  const hasSnapshotOriginalAmount = Number.isFinite(Number(transaction?.financialSnapshot?.originalAmount));
+
+  // CRITICAL FIX: Admin wallet adjustments are ALWAYS in the user's local
+  // currency. The normaliser may inject currency='USD' because the backend
+  // WalletTransaction model has no currency field, causing the fallback chain
+  // in normaliseWalletTransaction to default to 'USD'. We override with the
+  // known user currency (fallbackCurrency) to prevent double-multiplication
+  // (e.g., 500 EGP × 50 rate = 25,000 displayed).
+  const resolvedOriginalCurrency = resolveWalletTransactionOriginalCurrency(transaction);
+  const resolvedExecutionCurrency = resolveWalletTransactionExecutionCurrency(transaction, fallbackCurrency);
+
+  // Trust fallbackCurrency (user's actual currency) if no snapshot proves otherwise
+  const hasFinancialSnapshot = Boolean(transaction?.financialSnapshot?.originalCurrency);
+  const originalCurrencyCode = hasFinancialSnapshot
+    ? (resolvedOriginalCurrency || resolvedExecutionCurrency)
+    : fallbackCurrency;
+
+  const sourceAmount = hasSnapshotOriginalAmount
+    ? (signedAmount < 0 ? -Math.abs(snapshotOriginalAmount) : Math.abs(snapshotOriginalAmount))
+    : signedAmount;
 
   return {
     id: `wallet-${transaction?.id || transaction?._id || Date.now()}`,
@@ -97,22 +143,28 @@ const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
     status: String(transaction?.status || 'completed').toLowerCase(),
     date: transaction?.createdAt || transaction?.date || null,
     amount: signedAmount,
-    currencyCode: resolveWalletTransactionExecutionCurrency(transaction, fallbackCurrency),
+    sourceAmount,
+    originalCurrencyCode,
+    currencyCode: fallbackCurrency,
     title: typeMeta.label,
     subtitle: transaction?.description || transaction?.reference || '-',
     raw: transaction,
   };
 };
 
-const SummaryCard = ({ icon: Icon, label, value, note }) => (
-  <Card className="admin-premium-stat p-2 sm:p-3">
+const SummaryCard = ({ icon: Icon, label, value, note, tone = 'default' }) => (
+  <Card className={`admin-premium-stat p-2 sm:p-3 ${tone === 'danger' ? 'border-[rgba(220,38,38,0.18)] bg-[linear-gradient(135deg,rgba(254,242,242,0.92),rgba(255,255,255,0.82))]' : ''}`.trim()}>
     <div className="flex items-start gap-1.5 sm:gap-2">
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:rgb(var(--color-primary-rgb)/0.2)] bg-[color:rgb(var(--color-primary-rgb)/0.09)] text-[var(--color-primary)] sm:h-9 sm:w-9">
+      <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.65rem] border sm:h-9 sm:w-9 ${
+        tone === 'danger'
+          ? 'border-[rgba(220,38,38,0.2)] bg-[rgba(220,38,38,0.08)] text-[#dc2626]'
+          : 'border-[color:rgb(var(--color-primary-rgb)/0.2)] bg-[color:rgb(var(--color-primary-rgb)/0.09)] text-[var(--color-primary)]'
+      }`}>
         <Icon className="h-3 w-3 sm:h-4 sm:w-4" />
       </span>
       <div className="min-w-0">
         <p className="text-[10px] leading-tight text-[var(--color-text-secondary)] sm:text-xs">{label}</p>
-        <p className="mt-0.5 text-sm font-semibold leading-tight text-[var(--color-text)] sm:text-xl">{value}</p>
+        <p className={`mt-0.5 text-sm font-semibold leading-tight sm:text-xl ${tone === 'danger' ? 'text-[#b91c1c]' : 'text-[var(--color-text)]'}`}>{value}</p>
         {note ? <p className="mt-0.5 text-[10px] text-[var(--color-muted)] sm:text-xs">{note}</p> : null}
       </div>
     </div>
@@ -122,6 +174,7 @@ const SummaryCard = ({ icon: Icon, label, value, note }) => (
 const AdminUserTransactions = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { i18n } = useTranslation();
   const { addToast } = useToast();
   const actor = useAuthStore((state) => state.user);
@@ -134,6 +187,7 @@ const AdminUserTransactions = () => {
     getUserWallet,
     getUserWalletTransactions,
     updateUserCoins,
+    setUserBalance,
   } = useAdminStore();
   const { orders, loadOrders } = useOrderStore();
   const { topups, loadTopups } = useTopupStore();
@@ -179,6 +233,8 @@ const AdminUserTransactions = () => {
     [userId, wallets]
   );
 
+  const displayCurrencyCode = String(selectedUser?.currency || selectedWallet?.currency || 'USD').toUpperCase();
+
   const walletTransactions = useMemo(
     () => (Array.isArray(userWalletTransactions?.[userId]) ? userWalletTransactions[userId] : []),
     [userId, userWalletTransactions]
@@ -187,12 +243,12 @@ const AdminUserTransactions = () => {
   const userCurrencyCode = String(selectedUser?.currency || 'USD').toUpperCase();
   const currentBalance = asNumber(selectedWallet?.walletBalance ?? selectedWallet?.balance ?? selectedUser?.coins);
 
-  const formatMoney = (amount, currencyCode = userCurrencyCode) => {
+  const formatMoney = (amount, currencyCode = displayCurrencyCode) => {
     const safeAmount = asNumber(amount);
-    return formatCurrencyAmount(safeAmount, String(currencyCode || userCurrencyCode).toUpperCase(), currencies, locale);
+    return formatCurrencyAmount(safeAmount, String(currencyCode || displayCurrencyCode).toUpperCase(), currencies, locale);
   };
 
-  const formatSignedMoney = (amount, currencyCode = userCurrencyCode) => {
+  const formatSignedMoney = (amount, currencyCode = displayCurrencyCode) => {
     const safeAmount = asNumber(amount);
     const sign = safeAmount > 0 ? '+' : safeAmount < 0 ? '-' : '';
     return `${sign}${formatMoney(Math.abs(safeAmount), currencyCode)}`;
@@ -227,7 +283,7 @@ const AdminUserTransactions = () => {
         status: String(order?.status || '').toLowerCase(),
         date: order?.createdAt || order?.date,
         amount: -Math.abs(amount),
-        currencyCode: resolveOrderExecutionCurrency(order, userCurrencyCode),
+        originalCurrencyCode: resolveOrderExecutionCurrency(order, userCurrencyCode),
         title: isArabic ? 'طلب شراء' : 'Order purchase',
         subtitle: order?.productNameAr || order?.productName || order?.productId || '-',
         raw: order,
@@ -243,7 +299,7 @@ const AdminUserTransactions = () => {
         status: String(topup?.status || '').toLowerCase(),
         date: topup?.createdAt || topup?.date,
         amount: amount,
-        currencyCode: resolveTopupExecutionCurrency(topup, userCurrencyCode),
+        originalCurrencyCode: resolveTopupExecutionCurrency(topup, userCurrencyCode),
         title: isArabic ? 'عملية شحن رصيد' : 'Balance topup',
         subtitle: topup?.paymentChannel || topup?.method || '-',
         raw: topup,
@@ -256,86 +312,121 @@ const AdminUserTransactions = () => {
 
   const walletOperations = useMemo(
     () => walletTransactions
-      .map((entry) => buildWalletOperation(entry, selectedWallet?.currency || userCurrencyCode, isArabic))
+      .map((entry) => buildWalletOperation(entry, displayCurrencyCode, isArabic))
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
-    [isArabic, selectedWallet?.currency, userCurrencyCode, walletTransactions]
+    [displayCurrencyCode, isArabic, walletTransactions]
   );
 
-  const displayOperations = walletOperations.length ? walletOperations : operations;
+  const displayOperations = useMemo(
+    () => (walletOperations.length ? walletOperations : operations).map((entry) => {
+      const sourceCurrencyCode = String(entry?.originalCurrencyCode || entry?.currencyCode || displayCurrencyCode).toUpperCase();
+      const sourceAmount = entry?.sourceAmount !== undefined && entry?.sourceAmount !== null
+        ? asNumber(entry.sourceAmount)
+        : asNumber(entry.amount);
+      return {
+        ...entry,
+        originalCurrencyCode: sourceCurrencyCode,
+        convertedAmount: convertAmountBetweenCurrencies(sourceAmount, sourceCurrencyCode, displayCurrencyCode, currencies),
+        currencyCode: displayCurrencyCode,
+      };
+    }),
+    [currencies, displayCurrencyCode, operations, walletOperations]
+  );
   const creditTotal = useMemo(
-    () => displayOperations.reduce((sum, entry) => (entry.amount > 0 ? sum + entry.amount : sum), 0),
+    () => displayOperations.reduce((sum, entry) => (entry.convertedAmount > 0 ? sum + entry.convertedAmount : sum), 0),
     [displayOperations]
   );
   const debitTotal = useMemo(
-    () => Math.abs(displayOperations.reduce((sum, entry) => (entry.amount < 0 ? sum + entry.amount : sum), 0)),
+    () => Math.abs(displayOperations.reduce((sum, entry) => (entry.convertedAmount < 0 ? sum + entry.convertedAmount : sum), 0)),
     [displayOperations]
   );
   const operationsSourceNote = walletOperations.length
     ? (isArabic ? 'السجل المباشر من مسار المحفظة' : 'Live wallet route')
     : (isArabic ? 'سجل احتياطي من الطلبات والشحنات' : 'Fallback from orders and topups');
 
-  const handleBalanceUpdate = async (delta) => {
-    if (!selectedUser) return;
-    const safeDelta = asNumber(delta);
-    if (!safeDelta) return;
-    if (currentBalance + safeDelta < 0) {
-      addToast('لا يمكن جعل الرصيد أقل من صفر.', 'error');
+  const revalidateWalletState = async () => {
+    await Promise.allSettled([
+      loadUsers({ force: true }),
+      getUserById(selectedUser.id, { force: true }),
+      getUserWallet(selectedUser.id, { force: true }),
+      getUserWalletTransactions(selectedUser.id, { force: true }),
+    ]);
+  };
+
+  const handleAddBalance = async () => {
+    const amount = Math.abs(asNumber(adjustAmount));
+    if (amount <= 0) {
+      addToast('أدخل مبلغًا صحيحًا.', 'error');
       return;
     }
 
     setIsBalanceUpdating(true);
     try {
-      await updateUserCoins(selectedUser.id, safeDelta, actor);
-      await Promise.allSettled([
-        loadUsers({ force: true }),
-        getUserById(selectedUser.id, { force: true }),
-        getUserWallet(selectedUser.id, { force: true }),
-        getUserWalletTransactions(selectedUser.id, { force: true }),
-      ]);
-      addToast(
-        safeDelta > 0 ? 'تمت زيادة الرصيد بنجاح.' : 'تم خصم الرصيد بنجاح.',
-        'success'
-      );
+      await updateUserCoins(selectedUser.id, amount, actor);
+      await revalidateWalletState();
+      addToast('تمت زيادة الرصيد بنجاح.', 'success');
+      setAdjustAmount('');
     } catch (error) {
+      await revalidateWalletState();
+      addToast(error?.message || 'تعذر زيادة الرصيد.', 'error');
+    } finally {
+      setIsBalanceUpdating(false);
+    }
+  };
+
+  const handleDeductBalance = async () => {
+    const amount = Math.abs(asNumber(adjustAmount));
+    if (amount <= 0) {
+      addToast('أدخل مبلغًا صحيحًا.', 'error');
+      return;
+    }
+
+    setIsBalanceUpdating(true);
+    try {
+      // Send negative to trigger the deduct path in the store/API
+      await updateUserCoins(selectedUser.id, -amount, actor);
+      await revalidateWalletState();
+      addToast('تم خصم الرصيد بنجاح.', 'success');
+      setAdjustAmount('');
+    } catch (error) {
+      await revalidateWalletState();
+      addToast(error?.message || 'تعذر خصم الرصيد.', 'error');
+    } finally {
+      setIsBalanceUpdating(false);
+    }
+  };
+
+  const handleSetBalance = async () => {
+    const target = asNumber(targetBalance);
+    if (target === currentBalance) {
+      addToast('الرصيد الحالي مطابق للقيمة المطلوبة.', 'info');
+      return;
+    }
+
+    setIsBalanceUpdating(true);
+    try {
+      // Use the dedicated setBalance endpoint — bypasses credit limit checks
+      // and directly sets the exact walletBalance (including negative).
+      await setUserBalance(selectedUser.id, target, actor);
+      await revalidateWalletState();
+      addToast('تم تحديث الرصيد بنجاح.', 'success');
+      setTargetBalance('');
+    } catch (error) {
+      await revalidateWalletState();
       addToast(error?.message || 'تعذر تحديث الرصيد.', 'error');
     } finally {
       setIsBalanceUpdating(false);
     }
   };
 
-  const handleAddBalance = async () => {
-    const amount = asNumber(adjustAmount);
-    if (amount <= 0) {
-      addToast('أدخل مبلغًا صحيحًا.', 'error');
+  const handleBackNavigation = () => {
+    const previousPath = getPreviousVisitedPath(location.pathname);
+    if (previousPath) {
+      navigate(previousPath);
       return;
     }
-    await handleBalanceUpdate(amount);
-    setAdjustAmount('');
-  };
 
-  const handleDeductBalance = async () => {
-    const amount = asNumber(adjustAmount);
-    if (amount <= 0) {
-      addToast('أدخل مبلغًا صحيحًا.', 'error');
-      return;
-    }
-    await handleBalanceUpdate(-amount);
-    setAdjustAmount('');
-  };
-
-  const handleSetBalance = async () => {
-    const target = asNumber(targetBalance);
-    if (target < 0) {
-      addToast('الرصيد المستهدف يجب أن يكون أكبر من أو يساوي صفر.', 'error');
-      return;
-    }
-    const delta = target - currentBalance;
-    if (delta === 0) {
-      addToast('الرصيد الحالي مطابق للقيمة المطلوبة.', 'info');
-      return;
-    }
-    await handleBalanceUpdate(delta);
-    setTargetBalance('');
+    navigate(getDashboardPathForRole(actor?.role));
   };
 
   const renderOperationStatus = (item) => {
@@ -365,10 +456,6 @@ const AdminUserTransactions = () => {
               {isArabic ? 'عرض كل الطلبات والمعاملات المالية الخاصة بالمستخدم وإدارة رصيده.' : 'Review all user orders and financial operations with balance controls.'}
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => navigate('/admin/users')} className="h-8 gap-1 px-2 text-[11px] sm:h-10 sm:gap-2 sm:px-4 sm:text-sm">
-            <ArrowLeft className="h-4 w-4" />
-            {isArabic ? 'العودة للمستخدمين' : 'Back to users'}
-          </Button>
         </div>
 
         {selectedUser ? (
@@ -384,7 +471,7 @@ const AdminUserTransactions = () => {
                 <Badge variant="secondary" className="px-2 py-0.5 text-[10px]">
                   {selectedWallet?.transactionsCount || displayOperations.length} {isArabic ? 'حركة' : 'moves'}
                 </Badge>
-                <Badge variant="info" className="px-2 py-0.5 text-[10px]">{selectedWallet?.currency || selectedUser.currency || 'USD'}</Badge>
+                <Badge variant="info" className="px-2 py-0.5 text-[10px]">{selectedUser?.currency || selectedWallet?.currency || 'USD'}</Badge>
               </div>
             </div>
           </div>
@@ -411,8 +498,9 @@ const AdminUserTransactions = () => {
         <SummaryCard
           icon={Wallet}
           label={isArabic ? 'الرصيد الحالي' : 'Current balance'}
-          value={formatMoney(currentBalance, selectedWallet?.currency || userCurrencyCode)}
-          note={selectedWallet?.currency || userCurrencyCode}
+          value={formatMoney(currentBalance, displayCurrencyCode)}
+          note={displayCurrencyCode}
+          tone={currentBalance < 0 ? 'danger' : 'default'}
         />
         <SummaryCard
           icon={ReceiptText}
@@ -423,13 +511,13 @@ const AdminUserTransactions = () => {
         <SummaryCard
           icon={CheckCircle2}
           label={isArabic ? 'إجمالي الإضافات' : 'Total credits'}
-          value={formatMoney(creditTotal, selectedWallet?.currency || userCurrencyCode)}
+          value={formatMoney(creditTotal, displayCurrencyCode)}
           note={isArabic ? 'رصيد دخل المحفظة' : 'Incoming wallet flow'}
         />
         <SummaryCard
           icon={ShoppingCart}
           label={isArabic ? 'إجمالي الخصومات' : 'Total debits'}
-          value={formatMoney(debitTotal, selectedWallet?.currency || userCurrencyCode)}
+          value={formatMoney(debitTotal, displayCurrencyCode)}
           note={isArabic ? 'رصيد خرج من المحفظة' : 'Outgoing wallet flow'}
         />
       </div>
@@ -444,7 +532,8 @@ const AdminUserTransactions = () => {
               min="0"
               step="0.01"
               value={adjustAmount}
-              onChange={(event) => setAdjustAmount(event.target.value)}
+              onChange={(event) => setAdjustAmount(event.target.value.replace(/-/g, ''))}
+              onKeyDown={(event) => { if (event.key === '-' || event.key === 'e') event.preventDefault(); }}
               placeholder={isArabic ? 'أدخل المبلغ' : 'Enter amount'}
               className="mt-1.5 h-9 px-2 py-1.5 text-xs sm:mt-2 sm:h-11 sm:px-4 sm:py-3 sm:text-sm"
             />
@@ -464,7 +553,6 @@ const AdminUserTransactions = () => {
             <p className="text-[11px] text-[var(--color-text-secondary)]">{isArabic ? 'تعيين رصيد محدد' : 'Set exact balance'}</p>
             <Input
               type="number"
-              min="0"
               step="0.01"
               value={targetBalance}
               onChange={(event) => setTargetBalance(event.target.value)}
@@ -505,8 +593,8 @@ const AdminUserTransactions = () => {
               </div>
               <div className="mt-1.5 flex items-center justify-between text-[11px] text-[var(--color-text-secondary)]">
                 <span className="truncate pe-2">{formatDateTime(item.date, locale, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                <span className={`shrink-0 font-semibold ${item.amount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
-                  {formatSignedMoney(item.amount, item.currencyCode)}
+                <span className={`shrink-0 font-semibold ${item.convertedAmount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                  {formatSignedMoney(item.convertedAmount, item.currencyCode)}
                 </span>
               </div>
               <Button size="sm" variant="outline" onClick={() => setDetailsItem(item)} className="mt-1.5 h-8 w-full gap-1 px-2 text-[11px] sm:mt-2 sm:h-10 sm:gap-2 sm:px-4 sm:text-sm">
@@ -544,8 +632,8 @@ const AdminUserTransactions = () => {
                     <div className="text-xs text-[var(--color-text-secondary)]">{item.subtitle}</div>
                   </TableCell>
                   <TableCell className="text-center">{renderOperationStatus(item)}</TableCell>
-                  <TableCell className={`text-center font-semibold ${item.amount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
-                    {formatSignedMoney(item.amount, item.currencyCode)}
+                  <TableCell className={`text-center font-semibold ${item.convertedAmount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                    {formatSignedMoney(item.convertedAmount, item.currencyCode)}
                   </TableCell>
                   <TableCell className="text-center text-xs text-[var(--color-text-secondary)]">
                     {formatDateTime(item.date, locale, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -586,8 +674,8 @@ const AdminUserTransactions = () => {
               </div>
               <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-3">
                 <p className="text-xs text-[var(--color-text-secondary)]">{isArabic ? 'المبلغ' : 'Amount'}</p>
-                <p className={`mt-1 text-sm font-semibold ${detailsItem.amount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
-                  {formatSignedMoney(detailsItem.amount, detailsItem.currencyCode)}
+                <p className={`mt-1 text-sm font-semibold ${(detailsItem.convertedAmount ?? detailsItem.amount) >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
+                  {formatSignedMoney(detailsItem.convertedAmount ?? detailsItem.amount, detailsItem.currencyCode)}
                 </p>
               </div>
               <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-3">
@@ -607,7 +695,7 @@ const AdminUserTransactions = () => {
                 <div className="space-y-2 text-sm text-[var(--color-text)]">
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الوصف:' : 'Description:'}</span> {detailsItem.raw?.description || detailsItem.subtitle || '-'}</p>
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المرجع:' : 'Reference:'}</span> {detailsItem.raw?.reference || '-'}</p>
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الرصيد بعد العملية:' : 'Balance after:'}</span> {detailsItem.raw?.balanceAfter !== null && detailsItem.raw?.balanceAfter !== undefined ? formatMoney(detailsItem.raw.balanceAfter, detailsItem.raw?.currency || detailsItem.currencyCode) : '-'}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الرصيد بعد العملية:' : 'Balance after:'}</span> {detailsItem.raw?.balanceAfter !== null && detailsItem.raw?.balanceAfter !== undefined ? formatMoney(convertAmountBetweenCurrencies(detailsItem.raw.balanceAfter, detailsItem.raw?.currency || detailsItem.originalCurrencyCode || detailsItem.currencyCode, displayCurrencyCode, currencies), displayCurrencyCode) : '-'}</p>
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'مصدر السجل:' : 'Ledger source:'}</span> {detailsItem.raw?.sourceType || (isArabic ? 'محفظة مباشرة' : 'Direct wallet entry')}</p>
                 </div>
               ) : detailsItem.source === 'order' ? (
@@ -619,8 +707,8 @@ const AdminUserTransactions = () => {
               ) : (
                 <div className="space-y-2 text-sm text-[var(--color-text)]">
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'طريقة الدفع:' : 'Payment channel:'}</span> {detailsItem.raw?.paymentChannel || detailsItem.raw?.method || '-'}</p>
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المبلغ المطلوب:' : 'Requested amount:'}</span> {formatMoney(detailsItem.raw?.requestedAmount ?? detailsItem.raw?.amount ?? 0, detailsItem.raw?.currencyCode)}</p>
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المبلغ المعتمد:' : 'Approved amount:'}</span> {detailsItem.raw?.actualPaidAmount ? formatMoney(detailsItem.raw.actualPaidAmount, detailsItem.raw?.currencyCode) : '-'}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المبلغ المطلوب:' : 'Requested amount:'}</span> {formatMoney(convertAmountBetweenCurrencies(detailsItem.raw?.requestedAmount ?? detailsItem.raw?.amount ?? 0, detailsItem.raw?.currencyCode || detailsItem.originalCurrencyCode || detailsItem.currencyCode, displayCurrencyCode, currencies), displayCurrencyCode)}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المبلغ المعتمد:' : 'Approved amount:'}</span> {detailsItem.raw?.actualPaidAmount ? formatMoney(convertAmountBetweenCurrencies(detailsItem.raw.actualPaidAmount, detailsItem.raw?.currencyCode || detailsItem.originalCurrencyCode || detailsItem.currencyCode, displayCurrencyCode, currencies), displayCurrencyCode) : '-'}</p>
                 </div>
               )}
             </div>

@@ -5,7 +5,13 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useLanguage } from '../../context/LanguageContext';
 import useAuthStore from '../../store/useAuthStore';
-import { getDefaultRouteForRole, isAdminRole } from '../../utils/authRoles';
+import { isAdminRole } from '../../utils/authRoles';
+import {
+  getDashboardPathForRole,
+  getPreviousVisitedPath,
+  isSidebarRootPath,
+  registerVisitedPath,
+} from '../../utils/navigation';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -32,6 +38,10 @@ const Layout = () => {
       setIsSidebarOpen(false);
     }
   }, [location.pathname, isMobile]);
+
+  useEffect(() => {
+    registerVisitedPath(location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     document.body.dataset.sidebarOpen = String(isSidebarOpen);
@@ -67,12 +77,28 @@ const Layout = () => {
       return;
     }
 
+    if (isAdmin && isAdminWallet) {
+      navigate('/dashboard');
+      return;
+    }
+
+    if (isSidebarRootPath(path, user?.role)) {
+      navigate(getDashboardPathForRole(user?.role));
+      return;
+    }
+
+    const previousPath = getPreviousVisitedPath(path);
+    if (previousPath) {
+      navigate(previousPath);
+      return;
+    }
+
     if (isAdmin && !isAdminWallet) {
       navigate('/admin/dashboard');
       return;
     }
 
-    navigate(getDefaultRouteForRole(user?.role));
+    navigate(getDashboardPathForRole(user?.role));
   };
 
   return (

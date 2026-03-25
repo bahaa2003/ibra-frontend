@@ -125,6 +125,7 @@ const Dashboard = () => {
             products={storefrontProducts}
             language={language}
             onSelectProduct={handleProductSelect}
+            forceIconRight
             placeholder={language === 'ar' ? 'ابحث عن منتج وسيظهر مباشرة أسفل البحث...' : 'Search for a product and get direct matches...'}
             noResultsLabel={language === 'ar' ? 'لا يوجد منتج مطابق' : 'No matching product found'}
             className="mx-auto w-full"
@@ -152,7 +153,6 @@ const Dashboard = () => {
           : 'The homepage is now organized for faster navigation, clearer scanning, and better mobile comfort while keeping IBRA’s signature gold identity.'}
         chips={[
           { label: language === 'ar' ? (isAdmin ? 'محفظة الأدمن' : 'المحفظة') : (isAdmin ? 'Admin Wallet' : 'Wallet'), to: isAdmin ? '/admin/wallet' : '/wallet' },
-          { label: language === 'ar' ? 'المنتجات' : 'Products', to: '/products' },
           { label: language === 'ar' ? 'الإعدادات' : 'Settings', to: '/settings' },
         ]}
         copyright={language === 'ar' ? '© 2026 IBRA Store. جميع الحقوق محفوظة.' : '© 2026 IBRA Store. All rights reserved.'}

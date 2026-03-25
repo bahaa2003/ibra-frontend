@@ -192,7 +192,6 @@ const AdminProducts = () => {
     const [isSavingCategory, setIsSavingCategory] = useState(false);
     const [categoryForm, setCategoryForm] = useState({
         name: '',
-        nameAr: '',
         sortOrder: 0,
         image: '',
     });
@@ -204,8 +203,8 @@ const AdminProducts = () => {
         name: '',
         nameAr: '',
         description: '',
-        descriptionAr: '',
         category: '',
+        connectionType: 'auto',
         providerId: '',
         providerProductId: '',
         supplierId: '',
@@ -215,8 +214,6 @@ const AdminProducts = () => {
         externalPricingMode: 'use_local_price',
         supplierMarginType: 'fixed',
         supplierMarginValue: 0,
-        fallbackSupplierId: '',
-        supplierNotes: '',
         supplierFieldMappingsText: 'playerId:uid\nquantity:qty',
         syncPriceWithProvider: false,
         enableManualPrice: false,
@@ -508,8 +505,8 @@ const AdminProducts = () => {
                 name: product.name || '',
                 nameAr: product.nameAr || '',
                 description: product.description || '',
-                descriptionAr: product.descriptionAr || '',
                 category: product.category || categories[0]?.id || '',
+                connectionType: product.autoFulfillmentEnabled === false ? 'manual' : 'auto',
                 providerId: linkedProviderId,
                 providerProductId: linkedProviderProductId,
                 supplierId: linkedProviderId,
@@ -518,8 +515,6 @@ const AdminProducts = () => {
                 autoFulfillmentEnabled: product.autoFulfillmentEnabled !== false,
                 supplierMarginType: product.supplierMarginType || 'fixed',
                 supplierMarginValue: product.supplierMarginValue ?? 0,
-                fallbackSupplierId: product.fallbackSupplierId || '',
-                supplierNotes: product.supplierNotes || '',
                 supplierFieldMappingsText: Array.isArray(product.supplierFieldMappings) ? product.supplierFieldMappings.map((m) => `${m.internalField}:${m.externalField}`).join('\n') : 'playerId:uid\nquantity:qty',
                 syncPriceWithProvider: shouldSyncWithProvider,
                 externalPricingMode: product.externalPricingMode || (shouldSyncWithProvider ? 'use_supplier_price' : 'use_local_price'),
@@ -557,8 +552,8 @@ const AdminProducts = () => {
                 name: '',
                 nameAr: '',
                 description: '',
-                descriptionAr: '',
                 category: categories[0]?.id || '',
+                connectionType: 'auto',
                 providerId: '',
                 providerProductId: '',
                 supplierId: '',
@@ -568,8 +563,6 @@ const AdminProducts = () => {
                 externalPricingMode: 'use_local_price',
                 supplierMarginType: 'fixed',
                 supplierMarginValue: 0,
-                fallbackSupplierId: '',
-                supplierNotes: '',
                 supplierFieldMappingsText: 'playerId:uid\nquantity:qty',
                 syncPriceWithProvider: false,
                 enableManualPrice: false,
@@ -616,16 +609,16 @@ const AdminProducts = () => {
             return;
         }
 
-        const selectedSupplierId = String(productForm.supplierId || productForm.providerId || '').trim();
-        const selectedProviderProductId = String(productForm.providerProductId || productForm.externalProductId || '').trim();
-        const selectedExternalProductId = String(productForm.externalProductId || productForm.providerProductId || '').trim();
+        const isAutomaticConnection = productForm.connectionType !== 'manual';
+        const selectedSupplierId = isAutomaticConnection ? String(productForm.supplierId || productForm.providerId || '').trim() : '';
+        const selectedProviderProductId = isAutomaticConnection ? String(productForm.providerProductId || productForm.externalProductId || '').trim() : '';
+        const selectedExternalProductId = isAutomaticConnection ? String(productForm.externalProductId || productForm.providerProductId || '').trim() : '';
         const hasProviderLink = Boolean(selectedSupplierId && selectedProviderProductId);
-        const shouldSyncWithProvider = Boolean(productForm.syncPriceWithProvider && hasProviderLink);
+        const shouldSyncWithProvider = Boolean(isAutomaticConnection && productForm.syncPriceWithProvider && hasProviderLink);
         const resolvedExternalPricingMode = shouldSyncWithProvider
             ? (usesProviderPricingMode(productForm.externalPricingMode) ? productForm.externalPricingMode : 'use_supplier_price')
             : (usesProviderPricingMode(productForm.externalPricingMode) ? 'use_local_price' : productForm.externalPricingMode);
         const fallbackName = String(productForm.name || productForm.nameAr || '').trim();
-        const fallbackNameAr = String(productForm.nameAr || productForm.name || '').trim();
         const fallbackCategory = String(productForm.category || categories[0]?.id || '').trim();
         const productImage = String(productForm.image || editingProduct?.image || '').trim();
 
@@ -671,9 +664,9 @@ const AdminProducts = () => {
         const payload = {
             // معلومات أساسية
             name: fallbackName,
-            nameAr: fallbackNameAr,
+            nameAr: String(productForm.nameAr || productForm.name || '').trim(),
             description: productForm.description,
-            descriptionAr: productForm.descriptionAr,
+            descriptionAr: '',
             category: fallbackCategory,
             image: productImage,
             status: productForm.status,
@@ -685,13 +678,13 @@ const AdminProducts = () => {
             supplierId: selectedSupplierId,
             externalProductId: selectedExternalProductId,
             externalProductName: String(productForm.externalProductName || '').trim(),
-            autoFulfillmentEnabled: Boolean(productForm.autoFulfillmentEnabled),
-            fallbackSupplierId: String(productForm.fallbackSupplierId || '').trim(),
+            autoFulfillmentEnabled: isAutomaticConnection,
             supplierFieldMappings: parseSupplierMappings(productForm.supplierFieldMappingsText),
             externalPricingMode: String(resolvedExternalPricingMode || 'use_local_price'),
             supplierMarginType: String(productForm.supplierMarginType || 'fixed'),
             supplierMarginValue: Number(productForm.supplierMarginValue || 0),
-            supplierNotes: String(productForm.supplierNotes || '').trim(),
+            fallbackSupplierId: '',
+            supplierNotes: '',
             syncPriceWithProvider: shouldSyncWithProvider,
             enableManualPrice: productForm.enableManualPrice,
             manualPriceAdjustment,
@@ -780,13 +773,12 @@ const AdminProducts = () => {
             setEditingCategory(category);
             setCategoryForm({
                 name: String(category?.name || ''),
-                nameAr: String(category?.nameAr || ''),
                 sortOrder: Number(category?.sortOrder ?? category?.displayOrder ?? 0),
                 image: String(category?.image || ''),
             });
         } else {
             setEditingCategory(null);
-            setCategoryForm({ name: '', nameAr: '', sortOrder: 0, image: '' });
+            setCategoryForm({ name: '', sortOrder: 0, image: '' });
         }
         setIsCategoryModalOpen(true);
     };
@@ -795,11 +787,10 @@ const AdminProducts = () => {
         event.preventDefault();
 
         const name = String(categoryForm.name || '').trim();
-        const nameAr = String(categoryForm.nameAr || '').trim();
         const sortOrder = Number(categoryForm.sortOrder ?? 0);
         const safeSortOrder = Number.isFinite(sortOrder) ? sortOrder : 0;
 
-        if (!name && !nameAr) {
+        if (!name) {
             addToast(isEnglish ? 'Category name is required' : 'اسم القسم مطلوب', 'error');
             return;
         }
@@ -809,7 +800,7 @@ const AdminProducts = () => {
             if (editingCategory) {
                 await updateCategory(editingCategory.id, {
                     name,
-                    nameAr,
+                    nameAr: '',
                     sortOrder: safeSortOrder,
                     image: categoryForm.image || '',
                 });
@@ -817,7 +808,7 @@ const AdminProducts = () => {
             } else {
                 await addCategory({
                     name,
-                    nameAr,
+                    nameAr: '',
                     sortOrder: safeSortOrder,
                     image: categoryForm.image || '',
                 });
@@ -900,7 +891,6 @@ const AdminProducts = () => {
                                         </div>
                                         <div className="min-w-0">
                                             <div className="truncate font-medium text-gray-900 dark:text-white">{category.name || '-'}</div>
-                                            <div className="truncate text-xs text-gray-500">{category.nameAr || ''}</div>
                                         </div>
                                     </div>
                                 </TableCell>
@@ -965,7 +955,7 @@ const AdminProducts = () => {
                                                 </div>
                                                 <div>
                                                     <div className="font-medium text-gray-900 dark:text-white">{product.name}</div>
-                                                    <div className="text-xs text-gray-500">{product.nameAr}</div>
+                                                    <div className="text-xs text-gray-500">{categories.find((c) => c.id === product.category)?.name || product.category}</div>
                                                 </div>
                                             </div>
                                         </TableCell>
@@ -1040,12 +1030,6 @@ const AdminProducts = () => {
                             onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))}
                             placeholder={isEnglish ? 'Example: Games' : 'مثال: Games'}
                         />
-                        <Input
-                            label={isEnglish ? 'Arabic Name' : 'الاسم بالعربية'}
-                            value={categoryForm.nameAr}
-                            onChange={(e) => setCategoryForm((prev) => ({ ...prev, nameAr: e.target.value }))}
-                            placeholder={isEnglish ? 'Example: ألعاب' : 'مثال: ألعاب'}
-                        />
                     </div>
 
                     <Input
@@ -1089,13 +1073,8 @@ const AdminProducts = () => {
                             المعلومات الأساسية
                         </h3>
                         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input label="English Name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
-                                <Input label="Arabic Name" value={productForm.nameAr} onChange={(e) => setProductForm({ ...productForm, nameAr: e.target.value })} />
-                            </div>
-
+                            <Input label="Name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
                             <Input label="Description" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
-                            <Input label="Arabic Description" value={productForm.descriptionAr} onChange={(e) => setProductForm({ ...productForm, descriptionAr: e.target.value })} />
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">القسم</label>
@@ -1105,7 +1084,7 @@ const AdminProducts = () => {
                                     onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
                                 >
                                     {(categories || []).map((c) => (
-                                        <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{`${c.name} - ${c.nameAr}`}</option>
+                                        <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{c.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -1137,6 +1116,40 @@ const AdminProducts = () => {
                             الكمية والتسعير
                         </h3>
                         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">نوع الربط</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { value: 'manual', label: isEnglish ? 'Manual' : 'يدوي' },
+                                        { value: 'auto', label: isEnglish ? 'Automatic' : 'آلي' },
+                                    ].map((option) => {
+                                        const isSelected = productForm.connectionType === option.value;
+
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setProductForm((prev) => ({
+                                                    ...prev,
+                                                    connectionType: option.value,
+                                                    autoFulfillmentEnabled: option.value === 'auto',
+                                                    syncPriceWithProvider: option.value === 'auto' ? prev.syncPriceWithProvider : false,
+                                                    externalPricingMode: option.value === 'auto' ? prev.externalPricingMode : 'use_local_price',
+                                                }))}
+                                                className={`h-11 rounded-[0.95rem] border px-3 text-sm font-semibold transition-all ${
+                                                    isSelected
+                                                        ? 'border-[color:rgb(var(--color-primary-rgb)/0.42)] bg-[color:rgb(var(--color-primary-rgb)/0.12)] text-[var(--color-primary)] shadow-[0_14px_28px_-24px_rgb(var(--color-primary-rgb)/0.48)]'
+                                                        : 'border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.9)] text-[var(--color-text-secondary)] hover:border-[color:rgb(var(--color-primary-rgb)/0.24)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {productForm.connectionType === 'auto' ? (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">اختر المورد</label>
@@ -1291,17 +1304,13 @@ const AdminProducts = () => {
                                     </div>
                                 </div>
                             </div>
+                            ) : null}
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <Input
                                     label="External Product Name"
                                     value={productForm.externalProductName}
                                     onChange={(e) => setProductForm({ ...productForm, externalProductName: e.target.value })}
-                                />
-                                <Input
-                                    label="Fallback Supplier ID"
-                                    value={productForm.fallbackSupplierId}
-                                    onChange={(e) => setProductForm({ ...productForm, fallbackSupplierId: e.target.value })}
                                 />
                                 <Input
                                     label="supplierMarginValue"
@@ -1373,12 +1382,7 @@ const AdminProducts = () => {
                                 />
                             </div>
 
-                            <Input
-                                label="supplierNotes"
-                                value={productForm.supplierNotes}
-                                onChange={(e) => setProductForm({ ...productForm, supplierNotes: e.target.value })}
-                            />
-
+                            {productForm.connectionType === 'auto' ? (
                             <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                                 <div className="flex flex-wrap items-center gap-4">
                                     <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -1498,6 +1502,7 @@ const AdminProducts = () => {
                                     </div>
                                 ) : null}
                             </div>
+                            ) : null}
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <Input

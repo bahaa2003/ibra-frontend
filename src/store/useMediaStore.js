@@ -281,8 +281,8 @@ const deriveCategoriesFromProducts = (products = []) => {
 const useMediaStore = create(
   persist(
     (set, get) => ({
-      products: normalizeProducts(mockProducts, mockCategories),
-      categories: mockCategories,
+      products: isRealProvider ? [] : normalizeProducts(mockProducts, mockCategories),
+      categories: isRealProvider ? [] : mockCategories,
       isLoading: false,
       error: null,
       lastLoadedAt: 0,
@@ -577,6 +577,22 @@ const useMediaStore = create(
     }),
     {
       name: 'products-storage',
+      merge: (persistedState, currentState) => {
+        if (!isRealProvider) {
+          return {
+            ...currentState,
+            ...(persistedState || {}),
+          };
+        }
+
+        return {
+          ...currentState,
+          ...(persistedState || {}),
+          products: currentState.products,
+          categories: currentState.categories,
+          lastLoadedAt: 0,
+        };
+      },
       migrate: (persistedState) => {
         if (persistedState && persistedState.products) {
           const categories = Array.isArray(persistedState.categories) && persistedState.categories.length

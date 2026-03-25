@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { mockUsers } from '../data/mockData';
 import apiClient from '../services/client';
 import useNotificationStore from './useNotificationStore';
+import useGroupStore from './useGroupStore';
 import { normalizeAccountStatus } from '../utils/accountStatus';
 import { normalizeMoneyAmount } from '../utils/money';
 
@@ -22,6 +23,29 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const getCurrencyRate = (currencies, currencyCode) => {
+  const normalizedCode = String(currencyCode || 'USD').toUpperCase();
+  const matchedCurrency = (Array.isArray(currencies) ? currencies : []).find(
+    (entry) => String(entry?.code || '').toUpperCase() === normalizedCode
+  );
+
+  return toFiniteNumber(matchedCurrency?.rate, 1) || 1;
+};
+
+const convertAmountBetweenCurrencies = (amount, fromCurrencyCode, toCurrencyCode, currencies) => {
+  const numericAmount = normalizeMoneyAmount(toFiniteNumber(amount, 0));
+  const fromCode = String(fromCurrencyCode || 'USD').toUpperCase();
+  const toCode = String(toCurrencyCode || 'USD').toUpperCase();
+
+  if (fromCode === toCode) return numericAmount;
+
+  const fromRate = getCurrencyRate(currencies, fromCode);
+  const toRate = getCurrencyRate(currencies, toCode);
+  if (!fromRate || !toRate) return numericAmount;
+
+  return normalizeMoneyAmount((numericAmount / fromRate) * toRate);
+};
+
 const extractGroupIdentity = (groupInput) => {
   if (groupInput && typeof groupInput === 'object') {
     const groupId = String(groupInput.id || groupInput._id || groupInput.groupId || '').trim();
@@ -31,6 +55,27 @@ const extractGroupIdentity = (groupInput) => {
 
   const raw = String(groupInput || '').trim();
   return { groupId: raw, groupName: '' };
+};
+
+const resolveGroupPercentage = (groupInput, fallback = null) => {
+  if (groupInput && typeof groupInput === 'object') {
+    const directPercentage = Number(groupInput.percentage ?? groupInput.discount);
+    if (Number.isFinite(directPercentage)) return directPercentage;
+  }
+
+  const { groupId, groupName } = extractGroupIdentity(groupInput);
+  const groups = useGroupStore.getState().groups || [];
+  const matchedGroup = groups.find((entry) => (
+    (groupId && String(entry?.id || '').trim() === groupId)
+    || (groupName && String(entry?.name || '').trim().toLowerCase() === groupName.toLowerCase())
+  ));
+
+  if (matchedGroup) {
+    const matchedPercentage = Number(matchedGroup.percentage ?? matchedGroup.discount);
+    if (Number.isFinite(matchedPercentage)) return matchedPercentage;
+  }
+
+  return Number.isFinite(Number(fallback)) ? Number(fallback) : null;
 };
 
 const upsertUser = (users, nextUser) => {
@@ -107,6 +152,7 @@ const useAdminStore = create(
   persist(
     (set, get) => ({
       users: mockUsers,
+      deletedUsers: [],
       usersLastLoadedAt: 0,
       isLoadingUsers: false,
       wallets: [],
@@ -133,10 +179,14 @@ const useAdminStore = create(
         set({ isLoadingUsers: true });
 
         usersRequest = apiClient.users.list()
-          .then((items) => {
+          .then(async (items) => {
             const nextUsers = Array.isArray(items) ? items : mockUsers;
+            const nextDeletedUsers = apiClient.users.listDeleted
+              ? await apiClient.users.listDeleted().catch(() => [])
+              : [];
             set({
               users: nextUsers,
+              deletedUsers: Array.isArray(nextDeletedUsers) ? nextDeletedUsers : [],
               usersLastLoadedAt: Date.now(),
               isLoadingUsers: false,
             });
@@ -165,13 +215,17 @@ const useAdminStore = create(
         if (!normalizedUserId) return null;
 
         const existingUser = (get().users || []).find((entry) => String(entry?.id) === normalizedUserId) || null;
+        const existingDeletedUser = (get().deletedUsers || []).find((entry) => String(entry?.id) === normalizedUserId) || null;
         if (existingUser && !force) {
           return existingUser;
+        }
+        if (existingDeletedUser && !force) {
+          return existingDeletedUser;
         }
 
         const fetchedUser = await apiClient.users.getById(normalizedUserId);
         if (!fetchedUser) {
-          return existingUser;
+          return existingUser || existingDeletedUser;
         }
 
         set((state) => ({
@@ -392,22 +446,16 @@ const useAdminStore = create(
       },
 
       updateUserCoins: async (userId, amountToAdd, actor = null, onSelfUpdate = null) => {
+        // Call API — no optimistic state mutation. Let the backend be the source of truth.
         const apiResult = await apiClient.users.addCoins(userId, amountToAdd, actor);
-        const updatedUser = apiResult?.user || null;
-        set((state) => ({
-          users: state.users.map((entry) => (
-            entry.id === userId
-              ? {
-                ...entry,
-                ...(updatedUser || {}),
-                coins: normalizeMoneyAmount(updatedUser?.coins ?? (toFiniteNumber(entry.coins, 0) + amountToAdd)),
-              }
-              : entry
-          )),
-          usersLastLoadedAt: Date.now(),
-        }));
 
+        // Force re-fetch from backend to reflect the true DB state.
+        // CRITICAL: loadWallets must also be invalidated because its
+        // mergeWalletIntoUsers() overwrites users[].coins — a stale
+        // background loadWallets would silently revert the balance.
         await Promise.allSettled([
+          get().loadUsers({ force: true }),
+          get().loadWallets({ force: true }),
           get().getUserWallet(userId, { force: true }),
           get().getUserWalletTransactions(userId, { force: true }),
         ]);
@@ -416,9 +464,35 @@ const useAdminStore = create(
         return apiResult;
       },
 
+      setUserBalance: async (userId, nextBalance, actor = null, onSelfUpdate = null) => {
+        const normalizedBalance = normalizeMoneyAmount(toFiniteNumber(nextBalance, 0));
+
+        // Call API — no optimistic state mutation
+        const updatedUser = apiClient.users.setBalance
+          ? await apiClient.users.setBalance(userId, normalizedBalance, actor)
+          : await apiClient.users.updateProfile(userId, { walletBalance: normalizedBalance }, actor);
+
+        // Force re-fetch from backend to reflect the true DB state
+        await Promise.allSettled([
+          get().loadUsers({ force: true }),
+          get().loadWallets({ force: true }),
+          get().getUserWallet(userId, { force: true }),
+          get().getUserWalletTransactions(userId, { force: true }),
+        ]);
+
+        if (typeof onSelfUpdate === 'function') onSelfUpdate();
+        return updatedUser;
+      },
+
       updateUserGroup: async (userId, newGroup, actor = null) => {
         const updatedUser = await apiClient.users.updateGroup(userId, newGroup, actor);
         const { groupId, groupName } = extractGroupIdentity(newGroup);
+        const nextGroupPercentage = resolveGroupPercentage(
+          updatedUser?.groupPercentage !== undefined && updatedUser?.groupPercentage !== null
+            ? { ...updatedUser, percentage: updatedUser.groupPercentage }
+            : newGroup,
+          updatedUser?.groupPercentage
+        );
         set((state) => ({
           users: state.users.map((entry) => (
             entry.id === userId
@@ -428,6 +502,7 @@ const useAdminStore = create(
                 group: updatedUser?.group || updatedUser?.groupName || groupName || entry.group,
                 groupName: updatedUser?.groupName || updatedUser?.group || groupName || entry.groupName || entry.group,
                 groupId: updatedUser?.groupId || groupId || entry.groupId || '',
+                groupPercentage: nextGroupPercentage ?? entry.groupPercentage ?? null,
               }
               : entry
           )),
@@ -442,6 +517,12 @@ const useAdminStore = create(
           const useAuthStore = (await import('./useAuthStore')).default;
           const currentUser = useAuthStore.getState().user;
           if (currentUser && (currentUser.id === userId || currentUser._id === userId)) {
+            useAuthStore.getState().updateUserSession({
+              group: updatedUser?.group || updatedUser?.groupName || groupName || currentUser.group,
+              groupName: updatedUser?.groupName || updatedUser?.group || groupName || currentUser.groupName || currentUser.group,
+              groupId: updatedUser?.groupId || groupId || currentUser.groupId || '',
+              groupPercentage: nextGroupPercentage ?? currentUser.groupPercentage ?? null,
+            });
             await useAuthStore.getState().refreshProfile({ force: true });
           }
         } catch (_) { /* ignore if auth store unavailable */ }
@@ -460,22 +541,54 @@ const useAdminStore = create(
       },
 
       updateUserCurrency: async (userId, currencyCode, actor = null) => {
+        const normalizedUserId = String(userId || '').trim();
+        const nextCurrencyCode = String(currencyCode || '').toUpperCase();
+        if (!normalizedUserId || !nextCurrencyCode) return null;
+
+        const existingUser = (get().users || []).find((entry) => String(entry?.id || '').trim() === normalizedUserId) || null;
+        const previousCurrencyCode = String(existingUser?.currency || 'USD').toUpperCase();
+        const previousCreditLimit = normalizeMoneyAmount(Math.max(0, toFiniteNumber(existingUser?.creditLimit, 0)));
+
         // 1. Call the API — backend converts balance + returns updated user
-        await apiClient.users.updateCurrency(userId, currencyCode, actor);
+        const updatedCurrencyUser = await apiClient.users.updateCurrency(normalizedUserId, nextCurrencyCode, actor);
+
+        if (previousCreditLimit > 0 && previousCurrencyCode !== nextCurrencyCode) {
+          try {
+            const useSystemStore = (await import('./useSystemStore')).default;
+            let currencies = useSystemStore.getState().currencies || [];
+
+            if (!Array.isArray(currencies) || currencies.length === 0) {
+              currencies = await useSystemStore.getState().loadCurrencies().catch(() => []);
+            }
+
+            const convertedCreditLimit = convertAmountBetweenCurrencies(
+              previousCreditLimit,
+              previousCurrencyCode,
+              nextCurrencyCode,
+              currencies
+            );
+
+            await get().updateUserCreditLimit(normalizedUserId, convertedCreditLimit, actor);
+          } catch (_error) {
+            // If credit-limit conversion fails, keep the currency update instead of blocking the flow.
+          }
+        }
 
         // 2. Force re-fetch the entire users list from DB (bulletproof — no manual patching)
         await get().loadUsers({ force: true });
-        await get().getUserWallet(userId, { force: true }).catch(() => null);
+        await get().getUserWallet(normalizedUserId, { force: true }).catch(() => null);
 
         // 3. If the updated user is the currently logged-in user,
         //    force re-fetch their profile so navbar/balance updates instantly.
         try {
           const useAuthStore = (await import('./useAuthStore')).default;
           const currentUser = useAuthStore.getState().user;
-          if (currentUser && (currentUser.id === userId || currentUser._id === userId)) {
+          if (currentUser && (currentUser.id === normalizedUserId || currentUser._id === normalizedUserId)) {
             await useAuthStore.getState().refreshProfile({ force: true });
           }
         } catch (_) { /* ignore if auth store unavailable */ }
+
+        return updatedCurrencyUser;
       },
 
       updateUserCreditLimit: async (userId, creditLimit, actor = null) => {
@@ -517,15 +630,45 @@ const useAdminStore = create(
       },
 
       deleteUser: async (userId, actor = null) => {
-        await apiClient.users.delete(userId, actor);
         const normalizedUserId = String(userId || '').trim();
+        const targetUser = (get().users || []).find((entry) => String(entry?.id || '').trim() === normalizedUserId) || null;
+        await apiClient.users.delete(userId, actor);
         set((state) => ({
           users: state.users.filter((entry) => entry.id !== userId),
+          deletedUsers: targetUser
+            ? [
+              {
+                ...targetUser,
+                deletedAt: new Date().toISOString(),
+                isDeleted: true,
+                previousStatus: targetUser?.status || 'approved',
+                status: 'deleted',
+              },
+              ...(state.deletedUsers || []).filter((entry) => String(entry?.id || '').trim() !== normalizedUserId),
+            ]
+            : (state.deletedUsers || []),
           usersLastLoadedAt: Date.now(),
           wallets: (state.wallets || []).filter((entry) => String(entry?.userId || entry?.id || '').trim() !== normalizedUserId),
           userWalletTransactions: removeRecordKey(state.userWalletTransactions, normalizedUserId),
           walletTransactionsLastLoadedAt: removeRecordKey(state.walletTransactionsLastLoadedAt, normalizedUserId),
         }));
+      },
+
+      restoreUser: async (userId, actor = null) => {
+        if (!apiClient.users.restore) {
+          throw new Error('Restore endpoint is not available.');
+        }
+
+        const restoredUser = await apiClient.users.restore(userId, actor);
+        const normalizedUserId = String(userId || '').trim();
+
+        set((state) => ({
+          users: upsertUser(state.users, restoredUser),
+          deletedUsers: (state.deletedUsers || []).filter((entry) => String(entry?.id || '').trim() !== normalizedUserId),
+          usersLastLoadedAt: Date.now(),
+        }));
+
+        return restoredUser;
       },
 
       updateUserAvatar: async (userId, avatar, actor = null, onSelfUpdate = null) => {
@@ -557,6 +700,13 @@ const useAdminStore = create(
     {
       name: 'admin-ui-storage',
       getStorage: () => localStorage,
+      partialize: (state) => ({
+        // Only persist UI preferences and cache timestamps — NOT sensitive data.
+        // users, deletedUsers, wallets, userWalletTransactions contain PII and
+        // financial data that must not leak through localStorage.
+        usersLastLoadedAt: state.usersLastLoadedAt,
+        walletsLastLoadedAt: state.walletsLastLoadedAt,
+      }),
     }
   )
 );

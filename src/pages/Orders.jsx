@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock3,
@@ -38,10 +39,14 @@ const Orders = () => {
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { i18n } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('today');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
@@ -82,14 +87,31 @@ const Orders = () => {
   );
 
   const filteredOrders = useMemo(
-    () => filterOrders(enrichedOrders, {
-      searchTerm,
-      statusFilter,
-      typeFilter: 'all',
-      dateFilter: 'all',
-      sortOrder,
-    }),
-    [enrichedOrders, searchTerm, sortOrder, statusFilter]
+    () => {
+      const baseFiltered = filterOrders(enrichedOrders, {
+        searchTerm,
+        statusFilter,
+        typeFilter: 'all',
+        dateFilter,
+        sortOrder,
+      });
+
+      if (dateFilter !== 'custom') {
+        return baseFiltered;
+      }
+
+      const startBoundary = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null;
+      const endBoundary = customEndDate ? new Date(`${customEndDate}T23:59:59.999`) : null;
+
+      return baseFiltered.filter((order) => {
+        const orderDate = new Date(order?.createdAt || 0);
+        if (Number.isNaN(orderDate.getTime())) return false;
+        if (startBoundary && orderDate < startBoundary) return false;
+        if (endBoundary && orderDate > endBoundary) return false;
+        return true;
+      });
+    },
+    [customEndDate, customStartDate, dateFilter, enrichedOrders, searchTerm, sortOrder, statusFilter]
   );
 
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
@@ -98,6 +120,14 @@ const Orders = () => {
     () => enrichedOrders.find((order) => order.id === selectedOrderId) || null,
     [enrichedOrders, selectedOrderId]
   );
+
+  useEffect(() => {
+    const orderIdFromQuery = String(searchParams.get('orderId') || '').trim();
+    if (!orderIdFromQuery) return;
+
+    setSelectedOrderId(orderIdFromQuery);
+    void getOrderById(orderIdFromQuery, user?.id).catch(() => {});
+  }, [getOrderById, searchParams, user?.id]);
 
   const formatCount = (value) => formatNumber(value, locale);
 
@@ -149,17 +179,28 @@ const Orders = () => {
         onSearchChange={setSearchTerm}
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
+        dateFilter={dateFilter}
+        onDateChange={setDateFilter}
         sortOrder={sortOrder}
         onSortChange={setSortOrder}
         showTypeFilter={false}
-        showDateFilter={false}
+        showDateFilter
         resultCount={filteredOrders.length}
         searchPlaceholder={isArabic
           ? 'ابحث باسم المنتج أو رقم الطلب'
           : 'Search by product name or order number'}
         helperText={isArabic
-          ? 'تظهر هنا طلباتك فقط، ويمكنك تصفيتها بسرعة حسب حالتها.'
-          : 'Only your own orders appear here, and you can quickly filter them by status.'}
+          ? 'تظهر طلباتك حسب المدة التي تحددها فقط بدون حذف أي بيانات من النظام.'
+          : 'Your orders are displayed by the selected period only, without deleting any data.'}
+        customRange={dateFilter === 'custom' ? {
+          startDate: customStartDate,
+          endDate: customEndDate,
+          onStartDateChange: setCustomStartDate,
+          onEndDateChange: setCustomEndDate,
+          helperText: isArabic
+            ? 'فلترة إضافية مخصصة من تاريخ إلى تاريخ.'
+            : 'Custom date filtering from one date to another.',
+        } : null}
         compact
       />
 
@@ -173,6 +214,9 @@ const Orders = () => {
               currencies={currencies}
               onSelect={() => {
                 setSelectedOrderId(order.id);
+                const nextParams = new URLSearchParams(searchParams);
+                nextParams.set('orderId', order.id);
+                setSearchParams(nextParams, { replace: true });
                 void getOrderById(order.id, user?.id).catch(() => {});
               }}
             />
@@ -195,7 +239,12 @@ const Orders = () => {
 
       <OrderDetailsDrawer
         isOpen={Boolean(selectedOrder)}
-        onClose={() => setSelectedOrderId(null)}
+        onClose={() => {
+          setSelectedOrderId(null);
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete('orderId');
+          setSearchParams(nextParams, { replace: true });
+        }}
         order={selectedOrder}
         isArabic={isArabic}
         currencies={currencies}

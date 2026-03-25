@@ -15,6 +15,7 @@ import Loader from '../components/ui/Loader';
 import { useLanguage } from '../context/LanguageContext';
 import { formatWalletAmount, formatWalletNumber } from '../utils/storefront';
 import { normalizeMoneyAmount } from '../utils/money';
+import { getCurrencyMeta } from '../utils/pricing';
 import {
   resolveOrderExecutionCurrency,
   resolveTopupExecutionCurrency,
@@ -191,6 +192,8 @@ const normalizeWalletStatus = (value) => {
 const buildTransactionDedupKey = (transaction = {}) => {
   const amount = Math.abs(toFiniteNumber(transaction?.amount));
   const normalizedDate = String(transaction?.date || '').trim();
+  const normalizedSourceType = String(transaction?.sourceType || '').trim().toLowerCase();
+  const normalizedSourceId = String(transaction?.sourceId || '').trim().toLowerCase();
   const normalizedReference = String(
     transaction?.reference
     || transaction?.referenceId
@@ -198,6 +201,10 @@ const buildTransactionDedupKey = (transaction = {}) => {
     || transaction?.id
     || ''
   ).trim().toLowerCase();
+
+  if (normalizedSourceType && normalizedSourceId) {
+    return `${normalizedSourceType}:${normalizedSourceId}:${amount}`;
+  }
 
   if (normalizedReference) {
     return `${transaction?.type || 'tx'}:${normalizedReference}:${amount}`;
@@ -219,6 +226,17 @@ const mergeTransactions = (...groups) => {
   });
 
   return merged.sort(sortTransactionsByNewest);
+};
+
+const convertAmountBetweenCurrencies = (amount, fromCurrencyCode, toCurrencyCode, currencies) => {
+  const numericAmount = Number(amount || 0);
+  if (!Number.isFinite(numericAmount)) return 0;
+
+  const fromCurrency = getCurrencyMeta(String(fromCurrencyCode || 'USD').toUpperCase(), currencies);
+  const toCurrency = getCurrencyMeta(String(toCurrencyCode || 'USD').toUpperCase(), currencies);
+  if (!fromCurrency.rate || !toCurrency.rate) return numericAmount;
+
+  return normalizeMoneyAmount((numericAmount / fromCurrency.rate) * toCurrency.rate);
 };
 
 const Wallet = () => {
@@ -283,21 +301,45 @@ const Wallet = () => {
   const [txLoading, setTxLoading] = useState(true);
 
   const stats = useMemo(
-    () => ({
+    () => {
+      const convertedDeposits = transactions.reduce((sum, tx) => {
+        const signedAmount = Number(tx?.amount || 0);
+        if (!(signedAmount > 0)) return sum;
+
+        return sum + convertAmountBetweenCurrencies(
+          Math.abs(signedAmount),
+          tx?.currency || tx?.originalCurrency || userCurrency,
+          userCurrency,
+          currencies
+        );
+      }, 0);
+
+      const convertedSpent = transactions.reduce((sum, tx) => {
+        const signedAmount = Number(tx?.amount || 0);
+        if (!(signedAmount < 0)) return sum;
+
+        return sum + convertAmountBetweenCurrencies(
+          Math.abs(signedAmount),
+          tx?.currency || tx?.originalCurrency || userCurrency,
+          userCurrency,
+          currencies
+        );
+      }, 0);
+
+      return {
       totalDeposits: formatWalletAmount(
-        walletStats?.totalDeposits
-        ?? transactions.reduce((sum, tx) => (tx.amount > 0 ? sum + Math.abs(tx.amount) : sum), 0),
+        convertedDeposits,
         userCurrency
       ),
       totalSpent: formatWalletAmount(
-        walletStats?.totalSpent
-        ?? Math.abs(transactions.reduce((sum, tx) => (tx.amount < 0 ? sum + tx.amount : sum), 0)),
+        convertedSpent,
         userCurrency
       ),
       netBalance: formatWalletAmount(walletStats?.netBalance ?? balance, userCurrency),
       totalTransactions: formatWalletNumber(walletStats?.totalTransactions ?? transactions.length),
-    }),
-    [balance, transactions, userCurrency, walletStats]
+    };
+    },
+    [balance, currencies, transactions, userCurrency, walletStats]
   );
 
   // Fetch real transactions from BE
@@ -367,17 +409,45 @@ const Wallet = () => {
             ...(linkedOrder ? { order: linkedOrder } : {}),
             ...(linkedTopup ? { topup: linkedTopup } : {}),
           };
+          const executionCurrency = resolveWalletTransactionExecutionCurrency(enrichedTx, userCurrency);
+          const amountSourceCurrency = executionCurrency || tx?.currency || tx?.currencyCode || tx?.originalCurrency || userCurrency;
+          const convertedSignedAmount = convertAmountBetweenCurrencies(
+            signedAmount,
+            amountSourceCurrency,
+            userCurrency,
+            currencies
+          );
+          const rawBalanceAfter = tx.balanceAfter ?? null;
+          const convertedBalanceAfter = rawBalanceAfter !== null && rawBalanceAfter !== undefined
+            ? convertAmountBetweenCurrencies(
+                Number(rawBalanceAfter),
+                amountSourceCurrency,
+                userCurrency,
+                currencies
+              )
+            : null;
+          const resolvedStatus = linkedOrder
+            ? normalizeWalletStatus(linkedOrder?.status || tx.status || 'completed')
+            : linkedTopup
+              ? normalizeWalletStatus(linkedTopup?.status || tx.status || 'completed')
+              : normalizeWalletStatus(tx.status || 'completed');
 
           return {
             id: tx._id || tx.id,
             type: feType,
             description: tx.description || feType,
-            amount: signedAmount,
-            currency: resolveWalletTransactionExecutionCurrency(enrichedTx, userCurrency),
+            amount: convertedSignedAmount,
+            currency: userCurrency,
             originalCurrency: resolveWalletTransactionOriginalCurrency(enrichedTx) || null,
             currentCurrency: userCurrency,
-            status: normalizeWalletStatus(tx.status || 'completed'),
+            status: resolvedStatus,
             date: tx.createdAt || tx.date,
+            balanceAfter: convertedBalanceAfter,
+            balanceBefore: convertedBalanceAfter !== null
+              ? normalizeMoneyAmount(convertedBalanceAfter - convertedSignedAmount)
+              : null,
+            sourceType: tx.sourceType || (linkedOrder ? 'order' : linkedTopup ? 'topup' : null),
+            sourceId: tx.sourceId || tx.orderId || tx.depositId || tx.topupId || linkedOrder?.id || linkedTopup?.id || null,
             reference: (() => {
               const raw = tx.reference || tx.referenceId || tx.orderId || tx.depositId || tx.topupId || null;
               if (raw === null || raw === undefined) return null;
@@ -395,34 +465,52 @@ const Wallet = () => {
             id: `topup-${topup?.id || topup?._id || Math.random()}`,
             type: 'deposit',
             description: topup?.paymentChannel || topup?.method || t('wallet.typeDeposit', { defaultValue: 'Deposit' }),
-            amount: Math.abs(toFiniteNumber(
-              topup?.actualPaidAmount
-              ?? topup?.requestedAmount
-              ?? topup?.amount
-              ?? 0
-            )),
-            currency: resolveTopupExecutionCurrency(topup, userCurrency),
+            amount: convertAmountBetweenCurrencies(
+              Math.abs(toFiniteNumber(
+                topup?.actualPaidAmount
+                ?? topup?.requestedAmount
+                ?? topup?.amount
+                ?? 0
+              )),
+              resolveTopupExecutionCurrency(topup, userCurrency),
+              userCurrency,
+              currencies
+            ),
+            currency: userCurrency,
             originalCurrency: resolveTopupExecutionCurrency(topup, userCurrency),
             currentCurrency: userCurrency,
             status: normalizeWalletStatus(topup?.status || 'completed'),
             date: topup?.createdAt || topup?.date,
+            balanceBefore: null,
+            balanceAfter: null,
+            sourceType: 'topup',
+            sourceId: topup?.id || topup?._id || null,
             reference: topup?.id || topup?._id || null,
           })),
           relatedOrders.map((order) => ({
             id: `order-${order?.id || order?._id || Math.random()}`,
             type: 'purchase',
             description: order?.productNameAr || order?.productName || order?.productId || t('wallet.typePurchase', { defaultValue: 'Purchase' }),
-            amount: -Math.abs(toFiniteNumber(
-              order?.financialSnapshot?.finalAmountAtExecution
-              ?? order?.priceCoins
-              ?? order?.totalAmount
-              ?? 0
-            )),
-            currency: resolveOrderExecutionCurrency(order, userCurrency),
+            amount: -convertAmountBetweenCurrencies(
+              Math.abs(toFiniteNumber(
+                order?.financialSnapshot?.finalAmountAtExecution
+                ?? order?.priceCoins
+                ?? order?.totalAmount
+                ?? 0
+              )),
+              resolveOrderExecutionCurrency(order, userCurrency),
+              userCurrency,
+              currencies
+            ),
+            currency: userCurrency,
             originalCurrency: resolveOrderExecutionCurrency(order, userCurrency),
             currentCurrency: userCurrency,
             status: normalizeWalletStatus(order?.status || 'completed'),
             date: order?.createdAt || order?.date,
+            balanceBefore: null,
+            balanceAfter: null,
+            sourceType: 'order',
+            sourceId: order?.id || order?._id || null,
             reference: order?.siteOrderNumber || order?.orderNumber || order?.id || null,
           }))
         );
@@ -441,7 +529,7 @@ const Wallet = () => {
     return () => {
       isActive = false;
     };
-  }, [isAuthenticated, userCurrency, userId]);
+  }, [currencies, isAuthenticated, t, userCurrency, userId]);
 
   const [filteredTransactions, setFilteredTransactions] = useState([]);
 

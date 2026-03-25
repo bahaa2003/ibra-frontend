@@ -17,6 +17,7 @@ const ProductSearchBar = ({
   noResultsLabel,
   inputClassName,
   resetSignal = 0,
+  forceIconRight = false,
 }) => {
   const isControlled = typeof value === 'string';
   const [internalValue, setInternalValue] = useState('');
@@ -134,6 +135,7 @@ const ProductSearchBar = ({
         placeholder={placeholder}
         className={className}
         inputClassName={inputClassName}
+        forceIconRight={forceIconRight}
       />
 
       {showDropdown && dropdownLayout && typeof document !== 'undefined' && createPortal(

@@ -17,6 +17,7 @@ import Card from '../../components/ui/Card';
 import { useToast } from '../../components/ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
 import useAdminStore from '../../store/useAdminStore';
+import useGroupStore from '../../store/useGroupStore';
 import useOrderStore from '../../store/useOrderStore';
 import useTopupStore from '../../store/useTopupStore';
 import useSystemStore from '../../store/useSystemStore';
@@ -354,7 +355,8 @@ const AdminWallet = () => {
   const actor = useAuthStore((state) => state.user);
   const refreshProfile = useAuthStore((state) => state.refreshProfile);
   const { addToast } = useToast();
-  const { users, wallets, loadUsers, loadWallets, updateUserCoins } = useAdminStore();
+  const { users, wallets, loadUsers, loadWallets, updateUserCoins, updateUserCurrency, updateUserGroup } = useAdminStore();
+  const { groups, loadGroups } = useGroupStore();
   const { orders, loadOrders } = useOrderStore();
   const { topups, loadTopups } = useTopupStore();
   const { currencies, loadCurrencies } = useSystemStore();
@@ -373,6 +375,9 @@ const AdminWallet = () => {
   const [endDate, setEndDate] = useState(todayInputValue);
   const [selfTopupAmount, setSelfTopupAmount] = useState('');
   const [isSelfTopupUpdating, setIsSelfTopupUpdating] = useState(false);
+  const [settingsCurrency, setSettingsCurrency] = useState('');
+  const [settingsGroup, setSettingsGroup] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -383,6 +388,7 @@ const AdminWallet = () => {
       Promise.resolve(loadWallets({ force: true })),
       Promise.resolve(loadOrders(undefined, { force: true })),
       Promise.resolve(loadTopups({ force: true })),
+      Promise.resolve(loadGroups({ force: true })),
       Promise.resolve(loadCurrencies()),
     ]).finally(() => {
       if (active) {
@@ -393,7 +399,7 @@ const AdminWallet = () => {
     return () => {
       active = false;
     };
-  }, [loadCurrencies, loadOrders, loadTopups, loadUsers, loadWallets]);
+  }, [loadCurrencies, loadGroups, loadOrders, loadTopups, loadUsers, loadWallets]);
 
   const formatRangeDate = useCallback(
     (value) => formatDateTime(value, locale, { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -466,6 +472,65 @@ const AdminWallet = () => {
   }, [actor, usersById]);
 
   const adminCurrencyCode = String(adminProfile?.currency || actor?.currency || 'USD').toUpperCase();
+
+  useEffect(() => {
+    setSettingsCurrency(String(adminProfile?.currency || actor?.currency || currencies?.[0]?.code || 'USD').toUpperCase());
+    setSettingsGroup(String(adminProfile?.groupId || '').trim());
+  }, [actor?.currency, adminProfile?.currency, adminProfile?.groupId, currencies]);
+
+  const handleSaveAdminSettings = useCallback(async () => {
+    const adminId = String(adminProfile?.id || actor?.id || '').trim();
+    if (!adminId) {
+      addToast(isArabic ? 'تعذر تحديد حساب الأدمن الحالي.' : 'Unable to identify the current admin account.', 'error');
+      return;
+    }
+
+    const normalizedCurrency = String(settingsCurrency || '').trim().toUpperCase();
+    const normalizedGroup = String(settingsGroup || '').trim();
+
+    setIsSavingSettings(true);
+    try {
+      const currentCurrency = String(adminProfile?.currency || actor?.currency || '').trim().toUpperCase();
+      const currentGroup = String(adminProfile?.groupId || '').trim();
+
+      if (normalizedGroup !== currentGroup) {
+        await updateUserGroup(adminId, normalizedGroup || null, actor);
+      }
+
+      if (normalizedCurrency && normalizedCurrency !== currentCurrency) {
+        await updateUserCurrency(adminId, normalizedCurrency, actor);
+      }
+
+      await Promise.allSettled([
+        Promise.resolve(loadUsers({ force: true })),
+        Promise.resolve(loadWallets({ force: true })),
+        Promise.resolve(refreshProfile?.({ force: true })),
+      ]);
+
+      addToast(isArabic ? 'تم تحديث إعدادات الحساب بنجاح.' : 'Account settings were updated successfully.', 'success');
+    } catch (error) {
+      addToast(
+        error?.message || (isArabic ? 'تعذر تحديث إعدادات الحساب الحالية.' : 'Unable to update the current account settings.'),
+        'error'
+      );
+    } finally {
+      setIsSavingSettings(false);
+    }
+  }, [
+    actor,
+    addToast,
+    adminProfile?.currency,
+    adminProfile?.groupId,
+    adminProfile?.id,
+    isArabic,
+    loadUsers,
+    loadWallets,
+    refreshProfile,
+    settingsCurrency,
+    settingsGroup,
+    updateUserCurrency,
+    updateUserGroup,
+  ]);
 
   const handleSelfTopup = useCallback(async () => {
     const adminId = String(adminProfile?.id || actor?.id || '').trim();
@@ -700,6 +765,69 @@ const AdminWallet = () => {
                 <span>{isArabic ? 'إضافة رصيد لحسابي' : 'Add to my balance'}</span>
               </Button>
             </div>
+          </div>
+        </Card>
+
+        <Card className="admin-premium-stat relative mt-3 p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[var(--color-text)]">
+                {isArabic ? 'إعدادات حساب الأدمن' : 'Admin account settings'}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+                {isArabic
+                  ? 'يمكنك تغيير العملة والمجموعة الحالية مباشرة من هنا بدون الخروج من صفحة المحفظة.'
+                  : 'You can update the current admin currency and group directly from the wallet page.'}
+              </p>
+            </div>
+
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-[42rem]">
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-secondary)]">
+                  {isArabic ? 'العملة' : 'Currency'}
+                </span>
+                <select
+                  value={settingsCurrency}
+                  onChange={(event) => setSettingsCurrency(event.target.value)}
+                  className="h-10 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
+                >
+                  {(currencies || []).map((currencyItem) => (
+                    <option key={currencyItem.code} value={currencyItem.code}>
+                      {currencyItem.code} - {currencyItem.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-secondary)]">
+                  {isArabic ? 'المجموعة' : 'Group'}
+                </span>
+                <select
+                  value={settingsGroup}
+                  onChange={(event) => setSettingsGroup(event.target.value)}
+                  className="h-10 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
+                >
+                  <option value="">{isArabic ? 'بدون مجموعة' : 'No group'}</option>
+                  {(groups || []).map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              onClick={handleSaveAdminSettings}
+              disabled={isSavingSettings || !String(adminProfile?.id || actor?.id || '').trim()}
+              className="h-10 rounded-[0.95rem] px-4 text-sm"
+            >
+              <span>{isArabic ? 'حفظ الإعدادات' : 'Save settings'}</span>
+            </Button>
           </div>
         </Card>
       </section>

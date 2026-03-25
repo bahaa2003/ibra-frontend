@@ -70,7 +70,12 @@ const useAuthStore = create(
       },
 
       login: async (email, password) => {
-        set({ isLoading: true, error: null });
+        set({
+          isLoading: true,
+          error: null,
+          blockedStatus: null,
+          blockedUser: null,
+        });
         try {
           const response = await apiClient.auth.login(email, password);
           const outcome = buildAuthOutcome(response.user);
@@ -99,6 +104,7 @@ const useAuthStore = create(
               blockedStatus,
               blockedUser,
               isAuthenticated: false,
+              profileLastLoadedAt: 0,
             });
             return buildBlockedOutcome(blockedStatus, blockedUser, formattedError);
           }
@@ -109,13 +115,21 @@ const useAuthStore = create(
             error: formattedError,
             isLoading: false,
             isAuthenticated: false,
+            blockedStatus: null,
+            blockedUser: null,
+            profileLastLoadedAt: 0,
           });
           return { ok: false, error: formattedError };
         }
       },
 
       loginWithGoogle: async () => {
-        set({ isLoading: true, error: null });
+        set({
+          isLoading: true,
+          error: null,
+          blockedStatus: null,
+          blockedUser: null,
+        });
         try {
           const response = await apiClient.auth.loginWithGoogle();
           if (response?.redirectTo && !response?.user && !response?.token) {
@@ -167,6 +181,7 @@ const useAuthStore = create(
               blockedStatus,
               blockedUser: null,
               isAuthenticated: false,
+              profileLastLoadedAt: 0,
             });
             return buildBlockedOutcome(blockedStatus, null, formattedError);
           }
@@ -177,13 +192,21 @@ const useAuthStore = create(
             error: formattedError,
             isLoading: false,
             isAuthenticated: false,
+            blockedStatus: null,
+            blockedUser: null,
+            profileLastLoadedAt: 0,
           });
           return { ok: false, error: formattedError };
         }
       },
 
       signup: async (userData) => {
-        set({ isLoading: true, error: null });
+        set({
+          isLoading: true,
+          error: null,
+          blockedStatus: null,
+          blockedUser: null,
+        });
         try {
           const response = await apiClient.auth.register(userData);
           const status = normalizeAccountStatus(response?.user?.status);
@@ -220,12 +243,18 @@ const useAuthStore = create(
           };
         } catch (err) {
           const formattedError = formatAuthErrorMessage(err, { action: 'register' });
-          set({ error: formattedError, isLoading: false });
+          set({
+            error: formattedError,
+            isLoading: false,
+            blockedStatus: null,
+            blockedUser: null,
+          });
           return { ok: false, error: formattedError };
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        profileRefreshRequest = null;
         set({
           user: null,
           token: null,
@@ -236,6 +265,12 @@ const useAuthStore = create(
           blockedUser: null,
           profileLastLoadedAt: 0,
         });
+
+        try {
+          await apiClient.auth.logout?.();
+        } catch {
+          // Frontend state reset above remains the primary guard.
+        }
       },
 
       updateUserSession: (updates) => {

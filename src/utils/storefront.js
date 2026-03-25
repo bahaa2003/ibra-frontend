@@ -113,7 +113,7 @@ export const formatWalletAmount = (value, currencyCode = 'USD', options = {}) =>
   } = options;
   const amount = toFiniteMoneyNumber(value, 0);
   const normalizedCurrency = String(currencyCode || 'USD').toUpperCase();
-  const sign = signed ? (amount > 0 ? '+' : amount < 0 ? '-' : '') : '';
+  const sign = amount < 0 ? '-' : (signed && amount > 0 ? '+' : '');
 
   return `${sign}${normalizedCurrency} ${formatDisplayNumber(Math.abs(amount), locale, compact, {
     minimumFractionDigits,

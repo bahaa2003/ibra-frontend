@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
+  CheckCircle2,
   Clock3,
   Home,
   Mail,
@@ -58,18 +59,30 @@ const ACCOUNT_UI = {
       'border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.16),transparent_55%),rgba(255,255,255,0.82)] text-[var(--color-primary)] dark:bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_52%),rgba(15,23,42,0.9)]',
     message: 'مرحبًا، أحتاج مساعدة بخصوص تأكيد البريد الإلكتروني لحسابي في IBRA Store.',
   },
+  approved: {
+    icon: CheckCircle2,
+    title: 'تم تفعيل الحساب',
+    description: 'تمت الموافقة على حسابك بنجاح. يمكنك الآن الدخول والمتابعة إلى المنصة مباشرة.',
+    badge: 'جاهز للدخول',
+    accent:
+      'border-[color:rgb(var(--color-success-rgb)/0.22)] bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.16),transparent_55%),rgba(255,255,255,0.82)] text-[var(--color-success)] dark:bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_52%),rgba(15,23,42,0.9)]',
+    message: 'مرحبًا، تم تفعيل حسابي في IBRA Store وأحتاج مساعدة إضافية.',
+  },
 };
 
 const AccountAccessState = ({ variant = 'pending' }) => {
   const navigate = useNavigate();
   const { dir } = useLanguage();
   const { addToast } = useToast();
-  const { user, blockedStatus, blockedUser, refreshProfile, logout } = useAuthStore();
+  const { user, blockedStatus, blockedUser, refreshProfile, logout, clearBlockedAccess } = useAuthStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
   const currentStatus = normalizeAccountStatus(user?.status || blockedStatus || variant);
-  const displayVariant = isVerificationRequiredStatus(currentStatus)
+  const isAccessReady = isApprovedAccountStatus(currentStatus) && user;
+  const displayVariant = isAccessReady
+    ? 'approved'
+    : isVerificationRequiredStatus(currentStatus)
     ? 'verification'
     : currentStatus === 'rejected'
       ? 'rejected'
@@ -77,6 +90,7 @@ const AccountAccessState = ({ variant = 'pending' }) => {
   const config = ACCOUNT_UI[displayVariant] || ACCOUNT_UI.pending;
   const Icon = config.icon;
   const activeUser = user || blockedUser || null;
+  const showSignInShortcut = displayVariant === 'pending' && !user;
 
   const whatsappLink = useMemo(
     () => buildWhatsAppLink({
@@ -128,14 +142,6 @@ const AccountAccessState = ({ variant = 'pending' }) => {
     navigate(getDefaultRouteForRole(profile?.role || user?.role), { replace: true });
   };
 
-  useEffect(() => {
-    if (isApprovedAccountStatus(currentStatus) && user) {
-      navigate(getDefaultRouteForRole(user?.role), { replace: true });
-    }
-  }, [currentStatus, navigate, user]);
-
-  if (isApprovedAccountStatus(currentStatus) && user) return null;
-
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--color-bg)] px-4 py-10">
       <div className="pointer-events-none absolute inset-0">
@@ -152,7 +158,13 @@ const AccountAccessState = ({ variant = 'pending' }) => {
         <Card variant="premium" className="overflow-hidden rounded-[2rem] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-6 sm:p-8">
           <div className="space-y-6 text-center">
             <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.78)] px-4 py-2 text-xs font-semibold text-[var(--color-text-secondary)]">
-              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${displayVariant === 'rejected' ? 'bg-[var(--color-error)]' : 'bg-[var(--color-warning)]'}`} />
+              <span className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                displayVariant === 'approved'
+                  ? 'bg-[var(--color-success)]'
+                  : displayVariant === 'rejected'
+                    ? 'bg-[var(--color-error)]'
+                    : 'bg-[var(--color-warning)]'
+              }`} />
               {config.badge}
             </div>
 
@@ -186,7 +198,9 @@ const AccountAccessState = ({ variant = 'pending' }) => {
                     </p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                    getAccountStatusBadgeVariant(currentStatus) === 'danger'
+                    getAccountStatusBadgeVariant(currentStatus) === 'success'
+                      ? 'bg-[color:rgb(var(--color-success-rgb)/0.14)] text-[var(--color-success)]'
+                      : getAccountStatusBadgeVariant(currentStatus) === 'danger'
                       ? 'bg-[color:rgb(var(--color-error-rgb)/0.14)] text-[var(--color-error)]'
                       : 'bg-[color:rgb(var(--color-warning-rgb)/0.16)] text-[var(--color-warning)]'
                   }`}>
@@ -208,6 +222,51 @@ const AccountAccessState = ({ variant = 'pending' }) => {
                   <Mail className="h-4 w-4" />
                   {isResending ? 'جاري إعادة الإرسال...' : 'إعادة إرسال رابط التأكيد'}
                 </Button>
+              ) : isAccessReady ? (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => navigate(getDefaultRouteForRole(user?.role), { replace: true })}
+                >
+                  <ArrowRight className={`h-4 w-4 ${dir === 'rtl' ? '' : 'rotate-180'}`} />
+                  دخول
+                </Button>
+              ) : showSignInShortcut ? (
+                <>
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group relative overflow-hidden rounded-[1.2rem] border border-emerald-500/24 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.12))] px-5 py-4 text-start shadow-[0_22px_40px_-30px_rgba(5,150,105,0.55)] transition-all hover:-translate-y-0.5 hover:border-emerald-500/36 hover:shadow-[0_28px_50px_-28px_rgba(5,150,105,0.62)]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-[0_14px_30px_-18px_rgba(16,185,129,0.95)]">
+                        <MessageCircle className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-[var(--color-text)]">
+                          التواصل مع الأدمن عبر واتساب
+                        </span>
+                        <span className="mt-1 block text-xs leading-6 text-[var(--color-text-secondary)]">
+                          افتح المحادثة مباشرة وأرسل طلب تفعيل الحساب للأدمن.
+                        </span>
+                      </span>
+                      <ArrowRight className={`h-5 w-5 shrink-0 text-emerald-700 transition-transform group-hover:translate-x-1 ${dir === 'rtl' ? 'rotate-180 group-hover:-translate-x-1 group-hover:translate-x-0' : ''}`} />
+                    </div>
+                  </a>
+
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => {
+                      clearBlockedAccess?.();
+                      navigate('/auth', { replace: true });
+                    }}
+                  >
+                    <ArrowRight className={`h-4 w-4 ${dir === 'rtl' ? '' : 'rotate-180'}`} />
+                    دخول
+                  </Button>
+                </>
               ) : (
                 <a
                   href={whatsappLink}
@@ -232,7 +291,7 @@ const AccountAccessState = ({ variant = 'pending' }) => {
                 </a>
               )}
 
-              {user && displayVariant !== 'verification' && (
+              {user && !isAccessReady && displayVariant !== 'verification' && (
                 <Button
                   type="button"
                   variant="outline"

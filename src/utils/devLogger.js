@@ -39,9 +39,13 @@ const isBenignError = (error) => {
     status === 401
     || code === 'err_canceled'
     || code === 'aborterror'
+    || code === 'econnaborted'
     || message.includes('canceled')
     || message.includes('cancelled')
     || message.includes('aborted')
+    || message.includes('timeout')
+    || message.includes('timed out')
+    || message.includes('timeout exceeded')
     || message.includes('session expired')
   );
 };

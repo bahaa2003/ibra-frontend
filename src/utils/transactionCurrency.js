@@ -35,7 +35,9 @@ export const resolveWalletTransactionOriginalCurrency = (transaction = {}) => fi
   resolveOrderExecutionCurrency(transaction?.order),
   resolveTopupExecutionCurrency(transaction?.topup),
   transaction?.currencyCode,
-  transaction?.currency
+  transaction?.currency,
+  transaction?.walletCurrency,
+  transaction?.user?.currency
 );
 
 export const resolveWalletTransactionExecutionCurrency = (transaction = {}, fallback = '') => firstCurrencyCode(

@@ -518,7 +518,7 @@ const countryOptions = useMemo(() => {
             className="space-y-6 border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[linear-gradient(180deg,rgb(var(--color-card-rgb)/0.98),rgb(var(--color-surface-rgb)/0.94))] p-5 shadow-[0_34px_84px_-42px_rgba(0,0,0,0.84)] sm:p-7 md:p-8"
           >
             {!isLogin && (
-              <div className="rounded-[1.25rem] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[linear-gradient(180deg,rgba(212,175,55,0.14),rgba(212,175,55,0.06))] px-4 py-3 text-sm leading-7 text-[var(--color-text-secondary)]">
+              <div className="rounded-[1.25rem] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[linear-gradient(180deg,rgba(212,175,55,0.14),rgba(212,175,55,0.06))] px-4 py-3 text-[0.82rem] leading-6 text-[var(--color-text-secondary)] sm:text-[0.84rem]">
                 {t('auth.pendingApprovalNotice', {
                   defaultValue: dir === 'rtl'
                     ? 'التسجيل الجديد يحتاج موافقة الإدارة قبل استخدام الحساب، سواء تم عبر البريد أو عبر Google.'

@@ -9,6 +9,7 @@ const BalanceCard = ({ balance, currency, secondaryBalance, secondaryCurrency, o
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
+  const isNegativeBalance = Number(balance) < 0;
   const primaryBalance = formatWalletAmount(balance, currency || 'USD');
   const approxBalance = Number.isFinite(Number(secondaryBalance))
     ? formatWalletAmount(secondaryBalance, secondaryCurrency || 'USD')
@@ -36,11 +37,15 @@ const BalanceCard = ({ balance, currency, secondaryBalance, secondaryCurrency, o
         </div>
 
         <div className={`mt-4 ${isRTL ? 'text-right' : 'text-left'}`}>
-          <div className="text-[1.7rem] font-black tracking-[-0.04em] text-[#fff8e8] sm:text-[2.15rem]">
+          <div className={`text-[1.7rem] font-black tracking-[-0.04em] sm:text-[2.15rem] ${isNegativeBalance ? 'text-[#ffb4b4]' : 'text-[#fff8e8]'}`}>
             {primaryBalance}
           </div>
           {approxBalance && (
-            <div className="mt-1.5 inline-flex rounded-full border border-[#f1d089]/30 bg-[linear-gradient(180deg,rgba(255,239,194,0.16),rgba(189,133,35,0.2))] px-2.5 py-0.5 text-[11px] font-semibold text-[#fff1c9] sm:px-3 sm:py-1 sm:text-xs">
+            <div className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold sm:px-3 sm:py-1 sm:text-xs ${
+              isNegativeBalance
+                ? 'border border-[#f0aaaa]/30 bg-[linear-gradient(180deg,rgba(255,210,210,0.12),rgba(167,35,35,0.16))] text-[#ffd1d1]'
+                : 'border border-[#f1d089]/30 bg-[linear-gradient(180deg,rgba(255,239,194,0.16),rgba(189,133,35,0.2))] text-[#fff1c9]'
+            }`}>
               ~ {approxBalance}
             </div>
           )}

@@ -41,7 +41,7 @@ const SessionBootstrap = () => {
 
         if (cancelled) return;
 
-        await refreshProfile({ force: true });
+        await refreshProfile();
 
         if (cancelled) return;
 
