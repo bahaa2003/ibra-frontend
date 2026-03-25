@@ -139,7 +139,7 @@ function App() {
                   path="/api-sandbox"
                   element={(
                     <ProtectedRoute roles={['admin']}>
-                      {renderSuspended(<ApiSandbox />)}
+                      {/* {renderSuspended(<ApiSandbox />)} */}
                     </ProtectedRoute>
                   )}
                 />
