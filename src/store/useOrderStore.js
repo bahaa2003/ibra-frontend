@@ -192,6 +192,14 @@ const useOrderStore = create(
         });
 
         return created || { order: nextOrder };
+      } catch (err) {
+        // ── JIT Price Increase — re-throw with code so components can show localized message
+        if (err?.code === 'PROVIDER_PRICE_INCREASED') {
+          // Fire-and-forget: refetch product list so UI shows updated prices
+          apiClient.products.list().catch(() => {});
+          throw err;
+        }
+        throw err;
       },
 
       updateOrderStatus: async (id, status, orderContext = null) => {

@@ -524,12 +524,20 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
       setStatusCard({ tone: 'success', title: copy.successTitle, message: copy.successMessage });
       addToast(copy.successMessage, 'success');
     } catch (error) {
-      const message = '\u062a\u0639\u0630\u0631 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0637\u0644\u0628 \u0627\u062a\u0635\u0644 \u0628\u0627\u0644\u0645\u0633\u0624\u0648\u0644';
-      if (String(error?.code || '').toUpperCase() !== 'INVALID_ORDER_AMOUNT') {
-        devLogger.warnUnlessBenign('Order submit error:', error);
+      if (String(error?.code || '').toUpperCase() === 'PROVIDER_PRICE_INCREASED') {
+        const priceMsg = language === 'en'
+          ? 'The price for this service has been updated by the provider. Please refresh and review the new price.'
+          : 'عفواً، تم تحديث سعر هذه الخدمة من المصدر. برجاء تحديث الصفحة لرؤية السعر الجديد.';
+        setStatusCard({ tone: 'warning', title: language === 'en' ? 'Price Updated' : 'تم تحديث السعر', message: priceMsg });
+        addToast(priceMsg, 'warning');
+      } else {
+        const message = '\u062a\u0639\u0630\u0631 \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0637\u0644\u0628 \u0627\u062a\u0635\u0644 \u0628\u0627\u0644\u0645\u0633\u0624\u0648\u0644';
+        if (String(error?.code || '').toUpperCase() !== 'INVALID_ORDER_AMOUNT') {
+          devLogger.warnUnlessBenign('Order submit error:', error);
+        }
+        setStatusCard({ tone: 'danger', title: copy.failedTitle, message });
+        addToast(message, 'error');
       }
-      setStatusCard({ tone: 'danger', title: copy.failedTitle, message });
-      addToast(message, 'error');
     } finally {
       setIsSubmitting(false);
     }

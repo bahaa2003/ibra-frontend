@@ -305,7 +305,14 @@ const getSheetCopy = (language = 'ar') => (
       addToast(copy.successMessage, 'success');
       onClose();
     } catch (error) {
-      addToast(error?.message || copy.failureMessage, 'error');
+      if (error?.code === 'PROVIDER_PRICE_INCREASED') {
+        const priceMsg = language === 'en'
+          ? 'The price for this service has been updated by the provider. Please refresh and review the new price.'
+          : 'عفواً، تم تحديث سعر هذه الخدمة من المصدر. برجاء تحديث الصفحة لرؤية السعر الجديد.';
+        addToast(priceMsg, 'warning');
+      } else {
+        addToast(error?.message || copy.failureMessage, 'error');
+      }
     } finally {
       setIsSubmitting(false);
     }

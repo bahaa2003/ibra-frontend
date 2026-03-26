@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Check, X } from 'lucide-react';
 import useAuthStore from '../../store/useAuthStore';
@@ -244,7 +244,14 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
       addToast(t('product.orderReceived'), 'success');
       onClose();
     } catch (err) {
-      addToast(t('product.orderFailed'), 'error');
+      if (err?.code === 'PROVIDER_PRICE_INCREASED') {
+        const msg = language === 'en'
+          ? 'The price for this service has been updated by the provider. Please refresh and review the new price.'
+          : 'عفواً، تم تحديث سعر هذه الخدمة من المصدر. برجاء تحديث الصفحة لرؤية السعر الجديد.';
+        addToast(msg, 'warning');
+      } else {
+        addToast(t('product.orderFailed'), 'error');
+      }
     } finally {
       setIsOrdering(false);
     }

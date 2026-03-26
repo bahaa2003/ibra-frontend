@@ -1975,6 +1975,14 @@ const realApi = {
           const res = await http.patch(endpoint, payload);
           return normaliseUser(unwrap(res)?.user || unwrap(res));
         } catch (error) {
+          // Business rule errors (4xx with code) — do NOT retry on next endpoint
+          const respCode = error?.response?.data?.code;
+          if (respCode && error?.response?.status >= 400 && error?.response?.status < 500) {
+            const bizError = new Error(error.response.data.message || String.rawOrder.creation.failed);
+            bizError.code = respCode;
+            bizError.statusCode = error.response.status;
+            throw bizError;
+          }
           lastError = error;
         }
       }
