@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   User,
   UserCog,
   Users,
@@ -117,6 +118,12 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     { icon: ShieldCheck, label: t('sidebar.paymentsManager'), path: '/admin/payments', roles: ['admin'] },
     { icon: CreditCard, label: t('sidebar.paymentMethods'), path: '/admin/payment-methods', roles: ['admin'] },
     { icon: Coins, label: t('sidebar.currencies'), path: '/admin/currencies', roles: ['admin'] },
+    {
+      icon: Sparkles,
+      label: t('sidebar.createdBy', { defaultValue: 'تم الإنشاء بواسطة' }),
+      path: '/created-by',
+      roles: ['customer', 'manager']
+    },
     { icon: Settings, label: t('sidebar.settings'), path: '/settings', roles: ['admin', 'customer', 'manager'] },
     {
       icon: MessageCircle,

@@ -269,15 +269,15 @@ const mergeOperations = (...groups) => {
 };
 
 const SummaryCard = ({ icon: Icon, label, value, note }) => (
-  <Card className="admin-premium-stat p-2.5 sm:p-3">
-    <div className="flex items-start gap-2">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
-        <Icon className="h-4 w-4" />
+  <Card className="admin-premium-stat h-full p-3 sm:p-3.5">
+    <div className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)] sm:h-10 sm:w-10">
+        <Icon className="h-4 w-4 sm:h-[1.05rem] sm:w-[1.05rem]" />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] text-[var(--color-text-secondary)]">{label}</p>
-        <p className="mt-0.5 text-base font-semibold text-[var(--color-text)] sm:text-lg">{value}</p>
-        {note ? <p className="mt-1 text-[10px] text-[var(--color-muted)] sm:text-[11px]">{note}</p> : null}
+        <p className="text-[10px] font-medium text-[var(--color-text-secondary)] sm:text-[11px]">{label}</p>
+        <p className="mt-1 break-words text-[0.96rem] font-semibold leading-6 text-[var(--color-text)] sm:text-lg">{value}</p>
+        {note ? <p className="mt-1 text-[10px] leading-4.5 text-[var(--color-muted)] sm:text-[11px]">{note}</p> : null}
       </div>
     </div>
   </Card>
@@ -291,24 +291,24 @@ const OperationSnapshotCard = ({
   formatWhen,
   isArabic,
 }) => (
-  <Card className="admin-premium-stat p-3">
-    <div className="flex items-start gap-2.5">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
+  <Card className="admin-premium-stat h-full p-3 sm:p-3.5">
+    <div className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)] sm:h-10 sm:w-10">
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] text-[var(--color-text-secondary)]">{label}</p>
+        <p className="text-[10px] font-medium text-[var(--color-text-secondary)] sm:text-[11px]">{label}</p>
         {operation ? (
           <>
-            <p className="mt-1 text-base font-semibold text-[var(--color-text)]">{formatMoney(operation.amount, operation.currencyCode)}</p>
+            <p className="mt-1 break-words text-[0.96rem] font-semibold leading-6 text-[var(--color-text)] sm:text-base">{formatMoney(operation.amount, operation.currencyCode)}</p>
             <p className="mt-1 truncate text-[11px] font-medium text-[var(--color-text)]">
               {operation.userName || operation.userEmail || (isArabic ? 'بدون اسم' : 'No user')}
             </p>
-            <p className="mt-1 truncate text-[10px] text-[var(--color-muted)]">{operation.description}</p>
-            <p className="mt-1 text-[10px] text-[var(--color-muted)]">{formatWhen(operation.date)}</p>
+            <p className="mt-1 truncate text-[10px] leading-4.5 text-[var(--color-muted)]">{operation.description}</p>
+            <p className="mt-1 text-[10px] leading-4.5 text-[var(--color-muted)]">{formatWhen(operation.date)}</p>
           </>
         ) : (
-          <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+          <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">
             {isArabic ? 'لا توجد عملية في المدة المحددة' : 'No operation in the selected range'}
           </p>
         )}
@@ -318,32 +318,34 @@ const OperationSnapshotCard = ({
 );
 
 const OperationRow = ({ operation, formatMoney, formatWhen, isArabic }) => (
-  <div className="flex items-start gap-2.5 rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 py-2.5">
-    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] border ${operation.amount >= 0 ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600' : 'border-rose-500/20 bg-rose-500/10 text-rose-600'}`}>
-      {operation.amount >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
-    </div>
-
-    <div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="wallet-accent-chip px-2 py-0.5 text-[10px] font-semibold">
-          {operation.amount >= 0
-            ? (isArabic ? 'إضافة' : 'Credit')
-            : (isArabic ? 'خصم' : 'Debit')}
-        </span>
-        <p className="truncate text-[12px] font-semibold text-[var(--color-text)]">
-          {operation.userName || operation.userEmail || (isArabic ? 'بدون اسم' : 'No user')}
-        </p>
+  <div className="rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 py-3">
+    <div className="flex items-start gap-2.5">
+      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] border ${operation.amount >= 0 ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600' : 'border-rose-500/20 bg-rose-500/10 text-rose-600'}`}>
+        {operation.amount >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
       </div>
 
-      <p className="mt-1 truncate text-[11px] text-[var(--color-text-secondary)]">{operation.description}</p>
-      <p className="mt-1 text-[10px] text-[var(--color-muted)]">{formatWhen(operation.date)}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="wallet-accent-chip px-2 py-0.5 text-[10px] font-semibold">
+            {operation.amount >= 0
+              ? (isArabic ? 'إضافة' : 'Credit')
+              : (isArabic ? 'خصم' : 'Debit')}
+          </span>
+          <p className="truncate text-[12px] font-semibold text-[var(--color-text)]">
+            {operation.userName || operation.userEmail || (isArabic ? 'بدون اسم' : 'No user')}
+          </p>
+        </div>
+
+        <p className="mt-1 truncate text-[11px] leading-5 text-[var(--color-text-secondary)]">{operation.description}</p>
+        <p className="mt-1 text-[10px] leading-4.5 text-[var(--color-muted)]">{formatWhen(operation.date)}</p>
+      </div>
     </div>
 
-    <div className="shrink-0 text-right">
+    <div className={`mt-2.5 flex items-center justify-between gap-3 border-t border-[color:rgb(var(--color-border-rgb)/0.55)] pt-2.5 ${isArabic ? 'text-right' : 'text-left'} sm:mt-3`}>
       <p className={`text-[12px] font-semibold ${operation.amount >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
         {formatMoney(operation.amount, operation.currencyCode)}
       </p>
-      <p className="mt-1 text-[10px] text-[var(--color-muted)]">
+      <p className="text-[10px] text-[var(--color-muted)]">
         {operation.title}
       </p>
     </div>
@@ -685,12 +687,12 @@ const AdminWallet = () => {
   );
 
   return (
-    <div className="min-w-0 space-y-4 pb-4 sm:space-y-5">
-      <section className="admin-premium-hero relative overflow-hidden p-3">
+    <div className="min-w-0 space-y-3.5 pb-5 sm:space-y-5">
+      <section className="admin-premium-hero relative overflow-hidden p-3 sm:p-4 lg:p-5">
         <div className="pointer-events-none absolute -top-20 right-8 h-40 w-40 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.16)] blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-0 h-28 w-28 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.1)] blur-3xl" />
 
-        <div className="relative flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="relative flex flex-col gap-3.5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <span className="section-kicker">
               <Coins className="h-3.5 w-3.5" />
@@ -699,12 +701,12 @@ const AdminWallet = () => {
             <h1 className="page-heading mt-3">
               {isArabic ? 'محفظة الأدمن' : 'Admin Wallet'}
             </h1>
-            <p className="mt-2 text-xs text-[var(--color-text-secondary)] sm:text-sm">
+            <p className="mt-2 text-[11px] leading-5 text-[var(--color-text-secondary)] sm:text-sm">
               {selectedRangeLabel}
             </p>
           </div>
 
-          <div className="relative shrink-0">
+          <div className="relative w-full shrink-0 xl:w-auto">
             <DashboardDateRangeFilter
               isArabic={isArabic}
               formatRangeDate={formatRangeDate}
@@ -715,11 +717,13 @@ const AdminWallet = () => {
                 setStartDate(nextStart);
                 setEndDate(nextEnd);
               }}
+              className="w-full xl:w-auto"
+              buttonClassName="!min-w-0 !w-full justify-between xl:!w-auto xl:min-w-[240px]"
             />
           </div>
         </div>
 
-        <div className="relative mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="relative mt-3.5 grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 xl:grid-cols-3">
           {summaryCards.map((card) => (
             <SummaryCard
               key={card.label}
@@ -731,20 +735,20 @@ const AdminWallet = () => {
           ))}
         </div>
 
-        <Card className="admin-premium-stat relative mt-3 p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <Card className="admin-premium-stat relative mt-3.5 p-3 sm:p-4">
+          <div className="flex flex-col gap-3.5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--color-text)]">
                 {isArabic ? 'إضافة رصيد لحساب الأدمن' : 'Add balance to admin account'}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+              <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">
                 {isArabic
                   ? `سيتم إضافة الرصيد مباشرة إلى حسابك الحالي بعملة ${adminCurrencyCode}.`
                   : `The amount will be added directly to your current account in ${adminCurrencyCode}.`}
               </p>
             </div>
 
-            <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-[28rem]">
+            <div className="flex w-full flex-col gap-2.5 sm:flex-row lg:max-w-[28rem]">
               <Input
                 type="number"
                 min="0"
@@ -753,13 +757,13 @@ const AdminWallet = () => {
                 onChange={(event) => setSelfTopupAmount(event.target.value)}
                 placeholder={isArabic ? 'أدخل مبلغ الإضافة' : 'Enter topup amount'}
                 suffix={<span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{adminCurrencyCode}</span>}
-                className="h-10 px-3 py-2 text-sm"
+                className="h-11 px-3 py-2 text-sm"
               />
               <Button
                 type="button"
                 onClick={handleSelfTopup}
                 disabled={isSelfTopupUpdating || !String(adminProfile?.id || actor?.id || '').trim()}
-                className="h-10 shrink-0 rounded-[0.95rem] px-4 text-sm"
+                className="h-11 shrink-0 rounded-[0.95rem] px-4 text-sm sm:min-w-[10.5rem]"
               >
                 <PlusCircle className="h-4 w-4" />
                 <span>{isArabic ? 'إضافة رصيد لحسابي' : 'Add to my balance'}</span>
@@ -768,20 +772,20 @@ const AdminWallet = () => {
           </div>
         </Card>
 
-        <Card className="admin-premium-stat relative mt-3 p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <Card className="admin-premium-stat relative mt-3.5 p-3 sm:p-4">
+          <div className="flex flex-col gap-3.5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--color-text)]">
                 {isArabic ? 'إعدادات حساب الأدمن' : 'Admin account settings'}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+              <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">
                 {isArabic
                   ? 'يمكنك تغيير العملة والمجموعة الحالية مباشرة من هنا بدون الخروج من صفحة المحفظة.'
                   : 'You can update the current admin currency and group directly from the wallet page.'}
               </p>
             </div>
 
-            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-[42rem]">
+            <div className="grid w-full grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 lg:max-w-[42rem]">
               <label className="min-w-0">
                 <span className="mb-1 block text-[11px] font-semibold text-[var(--color-text-secondary)]">
                   {isArabic ? 'العملة' : 'Currency'}
@@ -789,7 +793,7 @@ const AdminWallet = () => {
                 <select
                   value={settingsCurrency}
                   onChange={(event) => setSettingsCurrency(event.target.value)}
-                  className="h-10 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
+                  className="h-11 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
                 >
                   {(currencies || []).map((currencyItem) => (
                     <option key={currencyItem.code} value={currencyItem.code}>
@@ -806,7 +810,7 @@ const AdminWallet = () => {
                 <select
                   value={settingsGroup}
                   onChange={(event) => setSettingsGroup(event.target.value)}
-                  className="h-10 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
+                  className="h-11 w-full rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.92)] px-3 text-sm text-[var(--color-text)]"
                 >
                   <option value="">{isArabic ? 'بدون مجموعة' : 'No group'}</option>
                   {(groups || []).map((group) => (
@@ -819,12 +823,12 @@ const AdminWallet = () => {
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3.5 flex justify-stretch sm:justify-end">
             <Button
               type="button"
               onClick={handleSaveAdminSettings}
               disabled={isSavingSettings || !String(adminProfile?.id || actor?.id || '').trim()}
-              className="h-10 rounded-[0.95rem] px-4 text-sm"
+              className="h-11 w-full rounded-[0.95rem] px-4 text-sm sm:w-auto"
             >
               <span>{isArabic ? 'حفظ الإعدادات' : 'Save settings'}</span>
             </Button>
@@ -832,13 +836,13 @@ const AdminWallet = () => {
         </Card>
       </section>
 
-      <section className="admin-premium-panel p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <section className="admin-premium-panel p-3 sm:p-4">
+        <div className="flex flex-col items-start justify-between gap-2.5 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-sm font-semibold text-[var(--color-text)]">
               {isArabic ? 'العمليات' : 'Operations'}
             </h2>
-            <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+            <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">
               {selectedRangeLabel}
             </p>
           </div>
@@ -849,7 +853,7 @@ const AdminWallet = () => {
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+        <div className="mt-3.5 grid grid-cols-1 gap-2.5 xl:grid-cols-2">
           <OperationSnapshotCard
             icon={ArrowUpRight}
             label={isArabic ? 'آخر إضافة' : 'Latest credit'}
@@ -868,8 +872,8 @@ const AdminWallet = () => {
           />
         </div>
 
-        <div className="mt-3">
-          <div className="mb-2 flex items-center gap-2">
+        <div className="mt-3.5">
+          <div className="mb-2.5 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-[0.85rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
               <History className="h-4 w-4" />
             </div>
@@ -877,7 +881,7 @@ const AdminWallet = () => {
               <h3 className="text-sm font-semibold text-[var(--color-text)]">
                 {isArabic ? 'آخر الحركات' : 'Recent movements'}
               </h3>
-              <p className="text-[10px] text-[var(--color-muted)]">
+              <p className="text-[10px] leading-4.5 text-[var(--color-muted)]">
                 {isLoading
                   ? (isArabic ? 'جارٍ تحديث البيانات...' : 'Refreshing data...')
                   : (isArabic ? 'عرض مختصر لأحدث العمليات' : 'Compact view of the latest operations')}
@@ -886,7 +890,7 @@ const AdminWallet = () => {
           </div>
 
           {filteredOperations.length ? (
-            <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
               {filteredOperations.slice(0, 8).map((operation) => (
                 <OperationRow
                   key={operation.id}
@@ -902,7 +906,7 @@ const AdminWallet = () => {
               <p className="text-sm font-semibold text-[var(--color-text)]">
                 {isArabic ? 'لا توجد عمليات في هذه المدة' : 'No operations in this range'}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+              <p className="mt-1 text-[11px] leading-5 text-[var(--color-muted)]">
                 {isArabic
                   ? 'جرّب تغيير التاريخ من الفلتر بالأعلى.'
                   : 'Try adjusting the date range above.'}

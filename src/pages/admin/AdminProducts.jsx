@@ -1306,81 +1306,27 @@ const AdminProducts = () => {
                             </div>
                             ) : null}
 
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <Input
-                                    label="External Product Name"
-                                    value={productForm.externalProductName}
-                                    onChange={(e) => setProductForm({ ...productForm, externalProductName: e.target.value })}
-                                />
-                                <Input
-                                    label="supplierMarginValue"
-                                    type="number"
-                                    value={productForm.supplierMarginValue}
-                                    onChange={(e) => setProductForm({ ...productForm, supplierMarginValue: e.target.value })}
-                                />
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">وضع التسعير الخارجي</label>
-                                    <select
-                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
-                                        value={productForm.externalPricingMode}
-                                        onChange={(e) => {
-                                            const value = e.target.value;
-                                            setProductForm((prev) => {
-                                                const nextForm = {
-                                                    ...prev,
-                                                    externalPricingMode: value,
-                                                    syncPriceWithProvider: usesProviderPricingMode(value),
-                                                };
-                                                if (!usesProviderPricingMode(value) || !selectedProviderProduct) {
-                                                    return nextForm;
-                                                }
-                                                return {
-                                                    ...nextForm,
-                                                    ...buildProviderSyncSnapshot(selectedProviderProduct, {
-                                                        enableManualPrice: prev.enableManualPrice,
-                                                        manualPriceAdjustment: prev.manualPriceAdjustment,
-                                                        fallbackMinQty: prev.minimumOrderQty,
-                                                        fallbackMaxQty: prev.maximumOrderQty,
-                                                    }),
-                                                };
-                                            });
-                                        }}
-                                    >
-                                        <option value="use_supplier_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام سعر المزود</option>
-                                        <option value="use_local_price" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">استخدام السعر المحلي</option>
-                                        <option value="supplier_price_plus_margin" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">سعر المزود + هامش</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">نوع هامش المزود</label>
-                                    <select
-                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
-                                        value={productForm.supplierMarginType}
-                                        onChange={(e) => setProductForm({ ...productForm, supplierMarginType: e.target.value })}
-                                    >
-                                        <option value="fixed" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">ثابت</option>
-                                        <option value="percentage" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">نسبة مئوية</option>
-                                    </select>
-                                </div>
-                            </div>
+                            {productForm.connectionType === 'auto' ? (
+                            <>
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(productForm.autoFulfillmentEnabled)}
+                                        onChange={(e) => setProductForm({ ...productForm, autoFulfillmentEnabled: e.target.checked })}
+                                    />
+                                    autoFulfillmentEnabled
+                                </label>
 
-                            <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                                <input
-                                    type="checkbox"
-                                    checked={Boolean(productForm.autoFulfillmentEnabled)}
-                                    onChange={(e) => setProductForm({ ...productForm, autoFulfillmentEnabled: e.target.checked })}
-                                />
-                                autoFulfillmentEnabled
-                            </label>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">ربط حقول المزود (داخلي:خارجي)</label>
-                                <textarea
-                                    className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900 min-h-[90px]"
-                                    value={productForm.supplierFieldMappingsText}
-                                    onChange={(e) => setProductForm({ ...productForm, supplierFieldMappingsText: e.target.value })}
-                                />
-                            </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">ربط حقول المزود (داخلي:خارجي)</label>
+                                    <textarea
+                                        className="w-full rounded-lg border bg-white p-2 dark:border-gray-700 dark:bg-gray-900 min-h-[90px]"
+                                        value={productForm.supplierFieldMappingsText}
+                                        onChange={(e) => setProductForm({ ...productForm, supplierFieldMappingsText: e.target.value })}
+                                    />
+                                </div>
+                            </>
+                            ) : null}
 
                             {productForm.connectionType === 'auto' ? (
                             <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">

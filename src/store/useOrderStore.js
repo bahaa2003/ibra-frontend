@@ -115,91 +115,94 @@ const useOrderStore = create(
       },
       
       addOrder: async (order) => {
-        const orderFieldsValues = order?.orderFieldsValues || order?.orderFields || {};
-        const playerId = String(
-          order?.playerId ||
-          orderFieldsValues?.playerId ||
-          orderFieldsValues?.uid ||
-          ''
-        ).trim();
+        try {
+          const orderFieldsValues = order?.orderFieldsValues || order?.orderFields || {};
+          const playerId = String(
+            order?.playerId ||
+            orderFieldsValues?.playerId ||
+            orderFieldsValues?.uid ||
+            ''
+          ).trim();
 
-        // Get current pricing and exchange rates for financial snapshot
-        const currencies = await apiClient.system.currencies().catch(() => []);
-        const products = await apiClient.products.list().catch(() => []);
-        
-        const product = products.find(p => p.id === order.productId);
-        const currencyCode = String(order.currencyCode || 'USD').toUpperCase();
-        const userCurrency = currencies.find(c => String(c.code || '').toUpperCase() === currencyCode) || { code: currencyCode, rate: 1 };
-        
-        // Calculate pricing snapshot
-        const basePrice = Number(order.unitPriceBase || product?.basePriceCoins || product?.price || 0);
-        const groupDiscount = 0; // TODO: Get from user group
-        const unitPriceInAccountCurrency = Number(order.unitPrice || basePrice);
-        const quantity = Number(order.quantity || 1);
-        const finalPrice = Number(order.priceCoins || (unitPriceInAccountCurrency * quantity));
+          // Get current pricing and exchange rates for financial snapshot
+          const currencies = await apiClient.system.currencies().catch(() => []);
+          const products = await apiClient.products.list().catch(() => []);
 
-        if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
-          const err = new Error('Invalid order amount');
-          err.code = 'INVALID_ORDER_AMOUNT';
-          throw err;
-        }
-        
-        const orderWithSnapshot = {
-          ...order,
-          playerId,
-          orderFields: orderFieldsValues,
-          orderFieldsValues,
-          financialSnapshot: {
-            originalCurrency: userCurrency.code,
-            originalAmount: basePrice,
-            exchangeRateAtExecution: Number(order.exchangeRateAtExecution || userCurrency.rate || 1),
-            convertedAmountAtExecution: finalPrice,
-            finalAmountAtExecution: finalPrice,
-            pricingSnapshot: {
-              basePrice: basePrice,
-              groupDiscount: groupDiscount,
-              unitPrice: unitPriceInAccountCurrency,
-              finalPrice: finalPrice,
-              currency: userCurrency.code
-            },
-            feesSnapshot: {
-              processingFee: 0,
-              serviceFee: 0,
-              totalFees: 0
-            }
+          const product = products.find((p) => p.id === order.productId);
+          const currencyCode = String(order.currencyCode || 'USD').toUpperCase();
+          const userCurrency = currencies.find((c) => String(c.code || '').toUpperCase() === currencyCode) || { code: currencyCode, rate: 1 };
+
+          // Calculate pricing snapshot
+          const basePrice = Number(order.unitPriceBase || product?.basePriceCoins || product?.price || 0);
+          const groupDiscount = 0; // TODO: Get from user group
+          const unitPriceInAccountCurrency = Number(order.unitPrice || basePrice);
+          const quantity = Number(order.quantity || 1);
+          const finalPrice = Number(order.priceCoins || (unitPriceInAccountCurrency * quantity));
+
+          if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+            const err = new Error('Invalid order amount');
+            err.code = 'INVALID_ORDER_AMOUNT';
+            throw err;
           }
-        };
 
-        const created = await apiClient.orders.create(orderWithSnapshot);
-        const createdOrder = created?.order || created || {};
-        const nextOrder = {
-          ...orderWithSnapshot,
-          ...createdOrder,
-          orderFields: createdOrder?.orderFields || createdOrder?.orderFieldsValues || orderWithSnapshot.orderFields,
-          orderFieldsValues: createdOrder?.orderFieldsValues || createdOrder?.orderFields || orderWithSnapshot.orderFieldsValues,
-          customerInput: createdOrder?.customerInput || orderWithSnapshot.customerInput,
-        };
-        set(state => ({
-          orders: [nextOrder, ...state.orders],
-          ordersLastLoadedAt: Date.now(),
-          ordersLastLoadedScope: state.ordersLastLoadedScope || `user:${nextOrder.userId}`,
-        }));
+          const orderWithSnapshot = {
+            ...order,
+            playerId,
+            orderFields: orderFieldsValues,
+            orderFieldsValues,
+            financialSnapshot: {
+              originalCurrency: userCurrency.code,
+              originalAmount: basePrice,
+              exchangeRateAtExecution: Number(order.exchangeRateAtExecution || userCurrency.rate || 1),
+              convertedAmountAtExecution: finalPrice,
+              finalAmountAtExecution: finalPrice,
+              pricingSnapshot: {
+                basePrice,
+                groupDiscount,
+                unitPrice: unitPriceInAccountCurrency,
+                finalPrice,
+                currency: userCurrency.code,
+              },
+              feesSnapshot: {
+                processingFee: 0,
+                serviceFee: 0,
+                totalFees: 0,
+              },
+            },
+          };
 
-        useNotificationStore.getState().addNotification({
-          title: 'طلب جديد',
-          message: `تم إنشاء طلب جديد بواسطة ${nextOrder?.userName || nextOrder?.userId || 'عميل'}`,
-          type: 'info',
-        });
+          const created = await apiClient.orders.create(orderWithSnapshot);
+          const createdOrder = created?.order || created || {};
+          const nextOrder = {
+            ...orderWithSnapshot,
+            ...createdOrder,
+            orderFields: createdOrder?.orderFields || createdOrder?.orderFieldsValues || orderWithSnapshot.orderFields,
+            orderFieldsValues: createdOrder?.orderFieldsValues || createdOrder?.orderFields || orderWithSnapshot.orderFieldsValues,
+            customerInput: createdOrder?.customerInput || orderWithSnapshot.customerInput,
+          };
 
-        return created || { order: nextOrder };
-      } catch (err) {
-        // ── JIT Price Increase — re-throw with code so components can show localized message
-        if (err?.code === 'PROVIDER_PRICE_INCREASED') {
-          // Fire-and-forget: refetch product list so UI shows updated prices
-          apiClient.products.list().catch(() => {});
+          set((state) => ({
+            orders: [nextOrder, ...state.orders],
+            ordersLastLoadedAt: Date.now(),
+            ordersLastLoadedScope: state.ordersLastLoadedScope || `user:${nextOrder.userId}`,
+          }));
+
+          useNotificationStore.getState().addNotification({
+            title: 'طلب جديد',
+            message: `تم إنشاء طلب جديد بواسطة ${nextOrder?.userName || nextOrder?.userId || 'عميل'}`,
+            type: 'info',
+          });
+
+          return created || { order: nextOrder };
+        } catch (err) {
+          // Refetch products so the UI picks up the latest prices after a provider price jump.
+          if (err?.code === 'PROVIDER_PRICE_INCREASED') {
+            apiClient.products.list().catch(() => {});
+            throw err;
+          }
+
           throw err;
         }
-        throw err;
       },
 
       updateOrderStatus: async (id, status, orderContext = null) => {

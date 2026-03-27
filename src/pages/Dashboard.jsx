@@ -25,8 +25,6 @@ const Dashboard = () => {
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const language = getStorefrontLanguage(i18n);
-  const isRTL = language === 'ar';
-  const isAdmin = String(user?.role || '').toLowerCase() === 'admin' || String(user?.role || '').toLowerCase() === 'super_admin';
 
   useEffect(() => {
     if (refreshProfile) {
@@ -107,7 +105,7 @@ const Dashboard = () => {
   }, [navigate]);
 
   return (
-    <div className="space-y-5 pb-4">
+    <div className="space-y-4 pb-5 sm:space-y-5">
       <HeroSlider slides={heroSlides} />
 
       <section className="py-1">
@@ -119,8 +117,8 @@ const Dashboard = () => {
         />
       </section>
 
-      <section id="categories" className="scroll-mt-28 space-y-3.5">
-        <div className="relative z-10 mx-auto flex w-full max-w-5xl justify-center px-1 sm:px-2">
+      <section id="categories" className="scroll-mt-28 space-y-3 sm:space-y-3.5">
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl justify-center px-0.5 sm:px-2">
           <ProductSearchBar
             products={storefrontProducts}
             language={language}
@@ -133,7 +131,7 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className="relative z-0 grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+        <div className="relative z-0 grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
           {visibleHomepageCategories.map((category, index) => (
             <CategoryCard
               key={category.id}
@@ -147,16 +145,29 @@ const Dashboard = () => {
       </section>
 
       <StoreFooter
-        title={language === 'ar' ? 'تجربة تسوق رقمية أوضح' : 'A clearer digital shopping experience'}
+        title="IBRA Store"
         description={language === 'ar'
-          ? 'أعدنا تنظيم الصفحة الرئيسية لتمنحك تنقلًا أسرع وقراءة أوضح، مع الحفاظ على الهوية الذهبية المميزة لـ IBRA.'
-          : 'The homepage is now organized for faster navigation, clearer scanning, and better mobile comfort while keeping IBRA’s signature gold identity.'}
-        chips={[
-          { label: language === 'ar' ? (isAdmin ? 'محفظة الأدمن' : 'المحفظة') : (isAdmin ? 'Admin Wallet' : 'Wallet'), to: isAdmin ? '/admin/wallet' : '/wallet' },
-          { label: language === 'ar' ? 'الإعدادات' : 'Settings', to: '/settings' },
-        ]}
-        copyright={language === 'ar' ? '© 2026 IBRA Store. جميع الحقوق محفوظة.' : '© 2026 IBRA Store. All rights reserved.'}
-        metaLine={language === 'ar' ? 'تنفيذ فوري • منتجات رقمية مختارة • دفع آمن' : 'Instant fulfilment • Curated digital goods • Secure checkout'}
+          ? 'هذا هو الاختيار المناسب لك'
+          : 'A calmer and cleaner mobile-first browsing experience.'}
+        chips={[]}
+        copyright={language === 'ar' ? (
+          <>
+            <span className="font-semibold tracking-[0.08em] text-[var(--color-text)]">IBRA Store</span>
+            <span className="inline-flex h-1 w-1 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.55)]" />
+            <span>© 2026</span>
+            <span className="inline-flex h-1 w-1 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.55)]" />
+            <span>جميع الحقوق محفوظة</span>
+          </>
+        ) : (
+          <>
+            <span className="font-semibold tracking-[0.08em] text-[var(--color-text)]">IBRA Store</span>
+            <span className="inline-flex h-1 w-1 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.55)]" />
+            <span>© 2026</span>
+            <span className="inline-flex h-1 w-1 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.55)]" />
+            <span>All rights reserved</span>
+          </>
+        )}
+        metaLine=""
       />
     </div>
   );

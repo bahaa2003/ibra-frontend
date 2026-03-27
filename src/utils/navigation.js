@@ -22,6 +22,7 @@ const CUSTOMER_SIDEBAR_PATHS = new Set([
   '/orders',
   '/account',
   '/account-security',
+  '/created-by',
   '/settings',
 ]);
 
@@ -29,6 +30,7 @@ const MANAGER_SIDEBAR_PATHS = new Set([
   '/manager/dashboard',
   '/account',
   '/account-security',
+  '/created-by',
   '/settings',
 ]);
 

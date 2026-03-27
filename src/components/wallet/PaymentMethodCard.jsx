@@ -14,6 +14,10 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
 
   const IconComponent = method.icon;
   const hasImage = Boolean(method.image);
+  const title = String(method.displayName || method.name || '').trim();
+  const description = String(method.description || '').trim();
+  const groupLabel = String(method.groupLabel || '').trim();
+  const instructionText = String(method.instructions || '').trim();
 
   const handleCopyAccount = async (event) => {
     event.stopPropagation();
@@ -39,15 +43,15 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ y: -5, scale: 1.02 }}
+      whileHover={{ y: -4, scale: 1.01 }}
       className="group relative"
     >
       <div
         className="relative cursor-pointer overflow-hidden rounded-[24px] border border-[#d3b171]/55 bg-[linear-gradient(145deg,rgba(93,72,33,0.15),rgba(246,215,148,0.14)_38%,rgba(255,251,236,0.94)_100%)] p-4 shadow-[0_18px_34px_-28px_rgba(125,92,33,0.68)] transition-all hover:border-[#caa159]/75 sm:p-6"
         onClick={() => onSelect(method)}
       >
-        <div className={`mb-4 flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
-          <div className={`flex min-w-0 items-center gap-3 sm:gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <div className={`mb-3.5 flex items-start justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+          <div className={`flex min-w-0 items-start gap-3 sm:gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>
             {hasImage ? (
               <img
                 src={resolveImageUrl(method.image)}
@@ -60,9 +64,14 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
               </div>
             )}
             <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold text-[#6f4f18] sm:text-lg">{method.name}</h3>
-              {method.description && (
-                <p className="mt-1 line-clamp-2 text-sm text-[#8f6e36]">{method.description}</p>
+              {groupLabel ? (
+                <p className="mb-1 text-[10px] font-semibold tracking-[0.08em] text-[#a37b35]">
+                  {groupLabel}
+                </p>
+              ) : null}
+              {title ? <h3 className="truncate text-[0.95rem] font-semibold text-[#6f4f18] sm:text-lg">{title}</h3> : null}
+              {description && (
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#8f6e36] sm:text-sm">{description}</p>
               )}
             </div>
           </div>
@@ -76,10 +85,15 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
         </div>
 
         {method.accountNumber && (
-          <div className="mb-4">
-            <div className="rounded-[18px] border border-[#dcc79a]/70 bg-white/55 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
-              <div className={`mb-2 text-sm text-[#8f6e36] ${isRTL ? 'text-right' : 'text-left'}`}>
-                {method.instructions}
+          <div className="mb-3.5">
+            <div className="rounded-[18px] border border-[#dcc79a]/70 bg-white/55 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] sm:p-4">
+              {instructionText ? (
+                <div className={`mb-2.5 text-[11px] leading-5 text-[#8f6e36] sm:text-sm ${isRTL ? 'text-right' : 'text-left'}`}>
+                  {instructionText}
+                </div>
+              ) : null}
+              <div className={`mb-2 text-[10px] font-semibold tracking-[0.08em] text-[#a37b35] ${isRTL ? 'text-right' : 'text-left'}`}>
+                {dir === 'rtl' ? 'رقم أو حساب التحويل' : 'Transfer account'}
               </div>
               <button
                 type="button"
@@ -88,14 +102,14 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
                   isRTL ? 'text-right' : 'text-left'
                 }`}
               >
-                <span className="w-full break-all text-sm sm:w-auto sm:max-w-[70%] sm:truncate">{method.accountNumber}</span>
+                <span className="w-full break-all text-sm leading-6 sm:w-auto sm:max-w-[70%] sm:truncate">{method.accountNumber}</span>
                 <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[#8c631f] ${isRTL ? 'flex-row-reverse self-end sm:self-auto' : ''}`}>
                   <Copy className="h-3.5 w-3.5" />
                   <span>{t('payments.copyAccount', { defaultValue: dir === 'rtl' ? 'نسخ' : 'Copy' })}</span>
                 </span>
               </button>
               {method.bankName && (
-                <div className={`mt-2 text-xs text-[#8f6e36] ${isRTL ? 'text-right' : 'text-left'}`}>
+                <div className={`mt-2 text-xs leading-5 text-[#8f6e36] ${isRTL ? 'text-right' : 'text-left'}`}>
                   {method.bankName}
                 </div>
               )}
@@ -103,7 +117,7 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
           </div>
         )}
 
-        <div className={`flex items-center gap-2 text-xs text-[#8f6e36] ${isRTL ? 'flex-row-reverse' : ''}`}>
+        <div className={`flex items-center gap-2 text-[11px] text-[#8f6e36] ${isRTL ? 'flex-row-reverse' : ''}`}>
           <Lock className="h-3 w-3" />
           <span>{t('payments.securityProtected')}</span>
         </div>

@@ -79,6 +79,8 @@ const DashboardDateRangeFilter = ({
   startDate,
   endDate,
   onRangeChange,
+  className,
+  buttonClassName,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectionStep, setSelectionStep] = useState('start');
@@ -336,11 +338,14 @@ const DashboardDateRangeFilter = ({
   );
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={cn('relative', className)}>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="inline-flex min-w-[220px] max-w-full items-center gap-2.5 rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3.5 py-2 text-start shadow-[var(--shadow-subtle)] transition-all duration-200 hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]"
+        className={cn(
+          'inline-flex min-w-[220px] max-w-full items-center gap-2.5 rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.96)] px-3.5 py-2 text-start shadow-[var(--shadow-subtle)] transition-all duration-200 hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]',
+          buttonClassName
+        )}
         aria-expanded={isOpen}
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.1)] text-[var(--color-primary)]">

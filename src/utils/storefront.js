@@ -46,6 +46,14 @@ const normalizeSearchToken = (value) => String(value || '')
   .trim()
   .toLowerCase();
 
+const pickFirstText = (...values) => {
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
 const resolveProductDisplayName = (product, language = 'ar') => (
   language === 'ar' ? product?.nameAr || product?.name : product?.name || product?.nameAr
 ) || '';
@@ -142,7 +150,10 @@ export const getCategoryDisplayTitle = (category, language = 'ar') => {
   if (category?.id === 'all') {
     return language === 'ar' ? config.titleAr : config.titleEn;
   }
-  return language === 'ar' ? (category?.nameAr || config.titleAr || category?.name) : (category?.name || config.titleEn || category?.nameAr);
+
+  return language === 'ar'
+    ? pickFirstText(category?.nameAr, category?.titleAr, category?.name, category?.title, config.titleAr, config.titleEn)
+    : pickFirstText(category?.name, category?.title, category?.nameAr, category?.titleAr, config.titleEn, config.titleAr);
 };
 
 export const getCategoryDisplaySubtitle = (category, language = 'ar') => {

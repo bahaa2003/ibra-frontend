@@ -30,6 +30,7 @@ const ProductDetails = lazy(() => import('./pages/ProductDetails'));
 const Wallet = lazy(() => import('./pages/Wallet'));
 const ApiSandbox = lazy(() => import('./pages/ApiSandbox'));
 const Settings = lazy(() => import('./pages/Settings'));
+const CreatedByPage = lazy(() => import('./pages/CreatedByPage'));
 const Account = lazy(() => import('./pages/Account'));
 const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'));
@@ -140,6 +141,14 @@ function App() {
                   element={(
                     <ProtectedRoute roles={['admin']}>
                       {/* {renderSuspended(<ApiSandbox />)} */}
+                    </ProtectedRoute>
+                  )}
+                />
+                <Route
+                  path="/created-by"
+                  element={(
+                    <ProtectedRoute roles={['customer', 'manager']}>
+                      {renderSuspended(<CreatedByPage />)}
                     </ProtectedRoute>
                   )}
                 />
