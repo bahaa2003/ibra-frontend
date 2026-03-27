@@ -11,7 +11,6 @@ const ADMIN_SIDEBAR_PATHS = new Set([
   '/admin/payment-methods',
   '/admin/currencies',
   '/admin/suppliers',
-  '/api-sandbox',
   '/account',
   '/account-security',
   '/settings',

@@ -33,6 +33,9 @@ const useTopupStore = create(
       topups: mockTopups,
       topupsLastLoadedAt: 0,
 
+      topupsPagination: null,
+      topupsSummary: null,
+
       loadTopups: async ({ force = false } = {}) => {
         const { topups, topupsLastLoadedAt } = get();
         const hasTopups = Array.isArray(topups) && topups.length > 0;
@@ -50,11 +53,14 @@ const useTopupStore = create(
         }
 
         topupsRequest = apiClient.topups.list()
-          .then((items) => {
-            const nextTopups = Array.isArray(items) ? items : mockTopups;
+          .then((result) => {
+            // Handle both old (array) and new ({ items, pagination }) response shapes
+            const items = Array.isArray(result) ? result : (result?.items || []);
+            const nextTopups = items.length ? items : mockTopups;
             set({
               topups: nextTopups,
               topupsLastLoadedAt: Date.now(),
+              topupsPagination: result?.pagination || null,
             });
 
             if (isRealProvider) {
@@ -73,6 +79,22 @@ const useTopupStore = create(
           });
 
         return topupsRequest;
+      },
+
+      /**
+       * Admin-only: load deposits with server-side filters (no cache/dedup).
+       * Each call hits the server directly, perfect for filter/page changes.
+       */
+      loadTopupsFiltered: async (params = {}) => {
+        const result = await apiClient.topups.list(params);
+        const items = Array.isArray(result) ? result : (result?.items || []);
+        set({
+          topups: items,
+          topupsLastLoadedAt: Date.now(),
+          topupsPagination: result?.pagination || null,
+          topupsSummary: result?.summary || null,
+        });
+        return items;
       },
 
       getTopupById: async (topupId, userId = null) => {
@@ -124,6 +146,11 @@ const useTopupStore = create(
           senderWalletNumber: isPayloadObject ? amountOrPayload.senderWalletNumber : '',
           type: topupType,
           gameDetails: gameDetails,
+          // ── Fields required by realApi.topups.create (POST /me/deposits) ──
+          paymentMethodId: isPayloadObject ? (amountOrPayload.paymentMethodId || '') : '',
+          currency: isPayloadObject ? (amountOrPayload.currencyCode || amountOrPayload.currency || 'USD') : 'USD',
+          receipt: isPayloadObject ? (amountOrPayload.receipt || amountOrPayload.proofImage || null) : null,
+          notes: isPayloadObject ? (amountOrPayload.notes || '') : '',
         };
 
         // Auto-create financial snapshot for game top-ups

@@ -4,7 +4,6 @@ import useSystemStore from '../../store/useSystemStore';
 import {
   Building2,
   ChevronLeft,
-  Code2,
   Coins,
   CreditCard,
   Home,
@@ -103,7 +102,6 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
       path: '/orders',
       roles: ['customer']
     },
-    { icon: Code2, label: t('sidebar.apiSandbox'), path: '/api-sandbox', roles: ['admin'] },
     { icon: Users, label: t('sidebar.users'), path: '/admin/users', roles: ['admin'] },
     { icon: UserCog, label: t('sidebar.supervisors'), path: '/admin/supervisors', roles: ['admin'] },
     { icon: Users, label: t('sidebar.groupsManager'), path: '/admin/groups', roles: ['admin'] },

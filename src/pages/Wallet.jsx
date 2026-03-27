@@ -305,25 +305,15 @@ const Wallet = () => {
       const convertedDeposits = transactions.reduce((sum, tx) => {
         const signedAmount = Number(tx?.amount || 0);
         if (!(signedAmount > 0)) return sum;
-
-        return sum + convertAmountBetweenCurrencies(
-          Math.abs(signedAmount),
-          tx?.currency || tx?.originalCurrency || userCurrency,
-          userCurrency,
-          currencies
-        );
+        // Wallet transactions are already in user's local currency — no conversion needed
+        return sum + Math.abs(signedAmount);
       }, 0);
 
       const convertedSpent = transactions.reduce((sum, tx) => {
         const signedAmount = Number(tx?.amount || 0);
         if (!(signedAmount < 0)) return sum;
-
-        return sum + convertAmountBetweenCurrencies(
-          Math.abs(signedAmount),
-          tx?.currency || tx?.originalCurrency || userCurrency,
-          userCurrency,
-          currencies
-        );
+        // Wallet transactions are already in user's local currency — no conversion needed
+        return sum + Math.abs(signedAmount);
       }, 0);
 
       return {
@@ -411,20 +401,16 @@ const Wallet = () => {
           };
           const executionCurrency = resolveWalletTransactionExecutionCurrency(enrichedTx, userCurrency);
           const amountSourceCurrency = executionCurrency || tx?.currency || tx?.currencyCode || tx?.originalCurrency || userCurrency;
-          const convertedSignedAmount = convertAmountBetweenCurrencies(
-            signedAmount,
-            amountSourceCurrency,
-            userCurrency,
-            currencies
-          );
+
+          // ── CRITICAL: Wallet transactions are ALWAYS stored in the user's
+          // local currency (walletBalance is in local currency). The backend's
+          // creditWalletDirect / debitWalletAtomic directly modify walletBalance,
+          // so the transaction amount IS already in the user's currency.
+          // Do NOT convert it — that would double-multiply (e.g. 2000 SAR → ×15 → 30,000).
+          const convertedSignedAmount = signedAmount;
           const rawBalanceAfter = tx.balanceAfter ?? null;
           const convertedBalanceAfter = rawBalanceAfter !== null && rawBalanceAfter !== undefined
-            ? convertAmountBetweenCurrencies(
-                Number(rawBalanceAfter),
-                amountSourceCurrency,
-                userCurrency,
-                currencies
-              )
+            ? Number(rawBalanceAfter)
             : null;
           const resolvedStatus = linkedOrder
             ? normalizeWalletStatus(linkedOrder?.status || tx.status || 'completed')
@@ -461,21 +447,23 @@ const Wallet = () => {
           };
         });
         const fallbackTransactions = mergeTransactions(
-          relatedTopups.map((topup) => ({
+          relatedTopups
+            // Only show approved/completed deposits as wallet entries.
+            // PENDING deposits must NOT appear as wallet transactions.
+            .filter((topup) => {
+              const s = String(topup?.status || '').toLowerCase();
+              return s === 'approved' || s === 'completed';
+            })
+            .map((topup) => ({
             id: `topup-${topup?.id || topup?._id || Math.random()}`,
             type: 'deposit',
             description: topup?.paymentChannel || topup?.method || t('wallet.typeDeposit', { defaultValue: 'Deposit' }),
-            amount: convertAmountBetweenCurrencies(
-              Math.abs(toFiniteNumber(
-                topup?.actualPaidAmount
-                ?? topup?.requestedAmount
-                ?? topup?.amount
-                ?? 0
-              )),
-              resolveTopupExecutionCurrency(topup, userCurrency),
-              userCurrency,
-              currencies
-            ),
+            // requestedAmount is already in the user's local currency — no conversion needed
+            amount: Math.abs(toFiniteNumber(
+              topup?.requestedAmount
+              ?? topup?.amount
+              ?? 0
+            )),
             currency: userCurrency,
             originalCurrency: resolveTopupExecutionCurrency(topup, userCurrency),
             currentCurrency: userCurrency,

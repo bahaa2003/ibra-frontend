@@ -152,7 +152,7 @@ const PaymentDetails = () => {
         transferredFromNumber: '',
         proofImage: uploadedFile || null,
         paymentChannel: method?.name || methodId || '',
-        currencyCode: user?.currency || 'USD',
+        currencyCode: group?.currency || method?.currency || user?.currency || 'USD',
         userId: user?.id || '',
         userName: user?.name || '',
         type: 'regular',

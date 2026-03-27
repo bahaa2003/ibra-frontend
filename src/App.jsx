@@ -28,7 +28,6 @@ const Orders = lazy(() => import('./pages/Orders'));
 const Products = lazy(() => import('./pages/Products'));
 const ProductDetails = lazy(() => import('./pages/ProductDetails'));
 const Wallet = lazy(() => import('./pages/Wallet'));
-const ApiSandbox = lazy(() => import('./pages/ApiSandbox'));
 const Settings = lazy(() => import('./pages/Settings'));
 const CreatedByPage = lazy(() => import('./pages/CreatedByPage'));
 const Account = lazy(() => import('./pages/Account'));
@@ -133,14 +132,6 @@ function App() {
                   element={(
                     <ProtectedRoute roles={['customer']}>
                       {renderSuspended(<PaymentDetails />)}
-                    </ProtectedRoute>
-                  )}
-                />
-                <Route
-                  path="/api-sandbox"
-                  element={(
-                    <ProtectedRoute roles={['admin']}>
-                      {/* {renderSuspended(<ApiSandbox />)} */}
                     </ProtectedRoute>
                   )}
                 />

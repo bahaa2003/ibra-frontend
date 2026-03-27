@@ -28,7 +28,10 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api
 const http = axios.create({
   baseURL: API_BASE,
   timeout: 15_000,
-  headers: { 'Content-Type': 'application/json' },
+  // NOTE: Do NOT set a default Content-Type here.
+  // Axios auto-sets 'application/json' for object bodies and
+  // 'multipart/form-data; boundary=…' for FormData bodies.
+  // Hardcoding it breaks Multer file uploads.
 });
 
 // ─── Token helpers ───────────────────────────────────────────────────────────
@@ -98,6 +101,7 @@ const serializePaymentGroupsForApi = (groups) => normalizePaymentGroups(groups, 
   id: group.id,
   name: group.name,
   description: group.description,
+  currency: group.currency,
   image: group.image,
   imageName: group.imageName,
   isActive: group.isActive !== false,
@@ -597,6 +601,7 @@ const normaliseGroup = (g) => {
     id: g._id || g.id,
     _id: undefined,
     name: g.name || '',
+    image: resolveImageUrl(g.image),
     // BE uses "percentage", FE uses "discount"
     discount: g.percentage ?? g.discount ?? 0,
     percentage: g.percentage ?? g.discount ?? 0,
@@ -688,6 +693,8 @@ const normaliseProduct = (p) => {
     supplierNotes: p.supplierNotes || '',
     // Category stays as-is (string in both BE and FE)
     category: p.category || '',
+    // Resolve image URL so user-facing components get fully-qualified paths
+    image: resolveImageUrl(p.image),
   };
 };
 
@@ -837,10 +844,13 @@ const normaliseDeposit = (d) => {
     requestedCoins: requestedAmount,
     amount: requestedAmount,
     amountUsd,
-    actualPaidAmount: amountUsd,
-    creditedCoins: amountUsd || (status === 'approved' ? requestedAmount : null),
+    // actualPaidAmount = the amount the user ACTUALLY paid in their LOCAL currency.
+    // Do NOT alias this to amountUsd — that's the USD conversion for internal accounting.
+    actualPaidAmount: requestedAmount,
+    creditedCoins: status === 'approved' ? requestedAmount : null,
     // Multi-currency fields
     currency,
+    currencyCode: currency,          // alias — AdminPayments reads currencyCode
     exchangeRate,
     paymentMethodId: d.paymentMethodId || '',
     notes: d.notes || '',
@@ -1023,7 +1033,7 @@ const normaliseCategory = (c) => {
     _id: undefined,
     name: c.name || '',
     nameAr: c.nameAr || '',
-    image: c.image || '',
+    image: resolveImageUrl(c.image),
     slug: c.slug || '',
     sortOrder: c.sortOrder ?? 0,
     isActive: c.isActive !== false,
@@ -2307,13 +2317,25 @@ const realApi = {
     /**
      * GET /admin/deposits (admin) or GET /me/deposits (customer).
      * Both use sendPaginated — deposits array in `data` directly.
+     * Accepts optional query params: { page, limit, status, search }.
      */
-    list: async () => {
-      const endpoint = isAdmin() ? '/admin/deposits' : '/me/deposits';
+    list: async (params = {}) => {
+      const base = isAdmin() ? '/admin/deposits' : '/me/deposits';
+      const query = new URLSearchParams();
+      if (params.page) query.set('page', String(params.page));
+      if (params.limit) query.set('limit', String(params.limit));
+      if (params.status && params.status !== 'all') query.set('status', params.status);
+      if (params.search) query.set('search', params.search);
+      const qs = query.toString();
+      const endpoint = qs ? `${base}?${qs}` : base;
       const res = await http.get(endpoint);
-      const data = unwrap(res);
-      const items = Array.isArray(data) ? data : (data?.deposits || []);
-      return items.map(normaliseDeposit);
+      // res.data = { success, message, data: [...deposits], pagination, summary }
+      // unwrap(res) returns res.data.data which is just the array — we need siblings too.
+      const body = res.data || {};
+      const items = Array.isArray(body.data) ? body.data : (body.deposits || []);
+      const pagination = body.pagination || null;
+      const summary = body.summary || null;
+      return { items: items.map(normaliseDeposit), pagination, summary };
     },
 
     /**
@@ -2345,7 +2367,7 @@ const realApi = {
     },
 
     /**
-     * POST /deposits — create a deposit request (multi-currency).
+     * POST /me/deposits — create a deposit request (multi-currency).
      *
      * BE expects multipart/form-data with:
      *   - requestedAmount      (required, number)
@@ -2357,27 +2379,33 @@ const realApi = {
      * FE sends: { requestedAmount, currency, paymentMethodId, receipt (File), notes }
      */
     create: async (topupData) => {
-      const amount = Number(
-        topupData.requestedAmount ?? topupData.requestedCoins ?? topupData.amount ?? 0
-      );
-      const currency = String(topupData.currency || 'USD').toUpperCase();
-      const paymentMethodId = String(topupData.paymentMethodId || '');
-      const notes = String(topupData.notes || '').trim();
-      const receiptFile = topupData.receipt || topupData.proofImage || null;
-
       const formData = new FormData();
-      formData.append('requestedAmount', amount);
-      formData.append('currency', currency);
-      formData.append('paymentMethodId', paymentMethodId);
+
+      // ── Text fields — FormData always sends strings, which is fine;
+      // express-validator's isFloat() / isString() accept stringified values.
+      formData.append(
+        'requestedAmount',
+        String(topupData.requestedAmount ?? topupData.amount ?? '0'),
+      );
+      formData.append(
+        'currency',
+        String(topupData.currency || 'USD').toUpperCase(),
+      );
+      formData.append(
+        'paymentMethodId',
+        String(topupData.paymentMethodId || ''),
+      );
+
+      const notes = String(topupData.notes || '').trim();
       if (notes) formData.append('notes', notes);
 
-      if (receiptFile instanceof Blob) {
-        formData.append('receipt', receiptFile);
-      }
+      // ── File — must be a File/Blob for Multer to parse it into req.file
+      const file = topupData.receipt || topupData.proofImage || null;
+      if (file) formData.append('receipt', file);
 
-      const res = await http.post('/deposits', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // Axios auto-sets Content-Type to multipart/form-data with boundary
+      // when the body is a FormData instance. Do NOT override it.
+      const res = await http.post('/me/deposits', formData);
       return normaliseDeposit(unwrap(res));
     },
 
@@ -2386,81 +2414,50 @@ const realApi = {
      *
      * BE admin actions:
      *   PATCH /admin/deposits/:id/approve  — approve + credit wallet
-     *     Body: { overrideAmount? } (optional)
+     *     Body: { amount?, currency?, adminNotes? }
      *   PATCH /admin/deposits/:id/reject   — reject
+     *     Body: { adminNotes? }
      *
-     * FE calls: apiClient.topups.updateStatus(id, status, updatedTopup)
-     *   The 3rd arg (updatedTopup) may contain:
-     *     - actualPaidAmount (override amount from review)
-     *     - financialSnapshot.originalAmount
-     *
-     * FE status → BE action:
-     *   'approved' | 'completed' → PATCH /admin/deposits/:id/approve
-     *   'rejected' | 'denied'   → PATCH /admin/deposits/:id/reject
+     * FE calls: apiClient.topups.updateStatus(id, status, reviewData)
+     *   reviewData may contain:
+     *     - actualPaidAmount  → maps to body.amount
+     *     - currencyCode      → maps to body.currency
+     *     - adminNote         → maps to body.adminNotes
      */
     updateStatus: async (topupId, status, reviewData) => {
       const normalised = (status || '').toLowerCase();
       let res;
 
       if (['approved', 'completed'].includes(normalised)) {
-        // Build approve body with optional override
+        // Build approve body — send admin overrides using backend field names
         const body = {};
-        const override = reviewData?.actualPaidAmount
+        const overrideAmount = reviewData?.actualPaidAmount
           ?? reviewData?.financialSnapshot?.originalAmount
           ?? null;
-        if (override !== null && override !== undefined) {
-          body.overrideAmount = Number(override);
+        if (overrideAmount !== null && overrideAmount !== undefined) {
+          body.amount = Number(overrideAmount);
+        }
+        const overrideCurrency = reviewData?.currencyCode
+          ?? reviewData?.currency
+          ?? null;
+        if (overrideCurrency) {
+          body.currency = String(overrideCurrency).toUpperCase();
+        }
+        const notes = reviewData?.adminNote ?? reviewData?.adminNotes ?? null;
+        if (notes) {
+          body.adminNotes = String(notes).trim();
         }
         res = await http.patch(`/admin/deposits/${topupId}/approve`, body);
         return normaliseDeposit(unwrap(res));
       }
 
       if (['rejected', 'denied', 'failed'].includes(normalised)) {
-        res = await http.patch(`/admin/deposits/${topupId}/reject`);
-        return normaliseDeposit(unwrap(res));
-      }
-
-      // Unknown status
-      devLogger.warn(`[realApi] topups.updateStatus: Unknown status '${status}'.`);
-      return null;
-    },
-
-    /**
-     * Map FE status strings to BE admin action routes.
-     *
-     * BE admin actions:
-     *   PATCH /admin/deposits/:id/approve  — approve + credit wallet
-     *     Body: { overrideAmount? } (optional)
-     *   PATCH /admin/deposits/:id/reject   — reject
-     *
-     * FE calls: apiClient.topups.updateStatus(id, status, updatedTopup)
-     *   The 3rd arg (updatedTopup) may contain:
-     *     - actualPaidAmount (override amount from review)
-     *     - financialSnapshot.originalAmount
-     *
-     * FE status → BE action:
-     *   'approved' | 'completed' → PATCH /admin/deposits/:id/approve
-     *   'rejected' | 'denied'   → PATCH /admin/deposits/:id/reject
-     */
-    updateStatus: async (topupId, status, reviewData) => {
-      const normalised = (status || '').toLowerCase();
-      let res;
-
-      if (['approved', 'completed'].includes(normalised)) {
-        // Build approve body with optional override
-        const body = {};
-        const override = reviewData?.actualPaidAmount
-          ?? reviewData?.financialSnapshot?.originalAmount
-          ?? null;
-        if (override !== null && override !== undefined) {
-          body.overrideAmount = Number(override);
+        const rejectBody = {};
+        const notes = reviewData?.adminNote ?? reviewData?.adminNotes ?? null;
+        if (notes) {
+          rejectBody.adminNotes = String(notes).trim();
         }
-        res = await http.patch(`/admin/deposits/${topupId}/approve`, body);
-        return normaliseDeposit(unwrap(res));
-      }
-
-      if (['rejected', 'denied', 'failed'].includes(normalised)) {
-        res = await http.patch(`/admin/deposits/${topupId}/reject`);
+        res = await http.patch(`/admin/deposits/${topupId}/reject`, rejectBody);
         return normaliseDeposit(unwrap(res));
       }
 
@@ -2672,12 +2669,39 @@ const realApi = {
         .map(([feKey, beKey]) => http.patch(`/admin/settings/${beKey}`, { value: normalizedPayload[feKey] }));
 
       if (updates.length > 0) await Promise.all(updates);
-      const nextSettings = normalizePaymentSettingsResponse({
-        ...currentCachedSettings,
-        ...normalizedPayload,
-      });
-      writeCachedPaymentSettings(nextSettings);
-      return nextSettings;
+
+      // ── Invalidate stale cache and re-fetch from server ────────────
+      // Previously we optimistically wrote the sent payload to cache.
+      // If the backend silently failed (e.g. Mongoose Mixed type bug),
+      // the cache would hold data that was never persisted.
+      // Now we invalidate first, then fetch the confirmed server state.
+      try {
+        localStorage.removeItem(PAYMENT_SETTINGS_CACHE_KEY);
+      } catch { /* ignore storage errors */ }
+
+      // Re-fetch from server to get the actual persisted state
+      try {
+        const freshRes = await http.get('/admin/settings');
+        const freshData = unwrap(freshRes);
+        const allSettings = freshData?.settings || (Array.isArray(freshData) ? freshData : []);
+        const find = (k) => allSettings.find((s) => s.key === k)?.value;
+        const nextSettings = normalizePaymentSettingsResponse({
+          countryAccounts: find('paymentCountryAccounts'),
+          instructions: find('paymentInstructions'),
+          whatsappNumber: find('whatsappNumber'),
+          paymentGroups: find('paymentGroups'),
+        });
+        writeCachedPaymentSettings(nextSettings);
+        return nextSettings;
+      } catch {
+        // If re-fetch fails, fall back to the payload we sent (best-effort)
+        const nextSettings = normalizePaymentSettingsResponse({
+          ...currentCachedSettings,
+          ...normalizedPayload,
+        });
+        writeCachedPaymentSettings(nextSettings);
+        return nextSettings;
+      }
     },
 
     /**

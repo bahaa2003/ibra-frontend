@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Eye, Pencil, X } from 'lucide-react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { Check, CheckCircle2, Clock3, Eye, Pencil, Search, Wallet, X } from 'lucide-react';
 import useTopupStore from '../../store/useTopupStore';
 import useAdminStore from '../../store/useAdminStore';
 import useSystemStore from '../../store/useSystemStore';
@@ -20,11 +20,34 @@ const statusVariant = (status) => {
 
 const isPendingLike = (status) => status === 'pending' || status === 'requested';
 
+const PAGE_SIZE = 20;
+
+const SummaryCard = ({ icon: Icon, label, value }) => (
+  <Card className="admin-premium-stat p-2.5">
+    <div className="flex items-start gap-2">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.8rem] border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-primary)]">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-[var(--color-text-secondary)]">{label}</p>
+        <p className="mt-0.5 text-lg font-semibold text-[var(--color-text)]">{value}</p>
+      </div>
+    </div>
+  </Card>
+);
+
 const AdminPayments = () => {
-  const { topups, loadTopups, getTopupById, updateTopupStatus, updateTopupRequest } = useTopupStore();
+  const { topups, topupsPagination, topupsSummary, loadTopups, loadTopupsFiltered, getTopupById, updateTopupStatus, updateTopupRequest } = useTopupStore();
   const { users, loadUsers } = useAdminStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { addToast } = useToast();
+
+  // ── Filter state ────────────────────────────────────────────────────────
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const deferredSearch = useDeferredValue(searchTerm);
 
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -41,14 +64,36 @@ const AdminPayments = () => {
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
+  // ── Fetch deposits with filters ─────────────────────────────────────────
+  const fetchDeposits = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await loadTopupsFiltered({
+        page: currentPage,
+        limit: PAGE_SIZE,
+        status: statusFilter,
+        search: deferredSearch,
+      });
+    } catch (_err) {
+      // fallback — loadTopups without filters
+      await loadTopups({ force: true });
+    }
+    setIsLoading(false);
+  }, [currentPage, statusFilter, deferredSearch, loadTopupsFiltered, loadTopups]);
+
   useEffect(() => {
-    loadTopups();
+    fetchDeposits();
     loadUsers();
     loadCurrencies();
-  }, [loadTopups, loadUsers, loadCurrencies]);
+  }, [fetchDeposits, loadUsers, loadCurrencies]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearch, statusFilter]);
 
   const requests = useMemo(
-    () => [...(topups || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+    () => [...(topups || [])],
     [topups]
   );
 
@@ -64,7 +109,7 @@ const AdminPayments = () => {
     setSelectedRequest(nextRequest);
     setReviewForm({
       actualPaidAmount: String(nextRequest?.requestedAmount ?? nextRequest?.requestedCoins ?? nextRequest?.amount ?? 0),
-      currencyCode: nextRequest?.currencyCode || 'USD',
+      currencyCode: nextRequest?.currencyCode || nextRequest?.currency || 'USD',
       adminNote: '',
     });
     setIsReviewModalOpen(true);
@@ -161,17 +206,66 @@ const AdminPayments = () => {
   });
   const formatRequestAmount = (value) => formatNumber(value, 'ar-EG');
 
+  const pagination = topupsPagination;
+  const totalPages = pagination?.pages || 1;
+  // Use server-side summary stats (unfiltered) so dashboard cards stay stable
+  const totalDeposits = topupsSummary?.totalDeposits ?? pagination?.total ?? requests.length;
+  const pendingCount = topupsSummary?.pendingCount ?? 0;
+  const approvedCount = topupsSummary?.approvedCount ?? 0;
+
   return (
-    <div className="min-w-0 space-y-6">
-      <header className="admin-premium-hero space-y-2">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">عمليات الشحن</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          مراجعة طلبات الشحن اليدوي وإدارة بيانات الاستلام وطرق الدفع من مكان واحد.
-        </p>
-      </header>
+    <div className="min-w-0 space-y-4 pb-4 sm:space-y-5">
+      <section className="admin-premium-hero relative overflow-hidden p-3">
+        <div className="pointer-events-none absolute -top-20 right-8 h-40 w-40 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.18)] blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-28 w-28 rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.12)] blur-3xl" />
+
+        <div className="relative min-w-0">
+          <h1 className="page-heading max-w-3xl">عمليات الشحن</h1>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            مراجعة طلبات الشحن اليدوي وإدارة بيانات الاستلام وطرق الدفع من مكان واحد.
+          </p>
+        </div>
+
+        <div className="relative mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <SummaryCard icon={Wallet} label="إجمالي الطلبات" value={formatRequestAmount(totalDeposits)} />
+          <SummaryCard icon={Clock3} label="قيد الانتظار" value={formatRequestAmount(pendingCount)} />
+          <SummaryCard icon={CheckCircle2} label="معتمدة" value={formatRequestAmount(approvedCount)} />
+        </div>
+      </section>
+
+      {/* Filter Toolbar */}
+      <Card className="admin-premium-panel min-w-0 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-secondary)]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="ابحث باسم المستخدم أو البريد الإلكتروني..."
+              className="w-full rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[var(--color-surface)] py-2.5 ps-10 pe-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+            >
+              <option value="all">الكل</option>
+              <option value="PENDING">قيد الانتظار</option>
+              <option value="APPROVED">معتمدة</option>
+              <option value="REJECTED">مرفوضة</option>
+            </select>
+            <span className="whitespace-nowrap text-xs text-[var(--color-text-secondary)]">
+              {formatRequestAmount(totalDeposits)} نتيجة
+            </span>
+          </div>
+        </div>
+      </Card>
 
       <Card className="admin-premium-panel min-w-0 p-4 sm:p-5">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">طلبات الشحن</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[var(--color-text)]">طلبات الشحن</h2>
 
         <div className="space-y-3 lg:hidden">
           {requests.map((request) => (
@@ -320,7 +414,43 @@ const AdminPayments = () => {
             </TableBody>
           </Table>
         </div>
+
+        {/* Empty state */}
+        {!isLoading && requests.length === 0 && (
+          <div className="rounded-xl border border-dashed border-[color:rgb(var(--color-border-rgb)/0.85)] bg-[color:rgb(var(--color-surface-rgb)/0.7)] p-8 text-center">
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              {searchTerm || statusFilter !== 'all'
+                ? 'لم يتم العثور على طلبات مطابقة. جرّب تعديل البحث أو الفلاتر.'
+                : 'لا توجد طلبات شحن بعد.'}
+            </p>
+          </div>
+        )}
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage <= 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          >
+            السابق
+          </Button>
+          <span className="text-sm text-[var(--color-text-secondary)]">
+            صفحة {formatRequestAmount(currentPage)} من {formatRequestAmount(totalPages)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          >
+            التالي
+          </Button>
+        </div>
+      )}
 
       <Modal
         isOpen={isEditModalOpen}
