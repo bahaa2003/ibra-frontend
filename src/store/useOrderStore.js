@@ -210,9 +210,7 @@ const useOrderStore = create(
         const currentOrder = orderContext || target;
         if (!currentOrder) return;
 
-        if (!isManualStatusEditableOrder(currentOrder)) {
-          throw new Error('Direct status changes are only available for manual orders.');
-        }
+
 
         const normalizedStatus = normalizeManualOrderStatus(status);
         const updated = await apiClient.orders.updateStatus(id, normalizedStatus, currentOrder);

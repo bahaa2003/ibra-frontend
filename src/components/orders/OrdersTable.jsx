@@ -123,7 +123,7 @@ const OrdersTable = ({
 
             <TableCell className="text-center">
               <span className="text-sm font-semibold text-emerald-500">
-                {order.profitUsd != null ? `$${Number(order.profitUsd).toFixed(2)}` : '-'}
+                {order.profitUsd != null ? `$${Number(order.profitUsd).toFixed(6)}` : '-'}
               </span>
             </TableCell>
 

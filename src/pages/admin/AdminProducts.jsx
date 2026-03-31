@@ -94,17 +94,72 @@ const countFractionDigits = (value) => {
     return normalized.split('.')[1]?.length || 0;
 };
 
+/**
+ * String-based decimal addition — preserves arbitrary precision.
+ * Avoids Number() which truncates 50dp prices to ~17 significant digits.
+ */
 const addPriceValues = (baseValue, deltaValue) => {
-    const base = Number(baseValue || 0);
-    const delta = Number(deltaValue || 0);
-    const scale = Math.max(countFractionDigits(baseValue), countFractionDigits(deltaValue));
-    const total = base + delta;
+    const a = normalizePriceInput(baseValue) || '0';
+    const b = normalizePriceInput(deltaValue) || '0';
 
-    if (scale <= 0) {
-        return String(total);
+    const aNeg = a.startsWith('-');
+    const bNeg = b.startsWith('-');
+    const aAbs = aNeg ? a.slice(1) : a;
+    const bAbs = bNeg ? b.slice(1) : b;
+
+    const [aInt = '0', aFrac = ''] = aAbs.split('.');
+    const [bInt = '0', bFrac = ''] = bAbs.split('.');
+
+    const maxFrac = Math.max(aFrac.length, bFrac.length);
+    const aPadded = aInt + aFrac.padEnd(maxFrac, '0');
+    const bPadded = bInt + bFrac.padEnd(maxFrac, '0');
+
+    const maxLen = Math.max(aPadded.length, bPadded.length);
+    const aDigits = aPadded.padStart(maxLen, '0');
+    const bDigits = bPadded.padStart(maxLen, '0');
+
+    const insertDecimal = (raw) => {
+        if (maxFrac <= 0) return raw;
+        const intP = raw.slice(0, raw.length - maxFrac) || '0';
+        const fracP = raw.slice(raw.length - maxFrac);
+        let combined = `${intP}.${fracP}`;
+        combined = combined.replace(/0+$/, '').replace(/\.$/, '');
+        return combined;
+    };
+
+    if (aNeg === bNeg) {
+        let carry = 0;
+        const digits = [];
+        for (let i = maxLen - 1; i >= 0; i--) {
+            const s = Number(aDigits[i]) + Number(bDigits[i]) + carry;
+            digits.unshift(s % 10);
+            carry = Math.floor(s / 10);
+        }
+        if (carry) digits.unshift(carry);
+        const str = insertDecimal(digits.join(''));
+        return (aNeg && str !== '0' ? '-' : '') + str;
     }
 
-    return total.toFixed(scale);
+    // Different signs: subtract smaller from larger
+    let larger, smaller, resultNeg;
+    if (aDigits.length !== bDigits.length ? aDigits.length > bDigits.length : aDigits >= bDigits) {
+        larger = aDigits; smaller = bDigits; resultNeg = aNeg;
+    } else {
+        larger = bDigits; smaller = aDigits; resultNeg = bNeg;
+    }
+
+    let borrow = 0;
+    const digits = [];
+    for (let i = maxLen - 1; i >= 0; i--) {
+        let d = Number(larger[i]) - Number(smaller[i]) - borrow;
+        if (d < 0) { d += 10; borrow = 1; } else { borrow = 0; }
+        digits.unshift(d);
+    }
+
+    let raw = digits.join('').replace(/^0+/, '') || '0';
+    if (maxFrac > 0) raw = raw.padStart(maxFrac + 1, '0');
+    const str = insertDecimal(raw);
+    return (resultNeg && str !== '0' ? '-' : '') + str;
 };
 
 const parsePositiveQuantity = (value, fallback) => {
@@ -331,19 +386,23 @@ const AdminProducts = () => {
             .then((items) => {
                 const nextItems = Array.isArray(items) ? items : [];
                 setProviderProducts(nextItems);
-                if (!nextItems.some((p) => hasMatchingProviderProduct(
-                    p,
-                    productForm.providerProductId,
-                    productForm.externalProductId
-                ))) {
-                    setProductForm((prev) => ({ ...prev, externalProductId: '', providerProductId: '', externalProductName: '' }));
-                }
+                // If the currently selected product ID is not in the new list, reset it
+                setProductForm((prev) => {
+                    const currentPPId = prev.providerProductId || prev.externalProductId;
+                    if (currentPPId && !nextItems.some((p) => hasMatchingProviderProduct(p, prev.providerProductId, prev.externalProductId))) {
+                        return { ...prev, externalProductId: '', providerProductId: '', externalProductName: '' };
+                    }
+                    return prev;
+                });
             })
             .catch(() => {
                 setProviderProducts([]);
                 addToast('فشل تحميل منتجات المزود', 'error');
             });
-    }, [isProductModalOpen, productForm.providerId, productForm.providerProductId, productForm.supplierId, productForm.externalProductId, addToast]);
+        // Fix 4: Only re-fetch when the provider ID changes or the modal opens/closes.
+        // providerProductId/externalProductId are removed to prevent race conditions
+        // when they are cleared by the provider onChange handler.
+    }, [isProductModalOpen, productForm.providerId, productForm.supplierId, addToast]);
 
     useEffect(() => {
         setProviderProductQuery('');
@@ -395,12 +454,20 @@ const AdminProducts = () => {
         const fallbackProviderProduct = selectedProviderProduct
             || providerProducts.find((product) => hasMatchingProviderProduct(product, providerProductId));
 
-        if (fallbackProviderProduct) {
+        // Fix 3: Extract only primitive values — never spread the live catalogue
+        // object to prevent accidental mutation of the providerProducts array.
+        const fallbackSnapshot = fallbackProviderProduct ? {
+            rawPrice: getProviderProductPriceValue(fallbackProviderProduct),
+            minQty: getProviderProductMinQtyValue(fallbackProviderProduct),
+            maxQty: getProviderProductMaxQtyValue(fallbackProviderProduct),
+        } : null;
+
+        if (fallbackSnapshot) {
             setProductForm((prev) => mergeProviderSyncIntoForm(
                 prev,
                 supplierId,
                 providerProductId,
-                buildProviderSyncSnapshot(fallbackProviderProduct, {
+                buildProviderSyncSnapshot(fallbackSnapshot, {
                     enableManualPrice: prev.enableManualPrice,
                     manualPriceAdjustment: manualOverride ?? prev.manualPriceAdjustment,
                     fallbackMinQty: prev.minimumOrderQty,
@@ -411,7 +478,13 @@ const AdminProducts = () => {
         try {
             setIsSyncingPrice(true);
             const synced = await apiClient.products.getSyncedPrice(supplierId, providerProductId);
-            const syncSource = { ...(fallbackProviderProduct || {}), ...(synced || {}) };
+            // Fix 3: Merge synced data into a new isolated object with only
+            // the primitive fields we need — never spreading the catalogue reference.
+            const syncSource = {
+                rawPrice: synced?.rawPrice ?? fallbackSnapshot?.rawPrice,
+                minQty: synced?.minQty ?? fallbackSnapshot?.minQty,
+                maxQty: synced?.maxQty ?? fallbackSnapshot?.maxQty,
+            };
             setProductForm((prev) => mergeProviderSyncIntoForm(
                 prev,
                 supplierId,
@@ -440,13 +513,20 @@ const AdminProducts = () => {
 
     const handleProviderProductSelect = (value) => {
         const selected = providerProducts.find((product) => hasMatchingProviderProduct(product, value));
+        // Fix 2: Extract only primitives from the catalogue item to prevent
+        // any accidental mutation of the source providerProducts array.
+        const selectedSnapshot = selected ? {
+            rawPrice: getProviderProductPriceValue(selected),
+            minQty: getProviderProductMinQtyValue(selected),
+            maxQty: getProviderProductMaxQtyValue(selected),
+        } : null;
         setProductForm((prev) => ({
             ...prev,
             externalProductId: String(selected?.externalProductId || value).trim(),
             providerProductId: value,
             externalProductName: selected?.name || '',
-            ...(prev.syncPriceWithProvider && selected
-                ? buildProviderSyncSnapshot(selected, {
+            ...(prev.syncPriceWithProvider && selectedSnapshot
+                ? buildProviderSyncSnapshot(selectedSnapshot, {
                     enableManualPrice: prev.enableManualPrice,
                     manualPriceAdjustment: prev.manualPriceAdjustment,
                     fallbackMinQty: prev.minimumOrderQty,
@@ -1158,6 +1238,9 @@ const AdminProducts = () => {
                                         value={productForm.supplierId || productForm.providerId}
                                         onChange={(e) => {
                                             const value = e.target.value;
+                                            // Fix 1: Full price reset — clear ALL price-related fields
+                                            // when provider changes to prevent stale prices from
+                                            // Provider B bleeding into Provider A's context.
                                             setProductForm((prev) => ({
                                                 ...prev,
                                                 supplierId: value,
@@ -1166,6 +1249,9 @@ const AdminProducts = () => {
                                                 providerProductId: '',
                                                 externalProductName: '',
                                                 syncedProviderBasePrice: '',
+                                                basePriceCoins: '',
+                                                enableManualPrice: false,
+                                                manualPriceAdjustment: '',
                                                 syncPriceWithProvider: value ? prev.syncPriceWithProvider : false,
                                             }));
                                         }}

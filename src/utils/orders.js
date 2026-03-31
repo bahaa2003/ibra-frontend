@@ -542,8 +542,9 @@ export const isManualActionableOrder = (order = {}) => {
 };
 
 export const isManualStatusEditableOrder = (order = {}) => {
-  const type = getOrderType(order);
-  return type === 'manual' && !order?.supplierId;
+  // Allow admin to manually override status of ANY order type,
+  // including automatic/provider-linked orders (e.g. stuck PENDING).
+  return true;
 };
 
 export const getManualOrderPrimaryAction = (order, language = 'ar') => {

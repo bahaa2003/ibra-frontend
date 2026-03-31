@@ -1078,8 +1078,9 @@ const productToBE = (fe) => {
   if (fe.showOutOfStockLabel !== undefined) body.showOutOfStockLabel = Boolean(fe.showOutOfStockLabel);
 
   // Pricing: FE uses basePriceCoins, BE uses basePrice
-  if (fe.basePriceCoins !== undefined) body.basePrice = Number(fe.basePriceCoins);
-  else if (fe.basePrice !== undefined) body.basePrice = Number(fe.basePrice);
+  // Send as String to preserve full 50dp precision — no Number() truncation.
+  if (fe.basePriceCoins !== undefined) body.basePrice = String(fe.basePriceCoins);
+  else if (fe.basePrice !== undefined) body.basePrice = String(fe.basePrice);
 
   // Quantity: FE uses minimumOrderQty / maximumOrderQty, BE uses minQty / maxQty
   if (fe.minimumOrderQty !== undefined) body.minQty = Number(fe.minimumOrderQty);
@@ -1152,7 +1153,7 @@ const productToBE = (fe) => {
   }
   if (fe.enableManualPrice !== undefined) body.enableManualPrice = Boolean(fe.enableManualPrice);
   if (fe.manualPriceAdjustment !== undefined) {
-    const manualAdjustment = Number(fe.manualPriceAdjustment || 0);
+    const manualAdjustment = String(fe.manualPriceAdjustment || '0');
     body.manualPriceAdjustment = manualAdjustment;
     body.manualDelta = manualAdjustment;
   }
@@ -1178,6 +1179,17 @@ const runProductMutationPlan = async (plan, fallbackMessage = 'Unable to save pr
       return normaliseProductMutationResponse(response);
     } catch (error) {
       lastError = error;
+
+      // Definitive client errors — do NOT retry the next endpoint.
+      // 400 = validation failed (e.g. bad basePrice, missing field)
+      // 409 = conflict (e.g. duplicate product name)
+      // 422 = unprocessable entity
+      const status = error?.response?.status;
+      if (status === 400 || status === 409 || status === 422) {
+        throw error;
+      }
+      // For 404 (endpoint doesn't exist) or 5xx (server error),
+      // fall through to the next endpoint in the plan.
     }
   }
 
