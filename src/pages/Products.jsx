@@ -400,8 +400,8 @@ const Products = () => {
       {/* ── Category & Product grid ────────────────────────────────── */}
       {!showInitialLoading && (
         <>
-          {/* Sub-categories at current level */}
-          {currentCategories.length > 0 && (
+          {/* Categories at current level — hidden if URL already targets a category */}
+          {currentCategories.length > 0 && !(currentParentId === null && activeCategoryParam) && (
             <section className="grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
               {currentCategories.map((catalog, index) => (
                 <CategoryCard
