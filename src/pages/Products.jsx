@@ -402,7 +402,7 @@ const Products = () => {
         <>
           {/* Categories at current level — hidden if URL already targets a category */}
           {currentCategories.length > 0 && !(currentParentId === null && activeCategoryParam) && (
-            <section className="grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-6 p-4 sm:gap-8 md:grid-cols-3 xl:grid-cols-4">
               {currentCategories.map((catalog, index) => (
                 <CategoryCard
                   key={catalog.id}
