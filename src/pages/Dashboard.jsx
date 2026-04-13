@@ -69,7 +69,14 @@ const Dashboard = () => {
   );
 
   const visibleHomepageCategories = useMemo(
-    () => storefrontCategories.filter((category) => category.id !== 'all'),
+    () => storefrontCategories.filter((category) => {
+      if (category.id === 'all') return false;
+      // Strict root-only: parentCategory must be null/undefined/empty
+      const p = category.parentCategory;
+      if (!p) return true;
+      if (typeof p === 'string' && !p.trim()) return true;
+      return false;
+    }),
     [storefrontCategories]
   );
 
@@ -77,15 +84,15 @@ const Dashboard = () => {
     () => [
       {
         id: 'ticker-basmala',
-        text: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ',
+        text: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ',
       },
       {
         id: 'ticker-verse',
-        text: 'رِجَالٌ لَّا تُلْهِيهِمْ تِجَارَةٌ وَلَا بَيْعٌ عَن ذِكْرِ اللَّهِ',
+        text: 'رِجَالٌ لَّا تُلْهِيهِمْ تِجَارَةٌ وَلَا بَيْعٌ عَن ذِكْرِ اللَّهِ',
       },
       {
         id: 'ticker-closing',
-        text: 'صَدَقَ اللَّهُ العَظِيمُ',
+        text: 'صَدَقَ اللَّهُ العَظِيمُ',
       }
     ],
     []

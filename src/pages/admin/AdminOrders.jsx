@@ -4,6 +4,10 @@ import {
   Clock3,
   ShieldCheck,
   ShoppingCart,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Card from '../../components/ui/Card';
@@ -39,8 +43,119 @@ const SummaryCard = ({ icon: Icon, label, value }) => (
   </Card>
 );
 
+/* ─── Pagination Bar ──────────────────────────────────────────────────────── */
+
+const ROWS_OPTIONS = [20, 50, 100, 500];
+
+/**
+ * Build a smart page number list with ellipsis.
+ * e.g. [1, 2, '…', 5, 6, 7, '…', 12, 13]
+ */
+const buildPageNumbers = (currentPage, totalPages) => {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  const pages = [];
+  const addPage = (p) => {
+    if (!pages.includes(p)) pages.push(p);
+  };
+
+  // Always show first 2
+  addPage(1);
+  addPage(2);
+
+  // Show current ± 1
+  if (currentPage - 1 > 2) pages.push('…');
+  for (let i = Math.max(3, currentPage - 1); i <= Math.min(totalPages - 2, currentPage + 1); i++) {
+    addPage(i);
+  }
+
+  // Always show last 2
+  if (currentPage + 1 < totalPages - 1) pages.push('…');
+  addPage(totalPages - 1);
+  addPage(totalPages);
+
+  return pages;
+};
+
+const PaginationBar = ({ page, totalPages, totalOrders, limit, onPageChange, onLimitChange, isArabic }) => {
+  if (totalPages <= 0) return null;
+
+  const pageNumbers = buildPageNumbers(page, totalPages);
+
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 sm:flex-row sm:justify-between">
+      {/* Rows per page */}
+      <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+        <span>{isArabic ? 'عدد الصفوف:' : 'Rows per page:'}</span>
+        <select
+          value={limit}
+          onChange={(e) => onLimitChange(Number(e.target.value))}
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+        >
+          {ROWS_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+        <span className="text-xs opacity-60">
+          ({isArabic ? `${totalOrders} طلب` : `${totalOrders} orders`})
+        </span>
+      </div>
+
+      {/* Page buttons */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-hover)] disabled:cursor-not-allowed disabled:opacity-30"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {pageNumbers.map((p, idx) =>
+          p === '…' ? (
+            <span key={`ellipsis-${idx}`} className="px-1 text-sm text-[var(--color-text-secondary)]">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border text-sm font-medium transition-colors ${
+                p === page
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-sm'
+                  : 'border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)] hover:bg-[var(--color-hover)]'
+              }`}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-hover)] disabled:cursor-not-allowed disabled:opacity-30"
+          aria-label="Next page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ─── Main Component ──────────────────────────────────────────────────────── */
+
 const AdminOrders = () => {
-  const { orders, loadOrders, getOrderById, updateOrderStatus, syncOrderSupplierStatus } = useOrderStore();
+  const {
+    adminOrders,
+    adminPagination,
+    adminOrdersLoading,
+    loadAdminOrders,
+    loadOrders,
+    getOrderById,
+    updateOrderStatus,
+    syncOrderSupplierStatus,
+  } = useOrderStore();
   const { users, loadUsers } = useAdminStore();
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
@@ -48,6 +163,12 @@ const AdminOrders = () => {
   const { i18n } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [appliedStartDate, setAppliedStartDate] = useState('');
+  const [appliedEndDate, setAppliedEndDate] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -61,6 +182,7 @@ const AdminOrders = () => {
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = isArabic ? 'ar-EG' : 'en-US';
 
+  // ── Fetch orders with server-side pagination + date range ────────────────
   useEffect(() => {
     let isMounted = true;
 
@@ -68,7 +190,12 @@ const AdminOrders = () => {
       setIsLoading(true);
 
       await Promise.allSettled([
-        Promise.resolve(loadOrders()),
+        Promise.resolve(loadAdminOrders({
+          page,
+          limit,
+          startDate: appliedStartDate || undefined,
+          endDate: appliedEndDate || undefined,
+        })),
         Promise.resolve(loadUsers()),
         Promise.resolve(loadProducts()),
         Promise.resolve(loadCurrencies()),
@@ -84,11 +211,28 @@ const AdminOrders = () => {
     return () => {
       isMounted = false;
     };
-  }, [loadCurrencies, loadOrders, loadProducts, loadUsers]);
+  }, [page, limit, appliedStartDate, appliedEndDate, loadAdminOrders, loadCurrencies, loadProducts, loadUsers]);
+
+  // ── Date range handlers ──────────────────────────────────────────────────
+  const handleApplyDateFilter = useCallback(() => {
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
+    setPage(1);
+  }, [startDate, endDate]);
+
+  const handleClearDateFilter = useCallback(() => {
+    setStartDate('');
+    setEndDate('');
+    setAppliedStartDate('');
+    setAppliedEndDate('');
+    setPage(1);
+  }, []);
+
+  const hasDateFilter = Boolean(appliedStartDate || appliedEndDate);
 
   const enrichedOrders = useMemo(
-    () => enrichOrders(orders, { users, products, language: isArabic ? 'ar' : 'en' }),
-    [orders, users, products, isArabic]
+    () => enrichOrders(adminOrders, { users, products, language: isArabic ? 'ar' : 'en' }),
+    [adminOrders, users, products, isArabic]
   );
 
   const filteredOrders = useMemo(
@@ -111,6 +255,17 @@ const AdminOrders = () => {
 
   const formatCount = (value) => formatNumber(value, locale);
 
+  // ── Pagination handlers ──────────────────────────────────────────────────
+  const handlePageChange = useCallback((newPage) => {
+    setPage(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleLimitChange = useCallback((newLimit) => {
+    setLimit(newLimit);
+    setPage(1); // Reset to page 1 when changing rows per page
+  }, []);
+
   const handleUpdateStatus = useCallback(async (order, nextStatus) => {
     const nextStatusLabel = getManualOrderStatusLabel(nextStatus, isArabic ? 'ar' : 'en');
     const confirmationMessage = isArabic
@@ -127,7 +282,12 @@ const AdminOrders = () => {
       await updateOrderStatus(order.id, nextStatus, order);
       await Promise.allSettled([
         Promise.resolve(loadUsers()),
-        Promise.resolve(loadOrders(undefined, { force: true })),
+        Promise.resolve(loadAdminOrders({
+          page,
+          limit,
+          startDate: appliedStartDate || undefined,
+          endDate: appliedEndDate || undefined,
+        })),
       ]);
       addToast(
         isArabic
@@ -140,7 +300,7 @@ const AdminOrders = () => {
     } finally {
       setActionOrderId('');
     }
-  }, [addToast, isArabic, loadOrders, loadUsers, updateOrderStatus]);
+  }, [addToast, appliedEndDate, appliedStartDate, isArabic, limit, loadAdminOrders, loadUsers, page, updateOrderStatus]);
 
   const handleSync = useCallback(async (order) => {
     setSyncingOrderId(order.id);
@@ -190,7 +350,7 @@ const AdminOrders = () => {
           <SummaryCard
             icon={ShoppingCart}
             label={isArabic ? 'إجمالي الطلبات' : 'Total orders'}
-            value={formatCount(summary.total)}
+            value={formatCount(adminPagination.total || summary.total)}
           />
           <SummaryCard
             icon={Clock3}
@@ -231,6 +391,50 @@ const AdminOrders = () => {
         helperText={null}
       />
 
+      {/* ── Date Range Filter ──────────────────────────────────────────── */}
+      <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-secondary)]">
+          <CalendarDays className="h-4 w-4" />
+          <span>{isArabic ? 'نطاق التاريخ' : 'Date Range'}</span>
+        </div>
+
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors"
+            max={endDate || undefined}
+          />
+          <span className="text-xs text-[var(--color-text-secondary)]">{isArabic ? 'إلى' : 'to'}</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors"
+            min={startDate || undefined}
+          />
+
+          <button
+            onClick={handleApplyDateFilter}
+            disabled={!startDate && !endDate}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isArabic ? 'تصفية' : 'Filter'}
+          </button>
+
+          {hasDateFilter && (
+            <button
+              onClick={handleClearDateFilter}
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-hover)]"
+            >
+              <X className="h-3.5 w-3.5" />
+              {isArabic ? 'مسح' : 'Clear'}
+            </button>
+          )}
+        </div>
+      </div>
+
       {filteredOrders.length ? (
         <OrdersMobileCards
           orders={filteredOrders}
@@ -250,6 +454,17 @@ const AdminOrders = () => {
               : 'Try adjusting the search or filters, or wait for new orders to appear.')}
         />
       )}
+
+      {/* ── Pagination Controls ──────────────────────────────────────────── */}
+      <PaginationBar
+        page={page}
+        totalPages={adminPagination.pages || 0}
+        totalOrders={adminPagination.total || 0}
+        limit={limit}
+        onPageChange={handlePageChange}
+        onLimitChange={handleLimitChange}
+        isArabic={isArabic}
+      />
 
       {selectedOrder ? (
         <Suspense fallback={null}>

@@ -570,7 +570,7 @@ const AdminGroups = () => {
                     <option value="">{tx('اختر مجموعة بديلة', 'Choose another group')}</option>
                     {alternativeGroups.map((group) => (
                       <option key={group.id} value={group.id}>
-                        {group.name}
+                        {group.name} ({group.discount ?? group.percentage ?? 0}%)
                       </option>
                     ))}
                   </select>

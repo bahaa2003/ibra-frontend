@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
-import { Layers3, Search } from 'lucide-react';
+import { Layers3, Search, ChevronRight, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
@@ -7,7 +7,7 @@ import useMediaStore from '../store/useMediaStore';
 import useGroupStore from '../store/useGroupStore';
 import useSystemStore from '../store/useSystemStore';
 import ProductSearchBar from '../components/products/ProductSearchBar';
-import CatalogCard from '../components/products/CatalogCard';
+import CategoryCard from '../components/home/CategoryCard';
 import ProductCardSimple from '../components/products/ProductCardSimple';
 import LoadingSkeleton from '../components/products/LoadingSkeleton';
 import EmptyState from '../components/products/EmptyState';
@@ -37,6 +37,9 @@ const getProductsPageCopy = (language = 'ar') => (
         emptyCatalogsDescription: 'عندما تتوفر أقسام مرتبطة بمنتجات ظاهرة في المتجر ستظهر هنا تلقائيًا.',
         emptyCategoryTitle: 'لا يوجد بها عناصر',
         emptyCategoryDescription: 'هذا القسم فارغ حاليًا، ويمكنك العودة لاختيار قسم آخر.',
+        subCategories: 'الأقسام الفرعية',
+        products: 'المنتجات',
+        home: 'الرئيسية',
       }
     : {
         pageKicker: 'Lighter and clearer storefront',
@@ -54,6 +57,9 @@ const getProductsPageCopy = (language = 'ar') => (
         emptyCatalogsDescription: 'Collections linked to visible storefront products will appear here automatically.',
         emptyCategoryTitle: 'There are no items in this category',
         emptyCategoryDescription: 'This category is currently empty, and you can return to choose another one.',
+        subCategories: 'Sub-categories',
+        products: 'Products',
+        home: 'Home',
       }
 );
 
@@ -75,6 +81,9 @@ const Products = () => {
 
   const activeCategoryParam = searchParams.get('category') || '';
   const activeRequestId = searchParams.get('request') || '';
+
+  // ── Hierarchical navigation state ──────────────────────────────────────
+  const [currentParentId, setCurrentParentId] = useState(null);
 
   useEffect(() => {
     loadProducts();
@@ -118,6 +127,108 @@ const Products = () => {
       .filter((category) => category.id !== 'all'),
     [categories, language, storefrontProducts]
   );
+
+  // ── Hierarchy helpers ──────────────────────────────────────────────────
+
+  /** Bulletproof parent ID extractor — handles string, ObjectId, populated object, undefined, empty string */
+  const getParentId = useCallback((cat) => {
+    if (!cat || !cat.parentCategory) return null;
+    const p = cat.parentCategory;
+    if (typeof p === 'object') return p._id || p.id || String(p) || null;
+    if (typeof p === 'string') { const trimmed = p.trim(); return trimmed || null; }
+    return String(p) || null;
+  }, []);
+
+  // Map of parentId → array of child categories
+  const childrenMap = useMemo(() => {
+    const map = new Map();
+    for (const cat of storefrontCategories) {
+      const parentId = getParentId(cat);
+      if (!map.has(parentId)) map.set(parentId, []);
+      map.get(parentId).push(cat);
+    }
+    return map;
+  }, [storefrontCategories, getParentId]);
+
+  // Check if a category has sub-categories
+  const hasChildren = useCallback(
+    (catId) => (childrenMap.get(catId) || []).length > 0,
+    [childrenMap]
+  );
+
+  // ── Sync URL ?category= param with drill-down state on mount ───────────
+  // If Dashboard navigates to /products?category=PARENT_ID, auto-drill-down
+  useEffect(() => {
+    if (!activeCategoryParam || isLoading) return;
+    // Only act once: if we haven't drilled down yet
+    if (currentParentId !== null) return;
+
+    const catId = activeCategoryParam.trim();
+    const catExists = storefrontCategories.some((c) => c.id === catId);
+    if (!catExists) return;
+
+    if (hasChildren(catId)) {
+      // It's a parent category — drill down immediately
+      setCurrentParentId(catId);
+      // Clear the URL param so it doesn't interfere
+      const next = new URLSearchParams(searchParams);
+      next.delete('category');
+      startTransition(() => {
+        setSearchParams(next, { replace: true });
+      });
+    }
+    // If it's a leaf category, the existing currentCatalog logic handles it
+  }, [activeCategoryParam, isLoading, currentParentId, storefrontCategories, hasChildren, searchParams, setSearchParams]);
+
+  // Categories at the current level — direct filter with robust string comparison
+  const currentCategories = useMemo(
+    () => storefrontCategories.filter((cat) => {
+      const pid = getParentId(cat);
+      if (currentParentId === null) return pid === null;
+      return String(pid || '').trim() === String(currentParentId || '').trim();
+    }),
+    [storefrontCategories, currentParentId, getParentId]
+  );
+
+  // Build breadcrumb trail
+  const breadcrumbTrail = useMemo(() => {
+    if (!currentParentId) return [];
+    const catMap = new Map(storefrontCategories.map((c) => [c.id, c]));
+    const trail = [];
+    let id = currentParentId;
+    while (id) {
+      const cat = catMap.get(id);
+      if (!cat) break;
+      trail.unshift(cat);
+      id = getParentId(cat);
+    }
+    return trail;
+  }, [storefrontCategories, currentParentId]);
+
+  // Get all descendant IDs recursively for product filtering
+  const getDescendantIds = useCallback((parentId) => {
+    const ids = new Set();
+    const queue = [parentId];
+    while (queue.length > 0) {
+      const id = queue.shift();
+      const children = childrenMap.get(id) || [];
+      for (const child of children) {
+        ids.add(child.id);
+        queue.push(child.id);
+      }
+    }
+    return ids;
+  }, [childrenMap]);
+
+  // Products for the EXACT current category only (strict, no descendant rollup)
+  const currentProducts = useMemo(() => {
+    if (!currentParentId) return [];
+    return storefrontProducts.filter((p) =>
+      String(p.category || '').trim() === String(currentParentId).trim()
+    );
+  }, [currentParentId, storefrontProducts]);
+
+  // ── Existing selection logic ───────────────────────────────────────────
 
   const selectedProduct = useMemo(
     () => storefrontProducts.find((product) => product.id === activeRequestId) || null,
@@ -169,22 +280,34 @@ const Products = () => {
     storefrontCategories,
   ]);
 
-  const openCatalog = useCallback((catalogId) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('category', catalogId);
-    next.delete('request');
-    setSearchResetSignal((value) => value + 1);
+  // ── Navigation handlers ────────────────────────────────────────────────
 
-    startTransition(() => {
-      setSearchParams(next);
-    });
-  }, [searchParams, setSearchParams]);
+  const handleCategoryClick = useCallback((catId) => {
+    if (hasChildren(catId)) {
+      // Drill down into sub-categories
+      setCurrentParentId(catId);
+    } else {
+      // Leaf category — open it via URL param to show products
+      const next = new URLSearchParams(searchParams);
+      next.set('category', catId);
+      next.delete('request');
+      setSearchResetSignal((value) => value + 1);
+      startTransition(() => {
+        setSearchParams(next);
+      });
+    }
+  }, [hasChildren, searchParams, setSearchParams]);
+
+  const openCatalog = useCallback((catalogId) => {
+    handleCategoryClick(catalogId);
+  }, [handleCategoryClick]);
 
   const resetToCatalogs = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete('category');
     next.delete('request');
     setSearchResetSignal((value) => value + 1);
+    setCurrentParentId(null);
 
     startTransition(() => {
       setSearchParams(next);
@@ -209,7 +332,26 @@ const Products = () => {
     });
   }, [searchParams, setSearchParams]);
 
+  const navigateBreadcrumb = useCallback((catId) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('category');
+    next.delete('request');
+    setSearchResetSignal((value) => value + 1);
+    setCurrentParentId(catId);
+    startTransition(() => {
+      setSearchParams(next);
+    });
+  }, [searchParams, setSearchParams]);
+
   const showInitialLoading = isLoading && storefrontProducts.length === 0 && storefrontCategories.length === 0;
+
+  // When viewing a specific leaf category via URL param
+  const isViewingLeafCategory = Boolean(currentCatalog);
+
+  // Products to display — from drill-down OR from leaf category selection
+  const displayProducts = isViewingLeafCategory
+    ? catalogProducts
+    : (currentParentId ? currentProducts : []);
 
   return (
     <div className="space-y-6 pb-4">
@@ -232,15 +374,58 @@ const Products = () => {
         <LoadingSkeleton variant={currentCatalog ? 'products' : 'catalogs'} />
       )}
 
-      {!showInitialLoading && currentCatalog && (
+      {/* ── Breadcrumb navigation ─────────────────────────────────────── */}
+      {!showInitialLoading && (currentParentId || isViewingLeafCategory) && (
+        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-1 text-sm">
+          <button
+            onClick={resetToCatalogs}
+            className="font-medium text-[var(--color-primary)] hover:underline"
+          >
+            {copy.home}
+          </button>
+          {breadcrumbTrail.map((crumb) => (
+            <span key={crumb.id} className="flex items-center gap-1">
+              <ChevronRight className="h-3.5 w-3.5 text-[var(--color-text-secondary)]" />
+              <button
+                onClick={() => navigateBreadcrumb(crumb.id)}
+                className="text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-primary)] hover:underline"
+              >
+                {crumb.title}
+              </button>
+            </span>
+          ))}
+        </nav>
+      )}
+
+      {/* ── Category & Product grid ────────────────────────────────── */}
+      {!showInitialLoading && (
         <>
-          {catalogProducts.length > 0 ? (
+          {/* Sub-categories at current level */}
+          {currentCategories.length > 0 && (
+            <section className="grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+              {currentCategories.map((catalog, index) => (
+                <CategoryCard
+                  key={catalog.id}
+                  category={catalog}
+                  active={false}
+                  index={index}
+                  onSelect={openCatalog}
+                />
+              ))}
+            </section>
+          )}
+
+          {/* Products — from leaf category or parent drill-down */}
+          {displayProducts.length > 0 && (
             <section className="grid grid-cols-3 gap-0">
-              {catalogProducts.map((product) => (
+              {displayProducts.map((product) => (
                 <ProductCardSimple key={product.id} product={product} onOpen={openProduct} />
               ))}
             </section>
-          ) : (
+          )}
+
+          {/* Empty state — inside a category with no children and no products */}
+          {(currentParentId || isViewingLeafCategory) && currentCategories.length === 0 && displayProducts.length === 0 && (
             <EmptyState
               icon={Layers3}
               title={copy.emptyCategoryTitle}
@@ -249,28 +434,16 @@ const Products = () => {
               onAction={resetToCatalogs}
             />
           )}
-        </>
-      )}
 
-      {!showInitialLoading && !currentCatalog && (
-        storefrontCategories.length > 0 ? (
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {storefrontCategories.map((catalog) => (
-              <CatalogCard
-                key={catalog.id}
-                catalog={catalog}
-                isRTL={isRTL}
-                onOpen={openCatalog}
-              />
-            ))}
-          </section>
-        ) : (
-          <EmptyState
-            icon={Search}
-            title={copy.emptyCatalogsTitle}
-            description={copy.emptyCatalogsDescription}
-          />
-        )
+          {/* Empty state — root level has no categories at all */}
+          {!currentParentId && !isViewingLeafCategory && currentCategories.length === 0 && (
+            <EmptyState
+              icon={Search}
+              title={copy.emptyCatalogsTitle}
+              description={copy.emptyCatalogsDescription}
+            />
+          )}
+        </>
       )}
 
       {selectedProduct ? (

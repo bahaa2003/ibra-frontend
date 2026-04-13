@@ -1014,7 +1014,7 @@ const AdminUsers = () => {
                   >
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>
-                        {group.name}
+                        {group.name} ({group.discount ?? group.percentage ?? 0}%)
                       </option>
                     ))}
                   </select>
@@ -1166,7 +1166,7 @@ const AdminUsers = () => {
             >
               {(groups || []).map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.name}
+                  {group.name} ({group.discount ?? group.percentage ?? 0}%)
                 </option>
               ))}
             </select>

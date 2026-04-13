@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, FileImage, Upload, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,8 @@ const UploadReceiptBox = ({ onFileUpload }) => {
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-  const maxSize = 5 * 1024 * 1024;
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'];
+  const maxSize = 20 * 1024 * 1024;
 
   const validateFile = (file) => {
     if (!allowedTypes.includes(file.type)) return t('payments.upload.invalidType');

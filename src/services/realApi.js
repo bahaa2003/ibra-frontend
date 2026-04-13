@@ -27,7 +27,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api
 
 const http = axios.create({
   baseURL: API_BASE,
-  timeout: 15_000,
+  timeout: 180_000,
   // NOTE: Do NOT set a default Content-Type here.
   // Axios auto-sets 'application/json' for object bodies and
   // 'multipart/form-data; boundary=…' for FormData bodies.
@@ -244,7 +244,7 @@ const requestTokenRefresh = async (refreshToken) => {
     `${API_BASE}${REFRESH_ENDPOINT}`,
     { refreshToken },
     {
-      timeout: 15_000,
+      timeout: 180_000,
       headers: { 'Content-Type': 'application/json' },
     }
   );
@@ -1027,16 +1027,31 @@ const normaliseCurrency = (c) => {
  */
 const normaliseCategory = (c) => {
   if (!c) return null;
+
+  // Bulletproof parentCategory extraction
+  const rawParent = c.parentCategory;
+  let parentCategory = null;
+  if (rawParent) {
+    if (typeof rawParent === 'object') {
+      parentCategory = String(rawParent._id || rawParent.id || '').trim() || null;
+    } else if (typeof rawParent === 'string') {
+      parentCategory = rawParent.trim() || null;
+    } else {
+      parentCategory = String(rawParent).trim() || null;
+    }
+  }
+
   return {
     ...c,
     id: c._id || c.id,
-    _id: undefined,
+    _id: c._id || c.id,
     name: c.name || '',
     nameAr: c.nameAr || '',
     image: resolveImageUrl(c.image),
     slug: c.slug || '',
     sortOrder: c.sortOrder ?? 0,
     isActive: c.isActive !== false,
+    parentCategory,
   };
 };
 
@@ -1588,6 +1603,7 @@ const realApi = {
         image: categoryData.image || null,
         sortOrder: categoryData.sortOrder ?? 0,
         isActive: categoryData.isActive !== false,
+        parentCategory: categoryData.parentCategory || null,
       };
       const res = await http.post('/admin/categories', body);
       return normaliseCategory(unwrap(res)?.category || unwrap(res));
@@ -2164,6 +2180,23 @@ const realApi = {
     },
   },
 
+  // ── Public Catalog (no auth required) ─────────────────────────────────
+  publicCatalog: {
+    /**
+     * GET /api/public/catalog — no auth token needed.
+     * Returns { categories, products } with ALL pricing fields stripped.
+     */
+    fetch: async () => {
+      const res = await http.get('/public/catalog');
+      const data = res.data?.data || {};
+      const rawCategories = Array.isArray(data.categories) ? data.categories : [];
+      return {
+        categories: rawCategories.map(normaliseCategory).filter(Boolean),
+        products: Array.isArray(data.products) ? data.products : [],
+      };
+    },
+  },
+
   // ── Orders ───────────────────────────────────────────────────────────────
   orders: {
     /**
@@ -2176,6 +2209,36 @@ const realApi = {
       const data = unwrap(res);
       const orders = Array.isArray(data) ? data : (data?.orders || []);
       return orders.map(normaliseOrder);
+    },
+
+    /**
+     * GET /admin/orders?page=X&limit=Y (admin only — with pagination metadata).
+     *
+     * Returns { orders: NormalisedOrder[], pagination: { page, limit, total, pages } }.
+     * Used by AdminOrders page for numbered pagination.
+     *
+     * @param {Object}  [params]
+     * @param {number}  [params.page=1]
+     * @param {number}  [params.limit=20]
+     * @param {string}  [params.status]
+     * @param {string}  [params.startDate] - ISO date string (from)
+     * @param {string}  [params.endDate]   - ISO date string (to)
+     */
+    listPaginated: async ({ page = 1, limit = 20, status, startDate, endDate } = {}) => {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(limit));
+      if (status && status !== 'all') params.set('status', status);
+      if (startDate) params.set('from', startDate);
+      if (endDate) params.set('to', endDate);
+
+      const res = await http.get(`/admin/orders?${params.toString()}`);
+      const raw = res.data;
+      const ordersArr = Array.isArray(raw?.data) ? raw.data : (raw?.data?.orders || []);
+      return {
+        orders: ordersArr.map(normaliseOrder),
+        pagination: raw?.pagination || { page, limit, total: ordersArr.length, pages: 1 },
+      };
     },
 
     /**
@@ -2550,8 +2613,8 @@ const realApi = {
     /**
      * PATCH /admin/currencies/:code → update currency fields.
      *
-     * BE Joi: { platformRate (req), markupPercentage, isActive }
-     * FE may send: { rate, platformRate, markupPercentage, isActive }
+     * BE Joi: { platformRate (req), markupPercentage, isActive, applyDebtAdjustment }
+     * FE may send: { rate, platformRate, markupPercentage, isActive, applyDebtAdjustment }
      */
     updateCurrency: async (code, updates, _actorContext) => {
       const body = {};
@@ -2560,9 +2623,13 @@ const realApi = {
       if (rate !== undefined) body.platformRate = Number(rate);
       if (updates.markupPercentage !== undefined) body.markupPercentage = Number(updates.markupPercentage);
       if (updates.isActive !== undefined) body.isActive = updates.isActive;
+      if (updates.applyDebtAdjustment) body.applyDebtAdjustment = true;
 
       const res = await http.patch(`/admin/currencies/${code}`, body);
-      return normaliseCurrency(unwrap(res)?.currency || unwrap(res));
+      const data = unwrap(res);
+      const currency = normaliseCurrency(data?.currency || data);
+      const debtAdjustment = data?.debtAdjustment || null;
+      return { ...currency, debtAdjustment };
     },
 
     /**

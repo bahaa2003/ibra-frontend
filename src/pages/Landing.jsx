@@ -116,7 +116,7 @@ const Landing = () => {
                     <ArrowRight className="h-5 w-5 rtl:rotate-180" />
                   </Button>
                 </Link>
-                <Link to="/products">
+                <Link to="/catalog">
                   <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                     {t('home.browseStore')}
                   </Button>

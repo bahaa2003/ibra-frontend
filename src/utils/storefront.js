@@ -220,15 +220,25 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
       tone: 'all',
       sortOrder: 0,
     },
-    ...safeCategories.map((category) => ({
-      id: String(category?.id || '').trim(),
-      image: getCategoryDisplayImage(category),
-      title: getCategoryDisplayTitle(category, language),
-      subtitle: getCategoryDisplaySubtitle(category, language),
-      count: countsByCategory.get(String(category?.id || '').trim()) || 0,
-      tone: getCategoryDisplayKey(category),
-      sortOrder: Number(category?.sortOrder ?? category?.displayOrder),
-    })),
+    ...safeCategories.map((category) => {
+      const rawParent = category?.parentCategory;
+      let parentCategory = null;
+      if (rawParent) {
+        if (typeof rawParent === 'object') parentCategory = rawParent._id || rawParent.id || String(rawParent) || null;
+        else if (typeof rawParent === 'string') { const trimmed = rawParent.trim(); parentCategory = trimmed || null; }
+        else parentCategory = String(rawParent) || null;
+      }
+      return {
+        id: String(category?.id || '').trim(),
+        image: getCategoryDisplayImage(category),
+        title: getCategoryDisplayTitle(category, language),
+        subtitle: getCategoryDisplaySubtitle(category, language),
+        count: countsByCategory.get(String(category?.id || '').trim()) || 0,
+        tone: getCategoryDisplayKey(category),
+        sortOrder: Number(category?.sortOrder ?? category?.displayOrder),
+        parentCategory,
+      };
+    }),
   ];
 
   return overview.sort((left, right) => {

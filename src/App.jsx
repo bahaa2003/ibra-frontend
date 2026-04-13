@@ -22,6 +22,7 @@ const AccountRejected = lazy(() => import('./pages/AccountRejected'));
 const AccountVerificationRequired = lazy(() => import('./pages/AccountVerificationRequired'));
 const EmailVerified = lazy(() => import('./pages/EmailVerified'));
 const Landing = lazy(() => import('./pages/Landing'));
+const PublicCatalog = lazy(() => import('./pages/PublicCatalog'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Orders = lazy(() => import('./pages/Orders'));
@@ -69,6 +70,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={renderSuspended(<Landing />)} />
+              <Route path="/catalog" element={renderSuspended(<PublicCatalog />)} />
               <Route path="/auth" element={renderSuspended(<Auth />)} />
               <Route path="/login" element={renderSuspended(<Auth />)} />
               <Route path="/email-verified" element={renderSuspended(<EmailVerified />)} />

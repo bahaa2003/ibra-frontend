@@ -249,6 +249,7 @@ const AdminProducts = () => {
         name: '',
         sortOrder: 0,
         image: '',
+        parentCategory: '',
     });
     const [providers, setProviders] = useState([]);
     const [providerProducts, setProviderProducts] = useState([]);
@@ -559,8 +560,8 @@ const AdminProducts = () => {
     const handleImageUpload = async (e, setForm, uploadCategory = 'products') => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-            addToast('يجب أن يكون حجم الصورة أقل من 5 ميجابايت', 'error');
+        if (file.size > 20 * 1024 * 1024) {
+            addToast(isEnglish ? 'Image must be under 20MB' : 'يجب أن يكون حجم الصورة أقل من 20 ميجابايت', 'error');
             return;
         }
         try {
@@ -855,10 +856,11 @@ const AdminProducts = () => {
                 name: String(category?.name || ''),
                 sortOrder: Number(category?.sortOrder ?? category?.displayOrder ?? 0),
                 image: String(category?.image || ''),
+                parentCategory: String(category?.parentCategory || ''),
             });
         } else {
             setEditingCategory(null);
-            setCategoryForm({ name: '', sortOrder: 0, image: '' });
+            setCategoryForm({ name: '', sortOrder: 0, image: '', parentCategory: '' });
         }
         setIsCategoryModalOpen(true);
     };
@@ -883,6 +885,7 @@ const AdminProducts = () => {
                     nameAr: '',
                     sortOrder: safeSortOrder,
                     image: categoryForm.image || '',
+                    parentCategory: categoryForm.parentCategory || null,
                 });
                 addToast(isEnglish ? 'Category updated' : 'تم تحديث القسم', 'success');
             } else {
@@ -891,6 +894,7 @@ const AdminProducts = () => {
                     nameAr: '',
                     sortOrder: safeSortOrder,
                     image: categoryForm.image || '',
+                    parentCategory: categoryForm.parentCategory || null,
                 });
                 addToast(isEnglish ? 'Category added' : 'تمت إضافة القسم', 'success');
             }
@@ -1121,9 +1125,27 @@ const AdminProducts = () => {
                     />
 
                     <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{isEnglish ? 'Parent Category (optional)' : 'القسم الرئيسي (اختياري)'}</label>
+                        <select
+                            className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
+                            value={categoryForm.parentCategory}
+                            onChange={(e) => setCategoryForm((prev) => ({ ...prev, parentCategory: e.target.value }))}
+                        >
+                            <option value="">{isEnglish ? '— None (Top Level) —' : '— بدون (قسم رئيسي) —'}</option>
+                            {(categories || [])
+                                .filter((c) => c.id !== editingCategory?.id)
+                                .map((c) => (
+                                    <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+                                        {c.name}{c.parentCategory ? ` (${isEnglish ? 'sub' : 'فرعي'})` : ''}
+                                    </option>
+                                ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{isEnglish ? 'Category Image (upload)' : 'صورة القسم (رفع)'}</label>
                         <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800/50">
-                            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setCategoryForm, 'categories')} className="hidden" id="category-image-upload" />
+                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setCategoryForm, 'categories')} className="hidden" id="category-image-upload" />
                             <label htmlFor="category-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
                                 {categoryForm.image
                                     ? <img src={resolveImageUrl(categoryForm.image)} alt="preview" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" />
@@ -1180,7 +1202,7 @@ const AdminProducts = () => {
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة المنتج (رفع)</label>
                                 <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800/50">
-                                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" />
+                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" />
                                     <label htmlFor="product-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
                                         {productForm.image ? <img src={resolveImageUrl(productForm.image)} alt="معاينة" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
                                     </label>

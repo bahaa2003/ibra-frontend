@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Trash2, PlusCircle } from 'lucide-react';
+import { Pencil, Trash2, PlusCircle, AlertTriangle } from 'lucide-react';
 import useSystemStore from '../../store/useSystemStore';
 import useAuthStore from '../../store/useAuthStore';
 import Card from '../../components/ui/Card';
@@ -24,9 +24,19 @@ const AdminCurrencies = () => {
 
   const [form, setForm] = useState(defaultForm);
   const [editingCode, setEditingCode] = useState('');
+  const [originalRate, setOriginalRate] = useState(null);
+  const [applyDebtAdjustment, setApplyDebtAdjustment] = useState(false);
   const [catalogCurrencies, setCatalogCurrencies] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [selectedCatalogCode, setSelectedCatalogCode] = useState('');
+
+  // Compute rate increase percentage dynamically
+  const rateIncreasePercent = useMemo(() => {
+    if (!editingCode || originalRate === null || originalRate <= 0) return null;
+    const newRate = Number(form.rate);
+    if (Number.isNaN(newRate) || newRate <= originalRate) return null;
+    return ((newRate - originalRate) / originalRate) * 100;
+  }, [editingCode, originalRate, form.rate]);
 
   useEffect(() => {
     loadCurrencies();
@@ -101,6 +111,8 @@ const AdminCurrencies = () => {
   const resetForm = () => {
     setForm(defaultForm);
     setEditingCode('');
+    setOriginalRate(null);
+    setApplyDebtAdjustment(false);
     setSelectedCatalogCode('');
   };
 
@@ -145,10 +157,22 @@ const AdminCurrencies = () => {
       rate: Number(form.rate),
     };
 
+    // Include debt adjustment flag when editing and rate increased
+    if (editingCode && applyDebtAdjustment && rateIncreasePercent > 0) {
+      payload.applyDebtAdjustment = true;
+    }
+
     try {
       if (editingCode) {
-        await updateCurrency(editingCode, payload, user);
-        addToast('تم تحديث العملة', 'success');
+        const result = await updateCurrency(editingCode, payload, user);
+        if (result?.debtAdjustment) {
+          addToast(
+            `تم تحديث العملة وتعديل ديون ${result.debtAdjustment.usersAdjusted} مستخدم (${rateIncreasePercent.toFixed(2)}%)`,
+            'success'
+          );
+        } else {
+          addToast('تم تحديث العملة', 'success');
+        }
       } else {
         await addCurrency(payload, user);
         addToast('تمت إضافة العملة', 'success');
@@ -161,6 +185,8 @@ const AdminCurrencies = () => {
 
   const handleEdit = (item) => {
     setEditingCode(item.code);
+    setOriginalRate(Number(item.rate));
+    setApplyDebtAdjustment(false);
     setForm({
       code: item.code,
       name: item.name,
@@ -244,6 +270,41 @@ const AdminCurrencies = () => {
             onChange={(e) => setForm((prev) => ({ ...prev, rate: e.target.value }))}
             placeholder="1"
           />
+
+          {/* ── Debt Adjustment Checkbox (visible only when editing + rate increased) ── */}
+          {editingCode && rateIncreasePercent > 0 && editingCode !== 'USD' && (
+            <div className="md:col-span-4">
+              <label
+                className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
+                  border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30
+                  hover:border-amber-400 dark:hover:border-amber-500"
+              >
+                <input
+                  type="checkbox"
+                  checked={applyDebtAdjustment}
+                  onChange={(e) => setApplyDebtAdjustment(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600
+                    focus:ring-amber-500 dark:border-gray-600 dark:bg-gray-800"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    <span>
+                      السعر ارتفع بنسبة{' '}
+                      <strong className="text-amber-900 dark:text-amber-200">
+                        {rateIncreasePercent.toFixed(2)}%
+                      </strong>
+                      {' '}— تطبيق هذه الزيادة على ديون المستخدمين؟
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    سيتم زيادة الأرصدة السالبة لجميع المستخدمين بنسبة {rateIncreasePercent.toFixed(2)}% لتعكس انخفاض قيمة العملة.
+                    {' '}(السعر القديم: {originalRate} → الجديد: {form.rate})
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
 
           <div className="md:col-span-4 flex gap-2">
             <Button type="submit">

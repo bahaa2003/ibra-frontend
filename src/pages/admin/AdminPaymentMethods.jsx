@@ -780,7 +780,7 @@ const AdminPaymentMethods = () => {
               <option value="">{tx('اختر مجموعة', 'Select a group')}</option>
               {paymentGroups.map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.name}
+                  {group.name} ({group.discount ?? group.percentage ?? 0}%)
                 </option>
               ))}
             </select>

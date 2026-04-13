@@ -34,6 +34,31 @@ const useOrderStore = create(
       ordersLastLoadedAt: 0,
       ordersLastLoadedScope: '',
 
+      // ── Admin paginated orders (separate from customer orders) ────────
+      adminOrders: [],
+      adminPagination: { page: 1, limit: 20, total: 0, pages: 0 },
+      adminOrdersLoading: false,
+
+      /**
+       * Fetch admin orders with server-side pagination.
+       * Does NOT use the regular orders cache — admin has its own state slice.
+       */
+      loadAdminOrders: async ({ page = 1, limit = 20, status, startDate, endDate } = {}) => {
+        set({ adminOrdersLoading: true });
+        try {
+          const result = await apiClient.orders.listPaginated({ page, limit, status, startDate, endDate });
+          set({
+            adminOrders: result.orders,
+            adminPagination: result.pagination,
+            adminOrdersLoading: false,
+          });
+          return result;
+        } catch (error) {
+          set({ adminOrdersLoading: false });
+          throw error;
+        }
+      },
+
       loadOrders: async (userId, { force = false } = {}) => {
         const scope = userId ? `user:${userId}` : 'all';
         const { orders, ordersLastLoadedAt, ordersLastLoadedScope } = get();
