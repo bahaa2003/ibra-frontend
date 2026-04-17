@@ -32,6 +32,7 @@ const defaultMethodForm = {
   type: 'mobile_wallet',
   feePercent: '0',
   accountNumber: '',
+  accountName: '',
   bankName: '',
   instructions: '',
   image: '',
@@ -284,6 +285,7 @@ const AdminPaymentMethods = () => {
       type: method.type,
       feePercent: String(method.feePercent ?? 0),
       accountNumber: method.accountNumber || '',
+      accountName: method.accountName || '',
       bankName: method.bankName || '',
       instructions: method.instructions || '',
       image: method.image || '',
@@ -373,6 +375,7 @@ const AdminPaymentMethods = () => {
       type: methodForm.type,
       feePercent: methodForm.feePercent,
       accountNumber: methodForm.accountNumber,
+      accountName: methodForm.accountName,
       bankName: methodForm.bankName,
       instructions: methodForm.instructions,
       image: methodForm.image,
@@ -616,6 +619,12 @@ const AdminPaymentMethods = () => {
                         {method.bankName}
                       </p>
                     )}
+                    {method.accountName && (
+                      <p>
+                        <span className="font-medium text-[var(--color-text)]">{tx('اسم صاحب الحساب:', 'Account Holder:')}</span>{' '}
+                        {method.accountName}
+                      </p>
+                    )}
                     {method.instructions && (
                       <p>
                         <span className="font-medium text-[var(--color-text)]">{tx('تعليمات:', 'Instructions:')}</span>{' '}
@@ -846,6 +855,13 @@ const AdminPaymentMethods = () => {
             value={methodForm.bankName}
             onChange={(event) => setMethodForm((prev) => ({ ...prev, bankName: event.target.value }))}
             placeholder={tx('يستخدم مع التحويل البنكي فقط', 'Used for bank transfer methods')}
+          />
+
+          <Input
+            label={tx('اسم صاحب الحساب (اختياري)', 'Account Holder Name (optional)')}
+            value={methodForm.accountName}
+            onChange={(event) => setMethodForm((prev) => ({ ...prev, accountName: event.target.value }))}
+            placeholder={tx('مثال: محمد أحمد', 'Example: John Doe')}
           />
 
           <div>

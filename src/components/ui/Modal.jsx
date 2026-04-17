@@ -9,7 +9,8 @@ const sizeClassNames = {
   xl: 'max-w-4xl',
 };
 
-const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
+const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', className: modalClassName }) => {
+  const backdropZ = modalClassName || 'z-50';
   return (
     <AnimatePresence>
       {isOpen && (
@@ -19,9 +20,9 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            className={cn('fixed inset-0 bg-black/70 backdrop-blur-sm', backdropZ)}
           />
-          <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4">
+          <div className={cn('pointer-events-none fixed inset-0 flex items-end justify-center p-3 sm:items-center sm:p-4', backdropZ)}>
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}

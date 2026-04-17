@@ -30,11 +30,11 @@ const AdminCurrencies = () => {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [selectedCatalogCode, setSelectedCatalogCode] = useState('');
 
-  // Compute rate increase percentage dynamically
-  const rateIncreasePercent = useMemo(() => {
+  // Compute rate change percentage dynamically (bidirectional)
+  const rateChangePercent = useMemo(() => {
     if (!editingCode || originalRate === null || originalRate <= 0) return null;
     const newRate = Number(form.rate);
-    if (Number.isNaN(newRate) || newRate <= originalRate) return null;
+    if (Number.isNaN(newRate) || newRate <= 0 || newRate === originalRate) return null;
     return ((newRate - originalRate) / originalRate) * 100;
   }, [editingCode, originalRate, form.rate]);
 
@@ -157,8 +157,8 @@ const AdminCurrencies = () => {
       rate: Number(form.rate),
     };
 
-    // Include debt adjustment flag when editing and rate increased
-    if (editingCode && applyDebtAdjustment && rateIncreasePercent > 0) {
+    // Include debt adjustment flag when editing and rate changed
+    if (editingCode && applyDebtAdjustment && rateChangePercent !== null) {
       payload.applyDebtAdjustment = true;
     }
 
@@ -167,7 +167,7 @@ const AdminCurrencies = () => {
         const result = await updateCurrency(editingCode, payload, user);
         if (result?.debtAdjustment) {
           addToast(
-            `تم تحديث العملة وتعديل ديون ${result.debtAdjustment.usersAdjusted} مستخدم (${rateIncreasePercent.toFixed(2)}%)`,
+            `تم تحديث العملة وتعديل ديون ${result.debtAdjustment.usersAdjusted} مستخدم (${Math.abs(rateChangePercent).toFixed(2)}%)`,
             'success'
           );
         } else {
@@ -271,34 +271,39 @@ const AdminCurrencies = () => {
             placeholder="1"
           />
 
-          {/* ── Debt Adjustment Checkbox (visible only when editing + rate increased) ── */}
-          {editingCode && rateIncreasePercent > 0 && editingCode !== 'USD' && (
+          {/* ── Debt Adjustment Checkbox (visible when editing + rate changed) ── */}
+          {editingCode && rateChangePercent !== null && editingCode !== 'USD' && (
             <div className="md:col-span-4">
               <label
-                className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                  border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30
-                  hover:border-amber-400 dark:hover:border-amber-500"
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
+                  ${rateChangePercent > 0
+                    ? 'border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/30 hover:border-amber-400 dark:hover:border-amber-500'
+                    : 'border-emerald-300 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/30 hover:border-emerald-400 dark:hover:border-emerald-500'
+                  }`}
               >
                 <input
                   type="checkbox"
                   checked={applyDebtAdjustment}
                   onChange={(e) => setApplyDebtAdjustment(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600
-                    focus:ring-amber-500 dark:border-gray-600 dark:bg-gray-800"
+                  className={`mt-0.5 h-4 w-4 rounded border-gray-300
+                    ${rateChangePercent > 0 ? 'text-amber-600 focus:ring-amber-500' : 'text-emerald-600 focus:ring-emerald-500'}
+                    dark:border-gray-600 dark:bg-gray-800`}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-300">
+                  <div className={`flex items-center gap-1.5 text-sm font-medium ${rateChangePercent > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
                     <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                     <span>
-                      السعر ارتفع بنسبة{' '}
-                      <strong className="text-amber-900 dark:text-amber-200">
-                        {rateIncreasePercent.toFixed(2)}%
-                      </strong>
-                      {' '}— تطبيق هذه الزيادة على ديون المستخدمين؟
+                      {rateChangePercent > 0
+                        ? <>السعر ارتفع بنسبة{' '}<strong className="text-amber-900 dark:text-amber-200">{Math.abs(rateChangePercent).toFixed(2)}%</strong>{' '}— تطبيق هذه الزيادة على ديون المستخدمين؟</>
+                        : <>السعر انخفض بنسبة{' '}<strong className="text-emerald-900 dark:text-emerald-200">{Math.abs(rateChangePercent).toFixed(2)}%</strong>{' '}— هل تريد تطبيق هذا الخصم على ديون المستخدمين؟</>
+                      }
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                    سيتم زيادة الأرصدة السالبة لجميع المستخدمين بنسبة {rateIncreasePercent.toFixed(2)}% لتعكس انخفاض قيمة العملة.
+                  <p className={`mt-1 text-xs ${rateChangePercent > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                    {rateChangePercent > 0
+                      ? `سيتم زيادة الأرصدة السالبة لجميع المستخدمين بنسبة ${Math.abs(rateChangePercent).toFixed(2)}% لتعكس انخفاض قيمة العملة.`
+                      : `سيتم تخفيض الأرصدة السالبة لجميع المستخدمين بنسبة ${Math.abs(rateChangePercent).toFixed(2)}% لتعكس ارتفاع قيمة العملة.`
+                    }
                     {' '}(السعر القديم: {originalRate} → الجديد: {form.rate})
                   </p>
                 </div>

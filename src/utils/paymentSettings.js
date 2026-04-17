@@ -1,4 +1,4 @@
-﻿const PAYMENT_METHOD_FIELDS = {
+const PAYMENT_METHOD_FIELDS = {
   mobile_wallet: ['amount'],
   bank_transfer: ['amount'],
   credit_card: ['amount', 'cardNumber', 'expiryDate', 'cvv'],
@@ -97,6 +97,7 @@ export const normalizePaymentMethod = (method = {}, index = 0) => {
     description: String(method?.description || '').trim(),
     type,
     accountNumber: String(method?.accountNumber || '').trim(),
+    accountName: String(method?.accountName || '').trim(),
     bankName: String(method?.bankName || '').trim(),
     feePercent: normalizeFeePercent(method?.feePercent),
     instructions: String(method?.instructions || '').trim(),

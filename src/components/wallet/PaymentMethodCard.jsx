@@ -108,6 +108,14 @@ const PaymentMethodCard = ({ method, onSelect, index }) => {
                   <span>{t('payments.copyAccount', { defaultValue: dir === 'rtl' ? 'نسخ' : 'Copy' })}</span>
                 </span>
               </button>
+              {method.accountName && (
+                <div className={`mt-2.5 rounded-[12px] border border-[#dcc79a]/60 bg-[linear-gradient(180deg,rgba(255,248,227,0.72),rgba(255,255,255,0.62))] px-3 py-2 ${isRTL ? 'text-right' : 'text-left'}`}>
+                  <p className="text-[10px] font-semibold tracking-[0.08em] text-[#a37b35]">
+                    {dir === 'rtl' ? 'اسم صاحب الحساب' : 'Account holder'}
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-[#6f4f18]">{method.accountName}</p>
+                </div>
+              )}
               {method.bankName && (
                 <div className={`mt-2 text-xs leading-5 text-[#8f6e36] ${isRTL ? 'text-right' : 'text-left'}`}>
                   {method.bankName}

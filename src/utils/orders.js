@@ -579,6 +579,20 @@ export const getCustomerOrderFeedback = (order = {}, language = 'ar') => {
     };
   }
 
+  if (statusKey === 'incomplete') {
+    const reason = String(order?.rejectionReason || '').trim();
+    return {
+      tone: 'danger',
+      title: isArabic ? 'تم رفض الطلب' : 'Your order was rejected',
+      description: reason
+        ? (isArabic ? `سبب الرفض: ${reason}` : `Rejection reason: ${reason}`)
+        : (isArabic
+          ? 'تم رفض هذا الطلب أو تعذر تنفيذه. يرجى التواصل مع الإدارة للمزيد من التفاصيل.'
+          : 'This order was rejected or could not be fulfilled. Please contact support for more details.'),
+      actionLabel: isArabic ? 'عرض التفاصيل' : 'View details',
+    };
+  }
+
   if (typeKey === 'manual') {
     return {
       tone: 'warning',

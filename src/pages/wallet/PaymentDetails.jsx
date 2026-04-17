@@ -246,6 +246,12 @@ const PaymentDetails = () => {
                   <span className="text-white font-mono">{selectedMethod.accountNumber}</span>
                 </div>
               )}
+              {selectedMethod.accountName && (
+                <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
+                  <span className="text-gray-400">باسم:</span>
+                  <span className="text-white">{selectedMethod.accountName}</span>
+                </div>
+              )}
               {selectedMethod.name && (
                 <div className={`flex justify-between items-center ${isRTL ? 'flex-row-reverse' : ''}`}>
                   <span className="text-gray-400">اسم المستلم:</span>

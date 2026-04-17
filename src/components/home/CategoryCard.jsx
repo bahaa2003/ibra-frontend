@@ -11,7 +11,7 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
     transition={{ delay: index * 0.05, duration: 0.28 }}
     whileHover={{ y: -3 }}
     className={cn(
-      'group relative overflow-hidden rounded-2xl bg-transparent text-start shadow-[0_18px_34px_-30px_rgba(15,23,42,0.34)] transition-all',
+      'group relative flex h-full flex-col overflow-hidden rounded-2xl bg-transparent text-start shadow-[0_18px_34px_-30px_rgba(15,23,42,0.34)] transition-all hover:z-10',
       active
         ? 'shadow-[0_20px_38px_-28px_rgba(212,175,55,0.24)]'
         : 'hover:shadow-[0_20px_38px_-30px_rgba(15,23,42,0.32)]'
@@ -23,10 +23,10 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
         alt={category.title}
         loading="lazy"
         decoding="async"
-        sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
+        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
         className={cn(
-          'h-full w-full bg-transparent object-cover transition-transform duration-700',
-          category.id === 'all' ? 'scale-[0.7] object-contain p-5' : 'scale-[1.01] group-hover:scale-[1.04]'
+          'h-full w-full bg-transparent object-contain transition-transform duration-700',
+          category.id === 'all' ? 'scale-[0.7] p-5' : 'scale-[1.01] group-hover:scale-[1.04]'
         )}
       />
 
@@ -44,7 +44,7 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
       </div>
     </div>
 
-    <div className="px-3 pb-3 pt-2 text-center">
+    <div className="px-3 pb-4 pt-2 text-center">
       <h3 className="line-clamp-1 text-[13px] font-semibold leading-5 text-[var(--color-text)] sm:text-[15px]">
         {category.title}
       </h3>

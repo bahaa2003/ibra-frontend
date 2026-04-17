@@ -253,7 +253,9 @@ const OrderDetailsDrawer = ({
                           'p-3.5',
                           customerFeedback.tone === 'success'
                             ? 'border-[color:rgb(var(--color-success-rgb)/0.28)] bg-[color:rgb(var(--color-success-rgb)/0.1)]'
-                            : 'border-[color:rgb(var(--color-warning-rgb)/0.28)] bg-[color:rgb(var(--color-warning-rgb)/0.1)]'
+                            : customerFeedback.tone === 'danger'
+                              ? 'border-[color:rgb(var(--color-error-rgb)/0.28)] bg-[color:rgb(var(--color-error-rgb)/0.1)]'
+                              : 'border-[color:rgb(var(--color-warning-rgb)/0.28)] bg-[color:rgb(var(--color-warning-rgb)/0.1)]'
                         )}
                       >
                         <p className="text-sm font-semibold text-[var(--color-text)]">
@@ -261,6 +263,18 @@ const OrderDetailsDrawer = ({
                         </p>
                         <p className="mt-1.5 text-xs leading-6 text-[var(--color-text-secondary)]">
                           {customerFeedback.description}
+                        </p>
+                      </Card>
+                    ) : null}
+
+                    {/* ── Rejection Reason (admin view) ──────────────────── */}
+                    {view === 'admin' && order.rejectionReason ? (
+                      <Card variant="flat" className="border-[color:rgb(var(--color-error-rgb)/0.28)] bg-[color:rgb(var(--color-error-rgb)/0.08)] p-3.5">
+                        <p className="text-sm font-semibold text-[var(--color-text)]">
+                          {isArabic ? 'سبب الرفض' : 'Rejection reason'}
+                        </p>
+                        <p className="mt-1.5 text-sm leading-6 text-[var(--color-text-secondary)]">
+                          {order.rejectionReason}
                         </p>
                       </Card>
                     ) : null}

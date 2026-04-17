@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Clock3,
@@ -11,6 +11,9 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Card from '../../components/ui/Card';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
+import { textareaClassName } from '../../components/ui/Input';
 import OrdersFiltersBar from '../../components/orders/OrdersFiltersBar';
 import OrdersMobileCards from '../../components/orders/OrdersMobileCards';
 import EmptyOrdersState from '../../components/orders/EmptyOrdersState';
@@ -266,8 +269,50 @@ const AdminOrders = () => {
     setPage(1); // Reset to page 1 when changing rows per page
   }, []);
 
+  // ── Rejection modal state ──────────────────────────────────────────────
+  const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+  const [rejectionText, setRejectionText] = useState('');
+  const pendingRejectionRef = useRef(null); // { order, nextStatus }
+
+  const confirmRejection = useCallback(() => {
+    const reason = rejectionText.trim();
+    if (!reason) {
+      addToast(
+        isArabic ? 'يجب إدخال سبب الرفض لتأكيد العملية.' : 'A rejection reason is required to proceed.',
+        'warning'
+      );
+      return;
+    }
+    const { order, nextStatus } = pendingRejectionRef.current || {};
+    if (!order || !nextStatus) return;
+
+    setRejectionModalOpen(false);
+    setRejectionText('');
+    pendingRejectionRef.current = null;
+
+    // Proceed with the status update
+    executeStatusUpdate(order, nextStatus, reason);
+  }, [rejectionText, isArabic, addToast]);
+
+  const cancelRejection = useCallback(() => {
+    setRejectionModalOpen(false);
+    setRejectionText('');
+    pendingRejectionRef.current = null;
+  }, []);
+
   const handleUpdateStatus = useCallback(async (order, nextStatus) => {
     const nextStatusLabel = getManualOrderStatusLabel(nextStatus, isArabic ? 'ar' : 'en');
+    const normalizedNext = String(nextStatus || '').toLowerCase();
+
+    // ── Rejection → open the custom modal ────────────────────────────────
+    if (['rejected', 'failed', 'denied', 'cancelled', 'canceled'].includes(normalizedNext)) {
+      pendingRejectionRef.current = { order, nextStatus };
+      setRejectionText('');
+      setRejectionModalOpen(true);
+      return;
+    }
+
+    // ── Non-rejection → standard confirmation ────────────────────────────
     const confirmationMessage = isArabic
       ? `هل تريد تحديث حالة هذا الطلب إلى "${nextStatusLabel}"؟`
       : `Do you want to update this order to "${nextStatusLabel}"?`;
@@ -276,10 +321,15 @@ const AdminOrders = () => {
       return;
     }
 
+    executeStatusUpdate(order, nextStatus, null);
+  }, [isArabic]);
+
+  const executeStatusUpdate = useCallback(async (order, nextStatus, rejectionReason) => {
+    const nextStatusLabel = getManualOrderStatusLabel(nextStatus, isArabic ? 'ar' : 'en');
     setActionOrderId(order.id);
 
     try {
-      await updateOrderStatus(order.id, nextStatus, order);
+      await updateOrderStatus(order.id, nextStatus, { ...order, rejectionReason });
       await Promise.allSettled([
         Promise.resolve(loadUsers()),
         Promise.resolve(loadAdminOrders({
@@ -482,6 +532,40 @@ const AdminOrders = () => {
           />
         </Suspense>
       ) : null}
+
+      {/* ── Rejection Reason Modal ────────────────────────────────────────── */}
+      <Modal
+        isOpen={rejectionModalOpen}
+        onClose={cancelRejection}
+        title={isArabic ? 'سبب رفض الطلب' : 'Order Rejection Reason'}
+        className="z-[90]"
+        footer={(
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button variant="ghost" className="flex-1" onClick={cancelRejection}>
+              {isArabic ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={confirmRejection}>
+              {isArabic ? 'تأكيد الرفض' : 'Confirm Rejection'}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            {isArabic
+              ? 'يرجى كتابة السبب الذي سيظهر للعميل عند رفض الطلب.'
+              : 'Please write the reason that will be shown to the customer when the order is rejected.'}
+          </p>
+          <textarea
+            className={textareaClassName}
+            value={rejectionText}
+            onChange={(e) => setRejectionText(e.target.value)}
+            placeholder={isArabic ? 'اكتب سبب الرفض هنا...' : 'Enter rejection reason here...'}
+            autoFocus
+            rows={4}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -111,6 +111,7 @@ const serializePaymentGroupsForApi = (groups) => normalizePaymentGroups(groups, 
     description: method.description,
     type: method.type,
     accountNumber: method.accountNumber,
+    accountName: method.accountName,
     bankName: method.bankName,
     feePercent: method.feePercent,
     instructions: method.instructions,
@@ -2307,69 +2308,25 @@ const realApi = {
     },
 
     /**
-     * Map FE status strings to BE admin action routes.
+     * Map FE status strings to the SINGLE unified backend endpoint.
      *
-     * BE has only two admin actions:
-     *   POST /admin/orders/:id/retry  — re-submit FAILED order to provider
-     *   POST /admin/orders/:id/refund — refund + mark as FAILED
+     * PATCH /admin/orders/:id/status   { status, rejectionReason? }
      *
-     * There is NO admin endpoint for manually marking as COMPLETED —
-     * that's handled automatically by the provider fulfillment engine.
-     *
-     * FE status string → BE action:
-     *   'failed' | 'rejected' | 'denied' | 'refunded'  → POST /admin/orders/:id/refund
-     *   'processing' | 'retry' | 'pending'              → POST /admin/orders/:id/retry
-     *   'completed' | 'approved'                        → POST /admin/orders/:id/complete
+     * This replaces the previous multi-endpoint fallback approach that caused
+     * cascading 404/422 errors.
      */
     updateStatus: async (orderId, status, orderContext = null) => {
       const normalizedOrderId = String(orderId || '').trim();
       const normalised = String(status || '').trim().toLowerCase();
       const body = { status: normalised };
-      const fulfillmentMode = String(orderContext?.fulfillmentMode || orderContext?.executionType || '').toLowerCase();
-      const isManualOrder = !orderContext?.supplierId && fulfillmentMode !== 'auto' && fulfillmentMode !== 'automatic';
-      const genericEndpoints = [
-        ['patch', `/admin/orders/${normalizedOrderId}`, body],
-        ['patch', `/orders/${normalizedOrderId}`, body],
-        ['patch', `/admin/orders/${normalizedOrderId}/status`, body],
-        ['patch', `/orders/${normalizedOrderId}/status`, body],
-      ];
 
-      const actionEndpoints = [];
-
-      if (['completed', 'approved'].includes(normalised)) {
-        actionEndpoints.push(
-          ['patch', `/orders/${normalizedOrderId}/complete`],
-          ['post', `/admin/orders/${normalizedOrderId}/complete`],
-        );
-      } else if (['failed', 'rejected', 'denied', 'refunded', 'cancelled', 'canceled'].includes(normalised)) {
-        actionEndpoints.push(
-          ['patch', `/orders/${normalizedOrderId}/fail`],
-          ['post', `/admin/orders/${normalizedOrderId}/refund`],
-        );
-      } else if (!isManualOrder && ['processing', 'retry', 'pending', 'under_review', 'requested'].includes(normalised)) {
-        actionEndpoints.push(['post', `/admin/orders/${normalizedOrderId}/retry`]);
+      // Attach rejectionReason if provided via orderContext
+      if (orderContext?.rejectionReason) {
+        body.rejectionReason = String(orderContext.rejectionReason).trim();
       }
 
-      const requestPlan = [...genericEndpoints, ...actionEndpoints];
-      let lastError = null;
-
-      for (const [method, endpoint, payload] of requestPlan) {
-        try {
-          const res = method === 'patch'
-            ? await http.patch(endpoint, payload)
-            : await http.post(endpoint, payload);
-          return normaliseOrder(unwrap(res)?.order || unwrap(res));
-        } catch (error) {
-          lastError = error;
-        }
-      }
-
-      if (lastError) {
-        throw lastError;
-      }
-
-      devLogger.warn(`[realApi] updateStatus: No endpoint plan matched '${status}'.`);
-      throw new Error('Unable to update order status.');
+      const res = await http.patch(`/admin/orders/${normalizedOrderId}/status`, body);
+      return normaliseOrder(unwrap(res)?.order || unwrap(res));
     },
 
     /**

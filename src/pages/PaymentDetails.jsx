@@ -293,6 +293,14 @@ const PaymentDetails = () => {
                   <span>{t('payments.copyAccount', { defaultValue: dir === 'rtl' ? 'نسخ الرقم' : 'Copy number' })}</span>
                 </span>
               </button>
+              {method.accountName && (
+                <div className={`mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-900 ${isRTL ? 'text-right' : 'text-left'}`}>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {t('payments.accountHolder', { defaultValue: dir === 'rtl' ? 'اسم صاحب الحساب' : 'Account holder' })}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{method.accountName}</p>
+                </div>
+              )}
               {method.bankName && (
                 <div className={`mt-2 text-xs text-gray-500 dark:text-gray-400 ${isRTL ? 'text-right' : 'text-left'}`}>
                   {method.bankName}

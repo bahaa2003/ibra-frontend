@@ -235,15 +235,25 @@ const useOrderStore = create(
         const currentOrder = orderContext || target;
         if (!currentOrder) return;
 
-
-
         const normalizedStatus = normalizeManualOrderStatus(status);
-        const updated = await apiClient.orders.updateStatus(id, normalizedStatus, currentOrder);
+
+        // Merge rejectionReason into the context so realApi can read it
+        const contextWithReason = {
+          ...currentOrder,
+          rejectionReason: orderContext?.rejectionReason || null,
+        };
+
+        const updated = await apiClient.orders.updateStatus(id, normalizedStatus, contextWithReason);
         const nextOrder = updated || { ...currentOrder, status: normalizedStatus };
         set(state => ({
           orders: state.orders.map((o) => (
             o.id === id
-              ? { ...o, ...nextOrder, status: nextOrder.status || normalizedStatus }
+              ? {
+                  ...o,
+                  ...nextOrder,
+                  status: nextOrder.status || normalizedStatus,
+                  rejectionReason: nextOrder.rejectionReason || orderContext?.rejectionReason || o.rejectionReason || null,
+                }
               : o
           )),
           ordersLastLoadedAt: Date.now(),
