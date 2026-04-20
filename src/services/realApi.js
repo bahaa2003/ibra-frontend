@@ -2317,8 +2317,9 @@ const realApi = {
      */
     updateStatus: async (orderId, status, orderContext = null) => {
       const normalizedOrderId = String(orderId || '').trim();
-      const normalised = String(status || '').trim().toLowerCase();
-      const body = { status: normalised };
+      // Pass status through as-is — the backend service normalizes internally.
+      // Preserving the original casing ensures Joi validates exactly what was sent.
+      const body = { status: String(status || '').trim() };
 
       // Attach rejectionReason if provided via orderContext
       if (orderContext?.rejectionReason) {

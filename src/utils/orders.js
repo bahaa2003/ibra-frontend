@@ -75,6 +75,7 @@ const VISUAL_STATUS_ALIASES = {
 export const PROVIDER_DISPLAY_NAMES = {
   'alkasr-vip':   { ar: 'الكاسر VIP',   en: 'Alkasr VIP' },
   'royal-crown':  { ar: 'رويال كراون', en: 'Royal Crown' },
+  'torosfon':  { ar:'توروس فون', en: 'Torosfon' },
 };
 
 /**
