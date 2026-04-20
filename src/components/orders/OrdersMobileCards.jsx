@@ -1,9 +1,9 @@
 import React from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, Building2 } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import OrderStatusBadge from './OrderStatusBadge';
-import { formatOrderDateTime, formatOrderMoney } from '../../utils/orders';
+import { formatOrderDateTime, formatOrderMoney, getProviderDisplayName } from '../../utils/orders';
 
 const OrdersMobileCards = ({
   orders,
@@ -16,9 +16,16 @@ const OrdersMobileCards = ({
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
       {orders.map((order) => (
-        <Card key={order.id} variant="flat" className="p-2.5 sm:p-3">
-          <div className="mb-1.5 flex items-start justify-start [direction:ltr]">
+        <Card key={order.id} variant="flat" className={`p-2.5 sm:p-3 ${String(order.status || '').toLowerCase() === 'manual_review' ? 'border-[color:rgb(var(--color-error-rgb)/0.45)] bg-[color:rgb(var(--color-error-rgb)/0.04)]' : ''}`}>
+          <div className="mb-1.5 flex items-start justify-between [direction:ltr]">
             <OrderStatusBadge status={order.status} isArabic={isArabic} className="shrink-0" />
+            {/* Provider badge */}
+            {order.providerCode ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.25)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
+                <Building2 className="h-2.5 w-2.5" />
+                {getProviderDisplayName(order.providerCode, isArabic ? 'ar' : 'en')}
+              </span>
+            ) : null}
           </div>
 
           <div className="min-w-0">

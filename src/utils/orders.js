@@ -23,6 +23,12 @@ const ORDER_STATUS_META = {
     labelEn: 'Incomplete',
     dotClassName: 'bg-[var(--color-error)]',
   },
+  manual_review: {
+    variant: 'danger',
+    labelAr: 'مراجعة يدوية',
+    labelEn: 'Manual review',
+    dotClassName: 'bg-[var(--color-error)] animate-pulse',
+  },
 };
 
 const ORDER_TYPE_META = {
@@ -55,7 +61,41 @@ const VISUAL_STATUS_ALIASES = {
   failed: 'incomplete',
   refunded: 'incomplete',
   rejected: 'incomplete',
+  // DLQ kill-switch status — rendered as its own distinct variant
+  manual_review: 'manual_review',
 };
+
+// ─── Provider Code → Display Label ───────────────────────────────────────────
+
+/**
+ * Maps the EXACT provider slugs stored in the DB to bilingual display labels.
+ * Keys must match order.providerCode verbatim (lowercase, with dashes preserved).
+ * Add a new entry here whenever a new provider is configured in the backend.
+ */
+export const PROVIDER_DISPLAY_NAMES = {
+  'alkasr-vip':   { ar: 'الكاسر VIP',   en: 'Alkasr VIP' },
+  'royal-crown':  { ar: 'رويال كراون', en: 'Royal Crown' },
+};
+
+/**
+ * Returns a human-readable provider label from a raw providerCode slug.
+ * Does a direct (lower-cased) lookup against the known slugs map.
+ * Falls back gracefully to title-casing the raw slug for unknown providers.
+ *
+ * @param {string} providerCode - exact slug from order.providerCode (e.g. 'alkasr-vip')
+ * @param {'ar'|'en'} language
+ */
+export const getProviderDisplayName = (providerCode, language = 'ar') => {
+  const key = toLower(providerCode);
+  const entry = PROVIDER_DISPLAY_NAMES[key];
+  if (entry) return language === 'ar' ? entry.ar : entry.en;
+  // Fallback: capitalize each dash-separated segment (e.g. 'new-api' → 'New Api')
+  return key.split('-').map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join(' ') || providerCode;
+};
+
+// NOTE: provider filter options are built dynamically from fetched orders in AdminOrders.jsx
+// to ensure only providers with actual orders are shown. No static list needed here.
+
 
 const MANUAL_STATUS_META = {
   pending: {
@@ -692,6 +732,7 @@ export const enrichOrders = (orders, { users = [], products = [], language = 'ar
         customerEmail,
         supplierName,
         notes,
+        order?.providerCode,
         ...dynamicFields.flatMap((field) => [field.label, field.value]),
       ].join(' ')),
     };
@@ -704,6 +745,7 @@ export const filterOrders = (orders, {
   typeFilter = 'all',
   dateFilter = 'all',
   sortOrder = 'newest',
+  providerFilter = 'all',
 } = {}) => {
   const normalizedSearchTerm = toLower(searchTerm);
   const threshold = getDateFilterThreshold(dateFilter);
@@ -714,12 +756,24 @@ export const filterOrders = (orders, {
         return false;
       }
 
-      if (statusFilter !== 'all' && order?.statusKey !== statusFilter) {
-        return false;
+      if (statusFilter !== 'all') {
+        // Special handling: 'manual_review' maps directly to the raw status,
+        // bypassing the visual alias system so the tab is exclusive.
+        if (statusFilter === 'manual_review') {
+          if (toLower(order?.status) !== 'manual_review') return false;
+        } else if (order?.statusKey !== statusFilter) {
+          return false;
+        }
       }
 
       if (typeFilter !== 'all' && order?.typeKey !== typeFilter) {
         return false;
+      }
+
+      if (providerFilter !== 'all') {
+        // Compare raw slugs directly — no dash/underscore stripping.
+        // The <select> option value is the exact order.providerCode string.
+        if (toLower(order?.providerCode) !== providerFilter) return false;
       }
 
       if (threshold) {
@@ -749,4 +803,5 @@ export const summarizeOrders = (orders = []) => ({
   processing: orders.filter((order) => order?.statusKey === 'processing').length,
   incomplete: orders.filter((order) => order?.statusKey === 'incomplete').length,
   manualPending: orders.filter((order) => order?.manualActionable).length,
+  manualReview: orders.filter((order) => toLower(order?.status) === 'manual_review').length,
 });

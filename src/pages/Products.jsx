@@ -402,7 +402,7 @@ const Products = () => {
         <>
           {/* Root categories — wide banners (currentParentId is null) */}
           {currentCategories.length > 0 && currentParentId === null && !activeCategoryParam && (
-            <section className="grid grid-cols-2 gap-2 p-4 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+            <section className="grid grid-cols-3 gap-2 p-4 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
               {currentCategories.map((catalog, index) => (
                 <CategoryCard
                   key={catalog.id}
@@ -417,7 +417,7 @@ const Products = () => {
 
           {/* Sub-categories — tight square cards (drilled into a parent) */}
           {currentCategories.length > 0 && currentParentId !== null && (
-            <section className="grid grid-cols-2 gap-4 p-4 sm:gap-6 md:grid-cols-4 lg:grid-cols-5">
+            <section className="grid grid-cols-3 gap-2 p-4 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
               {currentCategories.map((catalog, index) => (
                 <CategoryCard
                   key={catalog.id}
@@ -432,7 +432,7 @@ const Products = () => {
 
           {/* Products — from leaf category or parent drill-down */}
           {displayProducts.length > 0 && (
-            <section className="grid grid-cols-2 gap-4 p-4 sm:gap-6 md:grid-cols-4 lg:grid-cols-5">
+            <section className="grid grid-cols-3 gap-2 p-4 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
               {displayProducts.map((product) => (
                 <ProductCardSimple key={product.id} product={product} onOpen={openProduct} />
               ))}

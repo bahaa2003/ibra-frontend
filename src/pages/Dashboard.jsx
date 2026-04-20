@@ -138,7 +138,7 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className="relative z-0 grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
+        <div className="relative z-0 grid grid-cols-3 gap-2 sm:gap-2.5 md:grid-cols-3 xl:grid-cols-4">
           {visibleHomepageCategories.map((category, index) => (
             <CategoryCard
               key={category.id}

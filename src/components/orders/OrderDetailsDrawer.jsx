@@ -6,10 +6,12 @@ import Button, { cn } from '../ui/Button';
 import Card from '../ui/Card';
 import OrderStatusBadge from './OrderStatusBadge';
 import AdminOrderActions from './AdminOrderActions';
+import ManualReviewActions from './ManualReviewActions';
 import {
   getCustomerOrderFeedback,
   formatOrderDateTime,
   formatOrderMoney,
+  getProviderDisplayName,
 } from '../../utils/orders';
 
 const DetailTile = ({ label, value, hint = '', onClick, copyable = false }) => {
@@ -112,6 +114,11 @@ const OrderDetailsDrawer = ({
       key: 'supplier',
       label: isArabic ? 'المورد' : 'Supplier',
       value: order.supplierName,
+    } : null,
+    view === 'admin' && order?.providerCode ? {
+      key: 'provider-code',
+      label: isArabic ? 'مزود الخدمة' : 'Service provider',
+      value: getProviderDisplayName(order.providerCode, isArabic ? 'ar' : 'en'),
     } : null,
     view === 'admin' && order?.supplierOrderNumber ? {
       key: 'supplier-order-number',
@@ -327,12 +334,20 @@ const OrderDetailsDrawer = ({
                     ) : null}
 
                     {view === 'admin' ? (
-                      <AdminOrderActions
-                        order={order}
-                        isArabic={isArabic}
-                        isLoading={isActionLoading}
-                        onUpdateStatus={onUpdateStatus}
-                      />
+                      <>
+                        <ManualReviewActions
+                          order={order}
+                          isArabic={isArabic}
+                          isLoading={isActionLoading}
+                          onUpdateStatus={onUpdateStatus}
+                        />
+                        <AdminOrderActions
+                          order={order}
+                          isArabic={isArabic}
+                          isLoading={isActionLoading}
+                          onUpdateStatus={onUpdateStatus}
+                        />
+                      </>
                     ) : null}
                   </div>
                 </div>
