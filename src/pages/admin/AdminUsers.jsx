@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   KeyRound,
   MailCheck,
@@ -115,6 +117,8 @@ const AdminUsers = () => {
     users,
     deletedUsers,
     loadUsers,
+    loadUsersPage,
+    usersPagination,
     getUserById,
     wallets,
     loadWallets,
@@ -231,9 +235,8 @@ const AdminUsers = () => {
         return matchesFilter && matchesSearch;
       })
       .sort((left, right) => {
-        const pendingDelta = Number(isPendingAccountStatus(right?.status)) - Number(isPendingAccountStatus(left?.status));
-        if (pendingDelta !== 0) return pendingDelta;
-        return new Date(getUserRegistrationDate(right) || 0) - new Date(getUserRegistrationDate(left) || 0);
+        return Number(right?.walletBalance ?? right?.coins ?? right?.balance ?? 0)
+          - Number(left?.walletBalance ?? left?.coins ?? left?.balance ?? 0);
       });
   }, [customerUsers, deletedCustomerUsers, filter, search]);
 
@@ -707,21 +710,6 @@ const AdminUsers = () => {
                     {filter === 'deleted' ? 'محذوف' : getAccountStatusLabel(entry.status, isArabic)}
                   </Badge>
                 </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs">
-                  <div>
-                    <p className="text-[11px] text-[var(--color-text-secondary)]">طريقة التسجيل</p>
-                    <p className="mt-0.5 font-medium text-[var(--color-text)]">
-                      {getSignupMethodLabel(entry.signupMethod || entry.authProvider, isArabic)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[var(--color-text-secondary)]">تاريخ التسجيل</p>
-                    <p className="mt-0.5 font-medium text-[var(--color-text)]">
-                      {formatDate(getUserRegistrationDate(entry))}
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -762,10 +750,13 @@ const AdminUsers = () => {
           <TableHeader>
             <TableRow>
               <TableHead className={compactTableHeadClassName}>المستخدم</TableHead>
-              <TableHead className={compactTableHeadClassName}>طريقة التسجيل</TableHead>
-              <TableHead className={compactTableHeadClassName}>تاريخ التسجيل</TableHead>
               <TableHead className={compactTableHeadClassName}>الحالة</TableHead>
-              <TableHead className={compactTableHeadClassName}>الرصيد</TableHead>
+              <TableHead className={compactTableHeadClassName}>
+                <span className="inline-flex items-center gap-1">
+                  الرصيد
+                  <span aria-hidden="true">↓</span>
+                </span>
+              </TableHead>
               <TableHead className={`text-end ${compactTableHeadClassName}`}>الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
@@ -789,12 +780,6 @@ const AdminUsers = () => {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className={compactTableCellClassName}>
-                  <span className="text-xs font-medium text-[var(--color-text)]">
-                    {getSignupMethodLabel(entry.signupMethod || entry.authProvider, isArabic)}
-                  </span>
-                </TableCell>
-                <TableCell className={compactTableCellClassName}>{formatDate(getUserRegistrationDate(entry))}</TableCell>
                 <TableCell className={compactTableCellClassName}>
                   <Badge variant={filter === 'deleted' ? 'secondary' : getAccountStatusBadgeVariant(entry.status)}>
                     {filter === 'deleted' ? 'محذوف' : getAccountStatusLabel(entry.status, isArabic)}
@@ -833,6 +818,37 @@ const AdminUsers = () => {
           </TableBody>
         </Table>
       </div>
+
+      {/* ── Pagination Controls (bottom of users list/table) ───────────────── */}
+      {usersPagination && usersPagination.pages > 1 && (
+        <div className="admin-premium-panel mt-2.5 flex flex-col gap-2 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.84)] px-3 py-2 md:flex-row md:items-center md:justify-between">
+          <p className="text-[11px] text-[var(--color-text-secondary)]">
+            صفحة {usersPagination.page} من {usersPagination.pages} — إجمالي {usersPagination.total} مستخدم
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className={compactButtonClassName}
+              disabled={usersPagination.page <= 1}
+              onClick={() => loadUsersPage(usersPagination.page - 1)}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+              السابق
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={compactButtonClassName}
+              disabled={usersPagination.page >= usersPagination.pages}
+              onClick={() => loadUsersPage(usersPagination.page + 1)}
+            >
+              التالي
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Modal
         isOpen={isDetailsOpen}

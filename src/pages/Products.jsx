@@ -40,6 +40,7 @@ const getProductsPageCopy = (language = 'ar') => (
         subCategories: 'الأقسام الفرعية',
         products: 'المنتجات',
         home: 'الرئيسية',
+        backToCategories: 'الرجوع للأقسام',
       }
     : {
         pageKicker: 'Lighter and clearer storefront',
@@ -60,6 +61,7 @@ const getProductsPageCopy = (language = 'ar') => (
         subCategories: 'Sub-categories',
         products: 'Products',
         home: 'Home',
+        backToCategories: 'Back to categories',
       }
 );
 
@@ -84,6 +86,7 @@ const Products = () => {
 
   // ── Hierarchical navigation state ──────────────────────────────────────
   const [currentParentId, setCurrentParentId] = useState(null);
+  const [activeSubcategoryId, setActiveSubcategoryId] = useState(null);
 
   useEffect(() => {
     loadProducts();
@@ -286,8 +289,22 @@ const Products = () => {
     if (hasChildren(catId)) {
       // Drill down into sub-categories
       setCurrentParentId(catId);
+      setActiveSubcategoryId(null);
     } else {
-      // Leaf category — open it via URL param to show products
+      // Leaf category inside a drilled-down parent — isolate it
+      if (currentParentId !== null) {
+        setActiveSubcategoryId(catId);
+        // Also set the URL param to load products for this leaf
+        const next = new URLSearchParams(searchParams);
+        next.set('category', catId);
+        next.delete('request');
+        setSearchResetSignal((value) => value + 1);
+        startTransition(() => {
+          setSearchParams(next);
+        });
+        return;
+      }
+      // Leaf category at root level — open via URL param
       const next = new URLSearchParams(searchParams);
       next.set('category', catId);
       next.delete('request');
@@ -296,7 +313,7 @@ const Products = () => {
         setSearchParams(next);
       });
     }
-  }, [hasChildren, searchParams, setSearchParams]);
+  }, [currentParentId, hasChildren, searchParams, setSearchParams]);
 
   const openCatalog = useCallback((catalogId) => {
     handleCategoryClick(catalogId);
@@ -308,9 +325,21 @@ const Products = () => {
     next.delete('request');
     setSearchResetSignal((value) => value + 1);
     setCurrentParentId(null);
+    setActiveSubcategoryId(null);
 
     startTransition(() => {
       setSearchParams(next);
+    });
+  }, [searchParams, setSearchParams]);
+
+  const clearActiveSubcategory = useCallback(() => {
+    setActiveSubcategoryId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('category');
+    next.delete('request');
+    setSearchResetSignal((value) => value + 1);
+    startTransition(() => {
+      setSearchParams(next, { replace: true });
     });
   }, [searchParams, setSearchParams]);
 
@@ -416,7 +445,7 @@ const Products = () => {
           )}
 
           {/* Sub-categories — tight square cards (drilled into a parent) */}
-          {currentCategories.length > 0 && currentParentId !== null && (
+          {currentCategories.length > 0 && currentParentId !== null && !activeSubcategoryId && (
             <section className="grid grid-cols-3 gap-2 p-4 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
               {currentCategories.map((catalog, index) => (
                 <CategoryCard
@@ -429,6 +458,33 @@ const Products = () => {
               ))}
             </section>
           )}
+
+          {/* Active subcategory header + back button */}
+          {activeSubcategoryId && currentParentId !== null && (() => {
+            const activeSub = storefrontCategories.find((c) => c.id === activeSubcategoryId);
+            return activeSub ? (
+              <section className="px-4">
+                <button
+                  type="button"
+                  onClick={clearActiveSubcategory}
+                  className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.6)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)] shadow-sm transition-colors hover:bg-[color:rgb(var(--color-surface-rgb)/1)]"
+                >
+                  {isRTL ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+                  {copy.backToCategories}
+                </button>
+                <div className="flex items-center gap-3 rounded-[1rem] border border-[color:rgb(var(--color-border-rgb)/0.4)] bg-[color:rgb(var(--color-card-rgb)/0.7)] px-4 py-3 shadow-sm">
+                  {activeSub.image && (
+                    <img
+                      src={activeSub.image}
+                      alt={activeSub.title}
+                      className="h-10 w-10 rounded-xl object-cover"
+                    />
+                  )}
+                  <h2 className="text-base font-bold text-[var(--color-text)]">{activeSub.title}</h2>
+                </div>
+              </section>
+            ) : null;
+          })()}
 
           {/* Products — from leaf category or parent drill-down */}
           {displayProducts.length > 0 && (

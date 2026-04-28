@@ -224,40 +224,76 @@ const AdminOrders = () => {
   const [syncingOrderId, setSyncingOrderId] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
+  // ── Stable ref for store actions so they never appear in dep arrays ─────
+  // Zustand actions from a persisted store can be new references after
+  // hydration. Listing them as deps causes stale-closure fetches.
+  const storeActionsRef = useRef({ loadAdminOrders, loadUsers, loadProducts, loadCurrencies });
+  useEffect(() => {
+    storeActionsRef.current = { loadAdminOrders, loadUsers, loadProducts, loadCurrencies };
+  });
+
+  // ── Core page loader (stable, receives explicit params) ───────────────
+  const loadPage = useCallback(async ({ pg, lim, search, startDate, endDate }) => {
+    setIsLoading(true);
+    await Promise.allSettled([
+      storeActionsRef.current.loadAdminOrders({
+        page: pg,
+        limit: lim,
+        search: search || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      }),
+      storeActionsRef.current.loadUsers(),
+      storeActionsRef.current.loadProducts(),
+      storeActionsRef.current.loadCurrencies(),
+    ]);
+    setIsLoading(false);
+  }, []); // intentionally no deps — storeActionsRef is always current
+
+  // ── Debounced server-side search ─────────────────────────────────────
+  // We store the committed search term so the pagination effect below can
+  // read it, but we also call loadPage directly from the debounce callback
+  // so we never miss a trigger due to stale state.
+  const [serverSearchTerm, setServerSearchTerm] = useState('');
+  const searchTimerRef = useRef(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    const trimmed = deferredSearchTerm.trim();
+    searchTimerRef.current = setTimeout(() => {
+      setServerSearchTerm(trimmed);
+      setPage(1);
+      // Trigger the API call immediately with the new search term at page 1;
+      // do NOT rely on the pagination useEffect below to re-fire,
+      // because setServerSearchTerm + setPage(1) may batch and produce
+      // no observable dep change if page was already 1.
+      loadPage({
+        pg: 1,
+        lim: limit,
+        search: trimmed,
+        startDate: appliedStartDate,
+        endDate: appliedEndDate,
+      });
+    }, 500);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredSearchTerm]); // loadPage / limit / dates intentionally omitted — they have their own effects below
+
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = isArabic ? 'ar-EG' : 'en-US';
   const language = isArabic ? 'ar' : 'en';
 
-  // ── Fetch orders ─────────────────────────────────────────────────────────
+  // ── Re-fetch when page / limit / dates change ────────────────────────
+  // (Search changes are handled directly inside the debounce above.)
   useEffect(() => {
-    let isMounted = true;
-
-    const loadPage = async () => {
-      setIsLoading(true);
-
-      await Promise.allSettled([
-        Promise.resolve(loadAdminOrders({
-          page,
-          limit,
-          startDate: appliedStartDate || undefined,
-          endDate: appliedEndDate || undefined,
-        })),
-        Promise.resolve(loadUsers()),
-        Promise.resolve(loadProducts()),
-        Promise.resolve(loadCurrencies()),
-      ]);
-
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    };
-
-    loadPage();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [page, limit, appliedStartDate, appliedEndDate, loadAdminOrders, loadCurrencies, loadProducts, loadUsers]);
+    loadPage({
+      pg: page,
+      lim: limit,
+      search: serverSearchTerm,
+      startDate: appliedStartDate,
+      endDate: appliedEndDate,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit, appliedStartDate, appliedEndDate]); // serverSearchTerm changes are handled in the debounce effect above
 
   // ── Date range handlers ──────────────────────────────────────────────────
   const handleApplyDateFilter = useCallback(() => {
@@ -281,16 +317,19 @@ const AdminOrders = () => {
     [adminOrders, users, products, isArabic]
   );
 
+  // NOTE: Search is handled server-side via the debounced `serverSearchTerm` → `loadAdminOrders`.
+  // Do NOT pass `searchTerm` here — that would re-filter the already-correct server response,
+  // causing results to disappear on every page except page 1.
   const filteredOrders = useMemo(
     () => filterOrders(enrichedOrders, {
-      searchTerm: deferredSearchTerm,
+      searchTerm: '',        // ← intentionally blank: server already filtered by search
       statusFilter,
       typeFilter,
       dateFilter,
       sortOrder,
       providerFilter,
     }),
-    [dateFilter, deferredSearchTerm, enrichedOrders, sortOrder, statusFilter, typeFilter, providerFilter]
+    [dateFilter, enrichedOrders, sortOrder, statusFilter, typeFilter, providerFilter]
   );
 
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
@@ -388,6 +427,7 @@ const AdminOrders = () => {
         Promise.resolve(loadAdminOrders({
           page,
           limit,
+          search: serverSearchTerm || undefined,
           startDate: appliedStartDate || undefined,
           endDate: appliedEndDate || undefined,
         })),
@@ -403,7 +443,7 @@ const AdminOrders = () => {
     } finally {
       setActionOrderId('');
     }
-  }, [addToast, appliedEndDate, appliedStartDate, isArabic, limit, loadAdminOrders, loadUsers, page, updateOrderStatus]);
+  }, [addToast, appliedEndDate, appliedStartDate, isArabic, limit, loadAdminOrders, loadUsers, page, serverSearchTerm, updateOrderStatus]);
 
   const handleSync = useCallback(async (order) => {
     setSyncingOrderId(order.id);
@@ -490,8 +530,8 @@ const AdminOrders = () => {
         panelClassName="admin-premium-panel"
         compact
         searchPlaceholder={isArabic
-          ? 'ابحث باسم المنتج، العميل، البريد الإلكتروني، أو رقم الطلب'
-          : 'Search by product, customer, email, or order number'}
+          ? 'ابحث برقم الطلب، معرف الطلب، أو معرف اللاعب...'
+          : 'Search by order number, order ID, or player ID...'}
         helperText={null}
       />
 

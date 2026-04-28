@@ -418,6 +418,11 @@ const Wallet = () => {
               ? normalizeWalletStatus(linkedTopup?.status || tx.status || 'completed')
               : normalizeWalletStatus(tx.status || 'completed');
 
+          // CRITICAL: Enforce Number() on both operands to prevent string concatenation.
+          // balanceBefore = balanceAfter - signedAmount (reverse the transaction)
+          const safeBalanceAfter = convertedBalanceAfter !== null ? Number(convertedBalanceAfter) : null;
+          const safeSignedAmount = Number(convertedSignedAmount) || 0;
+
           return {
             id: tx._id || tx.id,
             type: feType,
@@ -428,9 +433,9 @@ const Wallet = () => {
             currentCurrency: userCurrency,
             status: resolvedStatus,
             date: tx.createdAt || tx.date,
-            balanceAfter: convertedBalanceAfter,
-            balanceBefore: convertedBalanceAfter !== null
-              ? normalizeMoneyAmount(convertedBalanceAfter - convertedSignedAmount)
+            balanceAfter: safeBalanceAfter,
+            balanceBefore: safeBalanceAfter !== null
+              ? normalizeMoneyAmount(safeBalanceAfter - safeSignedAmount)
               : null,
             sourceType: tx.sourceType || (linkedOrder ? 'order' : linkedTopup ? 'topup' : null),
             sourceId: tx.sourceId || tx.orderId || tx.depositId || tx.topupId || linkedOrder?.id || linkedTopup?.id || null,

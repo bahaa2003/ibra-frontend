@@ -2069,6 +2069,56 @@ const mockApi = {
       }
   },
 
+  dashboard: {
+    getDashboardStats: async ({ startDate, endDate } = {}) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+
+      const orders = getOrdersDb()?.state?.orders || mockOrders;
+      const users = getUsersDb()?.state?.users || mockUsers;
+      const productsDb = getDB('products-storage', { state: { products: mockProducts } });
+      const products = productsDb?.state?.products || mockProducts;
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (end && /^\d{4}-\d{2}-\d{2}$/.test(String(endDate))) end.setHours(23, 59, 59, 999);
+
+      const inRange = (value) => {
+        if (!start && !end) return true;
+        const date = new Date(value || 0);
+        if (Number.isNaN(date.getTime())) return false;
+        if (start && date < start) return false;
+        if (end && date > end) return false;
+        return true;
+      };
+
+      const rangedOrders = orders.filter((order) => inRange(order.createdAt || order.date || order.updatedAt));
+      const completedOrders = rangedOrders.filter((order) => ['completed', 'approved', 'success'].includes(String(order.status || '').toLowerCase()));
+      const pendingStatuses = ['pending', 'requested', 'under_review', 'processing'];
+
+      return {
+        orders: {
+          total: rangedOrders.length,
+          completed: completedOrders.length,
+          pending: rangedOrders.filter((order) => String(order.status || '').toLowerCase() === 'pending').length,
+          processing: rangedOrders.filter((order) => String(order.status || '').toLowerCase() === 'processing').length,
+          pendingProcessing: rangedOrders.filter((order) => pendingStatuses.includes(String(order.status || '').toLowerCase())).length,
+        },
+        financials: {
+          totalRevenueUsd: completedOrders.reduce((sum, order) => sum + Number(order.usdAmount ?? order.totalRevenueUsd ?? order.totalAmount ?? order.priceCoins ?? 0), 0),
+          totalProfitUsd: completedOrders.reduce((sum, order) => sum + Number(order.profitUsd ?? order.financialSnapshot?.profitUsd ?? 0), 0),
+        },
+        users: {
+          total: users.filter((user) => String(user.role || '').toLowerCase() === 'customer').length,
+          active: users.filter((user) => String(user.role || '').toLowerCase() === 'customer' && ['active', 'approved'].includes(String(user.status || '').toLowerCase())).length,
+          totalWalletBalance: users.reduce((sum, user) => sum + Number(user.coins ?? user.walletBalance ?? 0), 0),
+        },
+        products: {
+          total: products.length,
+          active: products.filter((product) => product.isActive !== false).length,
+        },
+      };
+    },
+  },
+
   audit: {
     list: async () => {
       await new Promise(resolve => setTimeout(resolve, DELAY));

@@ -503,9 +503,24 @@ const normaliseWalletTransaction = (tx, fallbackUserId = '') => {
     ? (tx.userId._id || tx.userId.id || '')
     : tx.userId;
 
+  // Preserve the reference field faithfully:
+  //   • If the backend returned a populated object { orderNumber, customerInput, … }
+  //     keep it as a plain object so resolveOrderMeta() can read sub-fields.
+  //   • If it is null / undefined / a raw ObjectId string, fall through to alternate
+  //     fields (referenceId, orderId, …) or null.
+  const rawReference = tx.reference;
+  const resolvedReference = (rawReference !== null && rawReference !== undefined && typeof rawReference === 'object')
+    ? rawReference                                  // ← populated object — preserve as-is
+    : (rawReference || tx.referenceId || tx.orderId || tx.depositId || tx.topupId || null);
+
+  // Avoid using a populated object as the `id` string — use the nested _id instead
+  const rawRefForId = (rawReference && typeof rawReference === 'object')
+    ? (rawReference._id || rawReference.id || null)
+    : rawReference;
+
   return {
     ...tx,
-    id: tx._id || tx.id || tx.transactionId || tx.reference || `${fallbackUserId || 'wallet'}-${type}-${tx.createdAt || Date.now()}`,
+    id: tx._id || tx.id || tx.transactionId || rawRefForId || `${fallbackUserId || 'wallet'}-${type}-${tx.createdAt || Date.now()}`,
     _id: undefined,
     userId: String(rawUserId || user?.id || fallbackUserId || ''),
     user,
@@ -517,7 +532,7 @@ const normaliseWalletTransaction = (tx, fallbackUserId = '') => {
     originalCurrency: originalTransactionCurrency || null,
     status: String(tx.status || 'completed').trim().toLowerCase(),
     description: tx.description || tx.note || tx.title || '',
-    reference: tx.reference || tx.referenceId || tx.orderId || tx.depositId || tx.topupId || null,
+    reference: resolvedReference,
     sourceType: tx.sourceType || tx.targetType || null,
     sourceId: tx.sourceId || tx.orderId || tx.depositId || tx.topupId || null,
     createdAt: tx.createdAt || tx.date || tx.timestamp || null,
@@ -1762,13 +1777,22 @@ const realApi = {
     /**
      * GET /admin/users → sendPaginated(res, users[], pagination)
      * unwrap() returns the users array directly from paginated envelope.
+     * Supports server-side pagination + sorting params.
      */
-    list: async () => {
-      const res = await http.get('/admin/users');
-      const data = unwrap(res);
+    list: async ({ page = 1, limit = 20, sortBy = 'walletBalance', sortOrder = 'desc' } = {}) => {
+      const normalizedSortBy = typeof sortBy === 'string' && sortBy.trim() ? sortBy.trim() : 'walletBalance';
+      const normalizedSortOrder = String(sortOrder || '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
+      const query = new URLSearchParams();
+      query.set('page', String(page));
+      query.set('limit', String(limit));
+      query.set('sortBy', normalizedSortBy);
+      query.set('sortOrder', normalizedSortOrder);
+      const res = await http.get(`/admin/users?${query}`);
+      const body = res.data || {};
+      const data = body.data;
       // sendPaginated puts the array as `data` directly
       const users = Array.isArray(data) ? data : (data?.users || []);
-      return normaliseUsers(users);
+      return { users: normaliseUsers(users), pagination: body.pagination || null };
     },
 
     listDeleted: async () => {
@@ -2072,6 +2096,11 @@ const realApi = {
 
     /**
      * GET /admin/wallets/:userId → fetch a single wallet summary.
+     *
+     * Backend now returns { user: {...userFields}, recentTransactions: [...populated] }.
+     * We flatten the user sub-object to the top level so normaliseWalletSummary
+     * correctly reads walletBalance, currency, name, email, etc., while preserving
+     * the populated recentTransactions array.
      */
     getByUserId: async (userId) => {
       const normalizedUserId = String(userId || '').trim();
@@ -2079,7 +2108,19 @@ const realApi = {
 
       const res = await http.get(`/admin/wallets/${normalizedUserId}`);
       const data = unwrap(res);
-      return normaliseWalletSummary(data?.wallet || data, normalizedUserId);
+      const raw = data?.wallet || data;
+
+      // Flatten { user: {...}, recentTransactions: [...] } → top-level wallet shape
+      const flatWallet = (raw?.user && typeof raw.user === 'object')
+        ? {
+            ...raw.user,                          // walletBalance, currency, name, email, etc.
+            user: raw.user,                       // keep sub-object for normaliser
+            recentTransactions: Array.isArray(raw.recentTransactions) ? raw.recentTransactions : [],
+            userId: raw.user?._id || raw.user?.id || normalizedUserId,
+          }
+        : raw;
+
+      return normaliseWalletSummary(flatWallet, normalizedUserId);
     },
 
     /**
@@ -2175,8 +2216,12 @@ const realApi = {
      * GET /admin/stats — aggregated dashboard statistics.
      * Returns: { orders, financials, users, products }
      */
-    getDashboardStats: async () => {
-      const res = await http.get('/admin/stats');
+    getDashboardStats: async ({ startDate, endDate } = {}) => {
+      const params = {
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+      };
+      const res = await http.get('/admin/dashboard/stats', { params });
       return unwrap(res);
     },
   },
@@ -2222,14 +2267,16 @@ const realApi = {
      * @param {number}  [params.page=1]
      * @param {number}  [params.limit=20]
      * @param {string}  [params.status]
+     * @param {string}  [params.search]    - free-text search (orderNumber, _id, playerID)
      * @param {string}  [params.startDate] - ISO date string (from)
      * @param {string}  [params.endDate]   - ISO date string (to)
      */
-    listPaginated: async ({ page = 1, limit = 20, status, startDate, endDate } = {}) => {
+    listPaginated: async ({ page = 1, limit = 20, status, search, startDate, endDate } = {}) => {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('limit', String(limit));
       if (status && status !== 'all') params.set('status', status);
+      if (search && String(search).trim()) params.set('search', String(search).trim());
       if (startDate) params.set('from', startDate);
       if (endDate) params.set('to', endDate);
 

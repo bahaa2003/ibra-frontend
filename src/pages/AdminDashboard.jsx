@@ -125,84 +125,9 @@ const getTopupDashboardDate = (topup) => (
   || null
 );
 
-const getProductDashboardDate = (product) => (
-  product?.createdAt
-  || product?.updatedAt
-  || product?.publishedAt
-  || product?.syncedAt
-  || null
-);
-
-const getSnapshotCurrency = (snapshot = {}, fallbackCurrency = 'USD') => String(
-  snapshot?.pricingSnapshot?.currency
-  || snapshot?.originalCurrency
-  || fallbackCurrency
-  || 'USD'
-).trim().toUpperCase();
-
-const getOrderRevenueUsd = (order) => {
-  const explicitRevenueUsd = order?.usdAmount
-    ?? order?.totalRevenueUsd
-    ?? order?.financialSnapshot?.usdAmount
-    ?? order?.financialSnapshot?.pricingSnapshot?.usdAmount;
-
-  if (explicitRevenueUsd !== undefined && explicitRevenueUsd !== null) {
-    return asNumber(explicitRevenueUsd);
-  }
-
-  const snapshot = order?.financialSnapshot || {};
-  const revenueAmount = asNumber(
-    snapshot?.pricingSnapshot?.finalPrice
-    ?? snapshot?.finalAmountAtExecution
-    ?? order?.priceCoins
-    ?? order?.totalAmount
-  );
-  const currency = getSnapshotCurrency(snapshot, order?.currency);
-  const exchangeRate = asNumber(snapshot?.exchangeRateAtExecution || order?.rateSnapshot);
-
-  if (currency === 'USD') return revenueAmount;
-  if (exchangeRate > 0) return revenueAmount / exchangeRate;
-  return revenueAmount;
-};
-
-const getOrderProfitUsd = (order) => {
-  const explicitProfitUsd = order?.profitUsd ?? order?.financialSnapshot?.profitUsd;
-  if (explicitProfitUsd !== undefined && explicitProfitUsd !== null) {
-    return asNumber(explicitProfitUsd);
-  }
-
-  const snapshot = order?.financialSnapshot || {};
-  const finalPrice = asNumber(
-    snapshot?.pricingSnapshot?.finalPrice
-    ?? snapshot?.finalAmountAtExecution
-    ?? order?.priceCoins
-    ?? order?.totalAmount
-  );
-  const basePrice = asNumber(
-    snapshot?.pricingSnapshot?.basePrice
-    ?? snapshot?.originalAmount
-    ?? order?.unitPriceBase
-  );
-  const profitAmount = finalPrice - basePrice;
-  const currency = getSnapshotCurrency(snapshot, order?.currency);
-  const exchangeRate = asNumber(snapshot?.exchangeRateAtExecution || order?.rateSnapshot);
-
-  if (currency === 'USD') return profitAmount;
-  if (exchangeRate > 0) return profitAmount / exchangeRate;
-  return profitAmount;
-};
-
 const formatRelativeProductName = (product, isArabic) => (
   product?.nameAr || product?.name || (isArabic ? 'منتج غير معروف' : 'Unknown product')
 );
-
-const getCurrencyRate = (currencies, currencyCode) => {
-  const normalizedCode = String(currencyCode || 'USD').trim().toUpperCase();
-  const matchedCurrency = (currencies || []).find(
-    (entry) => String(entry?.code || '').trim().toUpperCase() === normalizedCode
-  );
-  return asNumber(matchedCurrency?.rate) || 1;
-};
 
 const extractSupplierBalanceSnapshot = (payload = {}) => {
   const raw = payload || {};
@@ -262,6 +187,8 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [isLoadingDashboardStats, setIsLoadingDashboardStats] = useState(true);
   const [startDate, setStartDate] = useState(() => getDefaultDashboardRange().startDate);
   const [endDate, setEndDate] = useState(() => getDefaultDashboardRange().endDate);
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -303,6 +230,40 @@ const AdminDashboard = () => {
       isMounted = false;
     };
   }, [loadCurrencies, loadOrders, loadProducts, loadTopups, loadUsers]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardStats = async () => {
+      setIsLoadingDashboardStats(true);
+
+      try {
+        const nextStats = await apiClient.dashboard.getDashboardStats({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        });
+
+        if (isMounted) {
+          setDashboardStats(nextStats || null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setDashboardStats(null);
+          addToast(error?.message || (isArabic ? 'تعذر تحميل إحصائيات اللوحة.' : 'Unable to load dashboard stats.'), 'error');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingDashboardStats(false);
+        }
+      }
+    };
+
+    void loadDashboardStats();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [addToast, endDate, isArabic, startDate]);
 
   useEffect(() => {
     let isMounted = true;
@@ -390,26 +351,26 @@ const AdminDashboard = () => {
     [endDate, startDate]
   );
 
-  const filteredUsers = useMemo(
-    () => (users || []).filter((entry) => isDateWithinRange(getUserRegistrationDate(entry), dateRange)),
-    [dateRange, users]
+  const allCustomerUsers = useMemo(
+    () => (users || []).filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer'),
+    [users]
   );
 
-  const customerUsers = useMemo(
-    () => filteredUsers.filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer'),
-    [filteredUsers]
+  const newCustomersInRange = useMemo(
+    () => allCustomerUsers.filter((entry) => isDateWithinRange(getUserRegistrationDate(entry), dateRange)),
+    [dateRange, allCustomerUsers]
   );
 
-  const activeUsers = useMemo(
-    () => customerUsers.filter((entry) => isApprovedAccountStatus(entry?.status)),
-    [customerUsers]
+  const activeUsersInRange = useMemo(
+    () => newCustomersInRange.filter((entry) => isApprovedAccountStatus(entry?.status)),
+    [newCustomersInRange]
   );
 
   const pendingApprovalUsers = useMemo(
-    () => [...customerUsers]
+    () => [...allCustomerUsers]
       .filter((entry) => isPendingAccountStatus(entry?.status))
       .sort((left, right) => new Date(getUserRegistrationDate(right) || 0) - new Date(getUserRegistrationDate(left) || 0)),
-    [customerUsers]
+    [allCustomerUsers]
   );
 
   const enrichedOrders = useMemo(
@@ -428,8 +389,8 @@ const AdminDashboard = () => {
   );
 
   const pendingOrders = useMemo(
-    () => filteredOrders.filter((entry) => isPendingStatus(entry?.status)),
-    [filteredOrders]
+    () => enrichedOrders.filter((entry) => isPendingStatus(entry?.status)),
+    [enrichedOrders]
   );
 
   const manualTopups = useMemo(
@@ -443,20 +404,13 @@ const AdminDashboard = () => {
   );
 
   const pendingManualTopups = useMemo(
-    () => filteredManualTopups.filter((entry) => isPendingStatus(entry?.status)),
-    [filteredManualTopups]
-  );
-
-  const hasProductDateMetadata = useMemo(
-    () => (products || []).some((entry) => Boolean(getProductDashboardDate(entry))),
-    [products]
+    () => manualTopups.filter((entry) => isPendingStatus(entry?.status)),
+    [manualTopups]
   );
 
   const filteredProducts = useMemo(() => {
-    const items = Array.isArray(products) ? products : [];
-    if (!hasProductDateMetadata) return items;
-    return items.filter((entry) => isDateWithinRange(getProductDashboardDate(entry), dateRange));
-  }, [dateRange, hasProductDateMetadata, products]);
+    return Array.isArray(products) ? products : [];
+  }, [products]);
 
   const recentOrders = useMemo(
     () => [...filteredOrders].sort(byNewestDate).slice(0, 6),
@@ -475,28 +429,7 @@ const AdminDashboard = () => {
     [filteredManualTopups]
   );
 
-  const totalRevenueUsd = useMemo(
-    () => completedOrders.reduce((sum, entry) => sum + getOrderRevenueUsd(entry), 0),
-    [completedOrders]
-  );
-
-  const totalProfitUsd = useMemo(
-    () => completedOrders.reduce((sum, entry) => sum + getOrderProfitUsd(entry), 0),
-    [completedOrders]
-  );
-
-  const totalWalletBalanceUsd = useMemo(
-    () => customerUsers.reduce((sum, entry) => {
-      const balance = asNumber(entry?.coins);
-      const currencyRate = getCurrencyRate(currencies, entry?.currency);
-      const usdEquivalent = currencyRate > 0 ? balance / currencyRate : balance;
-      return sum + usdEquivalent;
-    }, 0),
-    [currencies, customerUsers]
-  );
-
   const formatCount = (value) => formatNumber(asNumber(value), locale);
-  const formatCoins = (value) => `${formatCount(value)} ${isArabic ? 'عملة' : 'coins'}`;
   const formatMoney = (value, currencyCode = 'USD') => {
     const currency = String(currencyCode || 'USD').toUpperCase();
     const amount = asNumber(value);
@@ -596,21 +529,13 @@ const AdminDashboard = () => {
     return isArabic ? 'عرض كل البيانات المتاحة' : 'Showing all available data';
   })();
 
-  const productMetricNote = hasProductDateMetadata
-    ? (
-      isArabic
-        ? 'بحسب تاريخ إنشاء أو تحديث المنتج داخل الفترة المحددة'
-        : 'Based on product create or update date within the selected range'
-    )
-    : (
-      isArabic
-        ? 'إجمالي المنتجات الحالية لأن السجلات لا تحتوي على طابع زمني كافٍ'
-        : 'Current catalog total because product timestamps are unavailable'
-    );
+  const productMetricNote = isArabic
+    ? 'إجمالي المنتجات الحالية المتاحة في المتجر'
+    : 'Current catalog total products available';
 
   const walletMetricNote = isArabic
-    ? 'إجمالي أرصدة العملاء الحالية بالدولار حسب عملة كل عميل وسعر الصرف الحالي'
-    : 'Current customer wallet balances converted to USD using each user currency and the current exchange rate';
+    ? 'إجمالي أرصدة العملاء الحالية كما هي مخزنة في قاعدة البيانات'
+    : 'Current customer wallet balances summed from the database';
 
   const supplierBalanceItems = useMemo(
     () => supplierBalances.map((entry) => ({
@@ -682,30 +607,35 @@ const AdminDashboard = () => {
     [isArabic]
   );
 
+  const statsOrders = dashboardStats?.orders || {};
+  const statsFinancials = dashboardStats?.financials || {};
+  const statsUsers = dashboardStats?.users || {};
+  const statsProducts = dashboardStats?.products || {};
+
   const stats = useMemo(
     () => [
       {
         title: isArabic ? 'صافي الأرباح (USD)' : 'Net Profit (USD)',
-        value: formatMoney(totalProfitUsd, 'USD'),
+        value: formatMoney(statsFinancials.totalProfitUsd ?? statsFinancials.netProfit ?? 0, 'USD'),
         note: isArabic ? 'الأرباح من الطلبات المكتملة داخل الفترة المحددة' : 'Profit from completed orders in the selected range',
         icon: DollarSign,
       },
       {
         title: isArabic ? 'إجمالي الإيرادات (USD)' : 'Total Revenue (USD)',
-        value: formatMoney(totalRevenueUsd, 'USD'),
+        value: formatMoney(statsFinancials.totalRevenueUsd ?? statsFinancials.totalRevenue ?? 0, 'USD'),
         note: isArabic ? 'الإيرادات من الطلبات المكتملة داخل الفترة المحددة' : 'Revenue from completed orders in the selected range',
         icon: TrendingUp,
       },
       {
         title: isArabic ? 'إجمالي الطلبات' : 'Total Orders',
-        value: formatCount(filteredOrders.length),
+        value: formatCount(statsOrders.total),
         note: isArabic ? 'كل الطلبات المطابقة للفترة الحالية' : 'All orders matching the current date range',
         icon: ShoppingCart,
       },
       {
         title: isArabic ? 'إجمالي المستخدمين' : 'Total Users',
-        value: formatCount(filteredUsers.length),
-        note: isArabic ? `${formatCount(activeUsers.length)} مستخدم مفعّل داخل الفترة` : `${formatCount(activeUsers.length)} approved users in range`,
+        value: formatCount(statsUsers.total),
+        note: isArabic ? `${formatCount(statsUsers.active)} مستخدم مفعّل` : `${formatCount(statsUsers.active)} active users`,
         icon: Users,
       },
       {
@@ -716,19 +646,19 @@ const AdminDashboard = () => {
       },
       {
         title: isArabic ? 'إجمالي المنتجات' : 'Total Products',
-        value: formatCount(filteredProducts.length),
+        value: formatCount(statsProducts.total),
         note: productMetricNote,
         icon: Package,
       },
       {
         title: isArabic ? 'الطلبات المعلقة' : 'Pending Orders',
-        value: formatCount(pendingOrders.length),
+        value: formatCount(statsOrders.pendingProcessing ?? (asNumber(statsOrders.pending) + asNumber(statsOrders.processing))),
         note: isArabic ? 'طلبات تحتاج متابعة داخل الفترة الحالية' : 'Orders that still need follow-up in the current range',
         icon: Clock3,
       },
       {
         title: isArabic ? 'الطلبات المكتملة' : 'Completed Orders',
-        value: formatCount(completedOrders.length),
+        value: formatCount(statsOrders.completed),
         note: isArabic ? 'طلبات تم تنفيذها داخل الفترة المحددة' : 'Orders fulfilled inside the selected range',
         icon: CheckCircle2,
       },
@@ -739,28 +669,32 @@ const AdminDashboard = () => {
         icon: ShieldCheck,
       },
       {
-        title: isArabic ? 'إجمالي أرصدة المحافظ (USD)' : 'Total Wallet Balances (USD)',
-        value: formatMoney(totalWalletBalanceUsd, 'USD'),
+        title: isArabic ? 'إجمالي أرصدة المحافظ' : 'Total Wallet Balances',
+        value: formatCount(statsUsers.totalWalletBalance),
         note: walletMetricNote,
         icon: Wallet,
       },
     ],
     [
-      activeUsers.length,
-      completedOrders.length,
-      filteredOrders.length,
-      filteredProducts.length,
-      filteredUsers.length,
       formatCount,
       formatMoney,
       isArabic,
       pendingApprovalUsers.length,
       pendingManualTopups.length,
-      pendingOrders.length,
       productMetricNote,
-      totalProfitUsd,
-      totalRevenueUsd,
-      totalWalletBalanceUsd,
+      statsFinancials.netProfit,
+      statsFinancials.totalProfitUsd,
+      statsFinancials.totalRevenue,
+      statsFinancials.totalRevenueUsd,
+      statsOrders.completed,
+      statsOrders.pending,
+      statsOrders.pendingProcessing,
+      statsOrders.processing,
+      statsOrders.total,
+      statsProducts.total,
+      statsUsers.active,
+      statsUsers.total,
+      statsUsers.totalWalletBalance,
       walletMetricNote,
     ]
   );
@@ -827,24 +761,24 @@ const AdminDashboard = () => {
       });
     }
 
-    if (!items.length && customerUsers.length) {
+    if (!items.length && allCustomerUsers.length) {
       items.push({
         id: 'customer-snapshot',
         icon: UserCog,
         tone: 'info',
         title: isArabic ? 'ملخص المستخدمين' : 'Users snapshot',
         description: isArabic
-          ? `يوجد حاليًا ${formatCount(customerUsers.length)} عميل و${formatCount(activeUsers.length)} منهم مفعّلون داخل الفترة المحددة.`
-          : `There are currently ${formatCount(customerUsers.length)} customers and ${formatCount(activeUsers.length)} of them are approved in the selected range.`,
+          ? `يوجد حاليًا ${formatCount(allCustomerUsers.length)} عميل و${formatCount(activeUsersInRange.length)} منهم مفعّلون داخل الفترة المحددة.`
+          : `There are currently ${formatCount(allCustomerUsers.length)} customers and ${formatCount(activeUsersInRange.length)} of them are approved in the selected range.`,
         timestamp: null,
       });
     }
 
     return items.slice(0, 4);
   }, [
-    activeUsers.length,
+    activeUsersInRange.length,
+    allCustomerUsers.length,
     completedOrders,
-    customerUsers.length,
     filteredOrders,
     filteredProducts,
     formatCount,
@@ -978,7 +912,7 @@ const AdminDashboard = () => {
         />
       </Card>
 
-      <StatsGrid stats={stats} isLoading={isLoading} />
+      <StatsGrid stats={stats} isLoading={isLoadingDashboardStats} />
 
       <div className="grid place-items-center gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:place-items-stretch xl:gap-6">
         <div className="w-full space-y-4 md:space-y-6">

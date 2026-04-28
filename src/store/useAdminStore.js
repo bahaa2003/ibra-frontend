@@ -14,6 +14,9 @@ let hasFetchedAdminWalletsFromBackendThisSession = false;
 
 const USERS_CACHE_TTL = 90 * 1000;
 const WALLETS_CACHE_TTL = 60 * 1000;
+const USERS_PAGE_LIMIT = 20;
+const USERS_DEFAULT_SORT_BY = 'walletBalance';
+const USERS_DEFAULT_SORT_ORDER = 'desc';
 let usersRequest = null;
 let walletsRequest = null;
 const walletTransactionsRequests = new Map();
@@ -22,6 +25,16 @@ const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const getUserBalanceForSort = (entry) => toFiniteNumber(
+  entry?.walletBalance ?? entry?.coins ?? entry?.balance,
+  0
+);
+
+const sortUsersByBalanceDesc = (users) => (
+  [...(Array.isArray(users) ? users : [])]
+    .sort((left, right) => getUserBalanceForSort(right) - getUserBalanceForSort(left))
+);
 
 const getCurrencyRate = (currencies, currencyCode) => {
   const normalizedCode = String(currencyCode || 'USD').toUpperCase();
@@ -153,6 +166,8 @@ const useAdminStore = create(
     (set, get) => ({
       users: mockUsers,
       deletedUsers: [],
+      usersPagination: null,
+      usersCurrentPage: 1,
       usersLastLoadedAt: 0,
       isLoadingUsers: false,
       wallets: [],
@@ -160,12 +175,17 @@ const useAdminStore = create(
       userWalletTransactions: {},
       walletTransactionsLastLoadedAt: {},
 
-      loadUsers: async ({ force = false } = {}) => {
+      loadUsers: async ({ force = false, page } = {}) => {
+        const requestedPageCandidate = Number(page ?? get().usersCurrentPage ?? 1);
+        const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
+          ? Math.floor(requestedPageCandidate)
+          : 1;
         const { users, usersLastLoadedAt } = get();
         const hasUsers = Array.isArray(users) && users.length > 0;
         const shouldBypassHydratedCache = isRealProvider && !hasFetchedAdminUsersFromBackendThisSession;
         const hasFreshUsers = !shouldBypassHydratedCache
           && hasUsers
+          && !page
           && (Date.now() - Number(usersLastLoadedAt || 0) < USERS_CACHE_TTL);
 
         if (!force && hasFreshUsers) {
@@ -178,15 +198,28 @@ const useAdminStore = create(
 
         set({ isLoadingUsers: true });
 
-        usersRequest = apiClient.users.list()
-          .then(async (items) => {
-            const nextUsers = Array.isArray(items) ? items : mockUsers;
+        usersRequest = apiClient.users.list({
+          page: requestedPage,
+          limit: USERS_PAGE_LIMIT,
+          sortBy: USERS_DEFAULT_SORT_BY,
+          sortOrder: USERS_DEFAULT_SORT_ORDER,
+        })
+          .then(async (result) => {
+            // Handle both old (array) and new ({ users, pagination }) response shapes
+            const items = Array.isArray(result) ? result : (result?.users || []);
+            const nextUsers = sortUsersByBalanceDesc(items.length ? items : mockUsers);
+            const pagination = result?.pagination || null;
+            const currentPage = Number.isFinite(Number(pagination?.page))
+              ? Math.floor(Number(pagination.page))
+              : requestedPage;
             const nextDeletedUsers = apiClient.users.listDeleted
               ? await apiClient.users.listDeleted().catch(() => [])
               : [];
             set({
               users: nextUsers,
               deletedUsers: Array.isArray(nextDeletedUsers) ? nextDeletedUsers : [],
+              usersPagination: pagination,
+              usersCurrentPage: currentPage,
               usersLastLoadedAt: Date.now(),
               isLoadingUsers: false,
             });
@@ -198,7 +231,7 @@ const useAdminStore = create(
           })
           .catch((_error) => {
             if (!hasUsers) {
-              set({ users: mockUsers });
+              set({ users: sortUsersByBalanceDesc(mockUsers) });
             }
             set({ isLoadingUsers: false });
             return get().users;
@@ -208,6 +241,14 @@ const useAdminStore = create(
           });
 
         return usersRequest;
+      },
+
+      loadUsersPage: async (page) => {
+        const requestedPageCandidate = Number(page);
+        const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
+          ? Math.floor(requestedPageCandidate)
+          : 1;
+        return get().loadUsers({ force: true, page: requestedPage });
       },
 
       getUserById: async (userId, { force = false } = {}) => {
@@ -226,6 +267,18 @@ const useAdminStore = create(
         const fetchedUser = await apiClient.users.getById(normalizedUserId);
         if (!fetchedUser) {
           return existingUser || existingDeletedUser;
+        }
+
+        if (existingUser) {
+          if (existingUser.wallet && !fetchedUser.wallet) {
+            fetchedUser.wallet = existingUser.wallet;
+          } else if (existingUser.wallet && fetchedUser.wallet && !fetchedUser.wallet.transactions) {
+            fetchedUser.wallet.transactions = existingUser.wallet.transactions;
+          }
+
+          if (existingUser.transactions && !fetchedUser.transactions) {
+            fetchedUser.transactions = existingUser.transactions;
+          }
         }
 
         set((state) => ({
@@ -301,14 +354,40 @@ const useAdminStore = create(
         }
 
         try {
-          const fetchedWallet = await apiClient.adminWallets.getByUserId(normalizedUserId);
+        const fetchedWallet = await apiClient.adminWallets.getByUserId(normalizedUserId);
           if (!fetchedWallet) return existingWallet;
 
-          set((state) => ({
-            wallets: upsertWallet(state.wallets, fetchedWallet),
-            walletsLastLoadedAt: Date.now(),
-            users: mergeWalletIntoUsers(state.users, fetchedWallet),
-          }));
+          // Seed userWalletTransactions immediately with the populated recentTransactions
+          // returned by the wallet endpoint. This prevents the flash: the UI gets correct
+          // orderNumber / customerInput data right away without waiting for a second
+          // getTransactionsByUserId call to complete.
+          const seedTransactions = Array.isArray(fetchedWallet.recentTransactions)
+            ? fetchedWallet.recentTransactions
+            : [];
+
+          set((state) => {
+            let nextUserWalletTransactions = state.userWalletTransactions;
+
+            if (seedTransactions.length > 0) {
+              nextUserWalletTransactions = {
+                ...state.userWalletTransactions,
+                [normalizedUserId]: seedTransactions,
+              };
+            }
+
+            return {
+              wallets: upsertWallet(state.wallets, fetchedWallet),
+              walletsLastLoadedAt: Date.now(),
+              users: mergeWalletIntoUsers(state.users, fetchedWallet),
+              ...(seedTransactions.length > 0 && {
+                userWalletTransactions: nextUserWalletTransactions,
+                walletTransactionsLastLoadedAt: {
+                  ...state.walletTransactionsLastLoadedAt,
+                  [normalizedUserId]: Date.now(),
+                },
+              }),
+            };
+          });
 
           return fetchedWallet;
         } catch (_error) {
@@ -357,6 +436,7 @@ const useAdminStore = create(
               const existingWallet = (state.wallets || []).find((entry) => (
                 String(entry?.userId || entry?.id || '').trim() === normalizedUserId
               )) || null;
+
               const nextWallet = buildWalletFromUser(relatedUser, {
                 ...(existingWallet || {}),
                 userId: normalizedUserId,

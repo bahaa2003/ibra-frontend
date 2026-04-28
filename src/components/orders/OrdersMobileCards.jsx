@@ -42,6 +42,20 @@ const OrdersMobileCards = ({
             </p>
           </div>
 
+          {/* ── Order ID + Player ID row ─────────────────────────────── */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-md border border-[color:rgb(var(--color-border-rgb)/0.72)] bg-[color:rgb(var(--color-surface-rgb)/0.55)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--color-text-secondary)]">
+              <span className="font-sans font-medium text-[var(--color-muted)]">{isArabic ? 'رقم الطلب' : 'Order'}</span>
+              #{order.siteOrderNumber || order.orderNumber}
+            </span>
+            {(order.playerId || order.primaryIdentifierField?.value) ? (
+              <span className="inline-flex items-center gap-1 rounded-md border border-[color:rgb(var(--color-primary-rgb)/0.2)] bg-[color:rgb(var(--color-primary-rgb)/0.06)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--color-primary)]">
+                <span className="font-sans font-medium">{isArabic ? 'معرف اللاعب' : 'Player ID'}</span>
+                {order.playerId || order.primaryIdentifierField?.value}
+              </span>
+            ) : null}
+          </div>
+
           <div className="mt-2 rounded-[0.9rem] border border-[color:rgb(var(--color-border-rgb)/0.72)] bg-[color:rgb(var(--color-card-rgb)/0.7)] px-2.5 py-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -52,9 +66,6 @@ const OrdersMobileCards = ({
                   {order.customerName}
                 </p>
               </div>
-              <p className="shrink-0 text-[10px] text-[var(--color-text-secondary)]">
-                #{order.siteOrderNumber || order.orderNumber}
-              </p>
             </div>
             <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-secondary)]">
               {order.customerEmail || '-'}

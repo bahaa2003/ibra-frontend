@@ -107,6 +107,40 @@ const walletTypeMeta = (type, isArabic) => {
   };
 };
 
+// ─── Helper: extract order number + player ID from a populated reference ─────
+// The backend now populates reference with { orderNumber, customerInput, status, totalPrice }.
+// customerInput.values is a free-form map — player ID may live under several key names.
+const resolveOrderMeta = (raw, orders = []) => {
+  // For 'wallet' source transactions the populated order lives on raw.reference
+  // For 'order' source entries it lives directly on raw itself
+  let orderDoc = raw?.reference && typeof raw.reference === 'object'
+    ? raw.reference
+    : (raw?.orderNumber != null ? raw : null);
+
+  if (!orderDoc) {
+    const refId = raw?.referenceId || (typeof raw?.reference === 'string' ? raw.reference : null);
+    if (refId && Array.isArray(orders)) {
+      orderDoc = orders.find((o) => String(o?.id || o?._id) === String(refId));
+    }
+  }
+
+  if (!orderDoc) return null;
+
+  const orderNumber = orderDoc.orderNumber ?? null;
+  const values = orderDoc.customerInput?.values || {};
+  const playerId =
+    values.playerId ??
+    values.player_id ??
+    values.uid ??
+    values.game_id ??
+    values.userId ??
+    null;
+
+  if (!orderNumber && !playerId) return null;
+  return { orderNumber, playerId };
+};
+
+
 const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
   const type = String(transaction?.type || transaction?.kind || transaction?.transactionType || '').trim().toLowerCase();
   const amount = asNumber(transaction?.amount);
@@ -588,6 +622,25 @@ const AdminUserTransactions = () => {
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-[var(--color-text)]">{item.title}</p>
                   <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">{item.subtitle}</p>
+                  {/* Order number + Player ID badges for wallet debit/refund rows */}
+                  {(() => {
+                    const meta = resolveOrderMeta(item.raw, userOrders);
+                    if (!meta) return null;
+                    return (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {meta.orderNumber != null && (
+                          <span className="inline-flex items-center gap-0.5 rounded-md bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
+                            📋 #{meta.orderNumber}
+                          </span>
+                        )}
+                        {meta.playerId && (
+                          <span className="inline-flex items-center gap-0.5 rounded-md bg-[color:rgb(var(--color-success-rgb,22,163,74)/0.08)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-success,#16a34a)]">
+                            🎮 {meta.playerId}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 {renderOperationStatus(item)}
               </div>
@@ -630,6 +683,25 @@ const AdminUserTransactions = () => {
                   <TableCell>
                     <div className="font-medium text-[var(--color-text)]">{item.title}</div>
                     <div className="text-xs text-[var(--color-text-secondary)]">{item.subtitle}</div>
+                    {/* Order number + Player ID badges */}
+                    {(() => {
+                      const meta = resolveOrderMeta(item.raw, userOrders);
+                      if (!meta) return null;
+                      return (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {meta.orderNumber != null && (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
+                              📋 #{meta.orderNumber}
+                            </span>
+                          )}
+                          {meta.playerId && (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-[color:rgb(var(--color-success-rgb,22,163,74)/0.08)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-success,#16a34a)]">
+                              🎮 {meta.playerId}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-center">{renderOperationStatus(item)}</TableCell>
                   <TableCell className={`text-center font-semibold ${item.convertedAmount >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>

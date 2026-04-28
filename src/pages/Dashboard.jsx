@@ -9,9 +9,9 @@ import AnnouncementTicker from '../components/home/AnnouncementTicker';
 import CategoryCard from '../components/home/CategoryCard';
 import ProductSearchBar from '../components/products/ProductSearchBar';
 import StoreFooter from '../components/home/StoreFooter';
-import buyCardsImage from '../assets/buyCards.webp';
-import chatAppsImage from '../assets/chatApps.webp';
-import gamesChargingImage from '../assets/gamesCharging.webp';
+import buyCardsImage from '../assets/slide1.png';
+import chatAppsImage from '../assets/slide2.jpeg';
+import gamesChargingImage from '../assets/slide3.jpeg';
 import {
   createStorefrontCategories,
   createStorefrontProducts,
