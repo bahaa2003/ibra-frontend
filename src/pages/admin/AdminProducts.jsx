@@ -44,6 +44,18 @@ const getProviderProductMaxQtyValue = (product) => (
     ?? ''
 );
 
+const isPermissionDeniedError = (error) => {
+    const status = Number(error?.status || error?.response?.status || error?.statusCode || 0);
+    const code = String(error?.code || error?.response?.data?.code || error?.response?.data?.error_code || '').toUpperCase();
+    const message = String(error?.message || error?.response?.data?.message || '').toLowerCase();
+
+    return status === 403
+        || code === 'FORBIDDEN'
+        || code === 'AUTHORIZATION_ERROR'
+        || code === 'PERMISSION_DENIED'
+        || message.includes('permission');
+};
+
 const dynamicFieldTypeOptions = [
     { value: 'text', label: 'Text', labelAr: 'نص' },
     { value: 'number', label: 'Number', labelAr: 'رقم' },
@@ -522,10 +534,12 @@ const AdminProducts = () => {
                     isActive: supplier.isActive !== false,
                 })) : []);
             })
-            .catch(() => {
+            .catch((error) => {
                 if (!isMounted) return;
                 setProviders([]);
-                addToast('فشل تحميل المزودين', 'error');
+                if (!isPermissionDeniedError(error)) {
+                    addToast('فشل تحميل المزودين', 'error');
+                }
             });
 
         return () => {

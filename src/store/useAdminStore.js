@@ -38,6 +38,18 @@ const sortUsersByBalanceDesc = (users) => (
     .sort((left, right) => getUserBalanceForSort(right) - getUserBalanceForSort(left))
 );
 
+const isPermissionDeniedError = (error) => {
+  const status = Number(error?.status || error?.response?.status || error?.statusCode || 0);
+  const code = String(error?.code || error?.response?.data?.code || error?.response?.data?.error_code || '').toUpperCase();
+  const message = String(error?.message || error?.response?.data?.message || '').toLowerCase();
+
+  return status === 403
+    || code === 'FORBIDDEN'
+    || code === 'AUTHORIZATION_ERROR'
+    || code === 'PERMISSION_DENIED'
+    || message.includes('permission');
+};
+
 const getCurrencyRate = (currencies, currencyCode) => {
   const normalizedCode = String(currencyCode || 'USD').toUpperCase();
   const matchedCurrency = (Array.isArray(currencies) ? currencies : []).find(
@@ -214,8 +226,10 @@ const useAdminStore = create(
             const currentPage = Number.isFinite(Number(pagination?.page))
               ? Math.floor(Number(pagination.page))
               : requestedPage;
-            const nextDeletedUsers = apiClient.users.listDeleted
-              ? await apiClient.users.listDeleted().catch(() => [])
+            const currentUser = useAuthStore.getState().user;
+            const canLoadDeletedUsers = normalizeRole(currentUser?.role) === ROLES.ADMIN;
+            const nextDeletedUsers = canLoadDeletedUsers && apiClient.users.listDeleted
+              ? await apiClient.users.listDeleted().catch((error) => (isPermissionDeniedError(error) ? [] : []))
               : [];
             set({
               users: nextUsers,
@@ -231,7 +245,18 @@ const useAdminStore = create(
             }
             return nextUsers;
           })
-          .catch((_error) => {
+          .catch((error) => {
+            if (isPermissionDeniedError(error)) {
+              set({
+                users: [],
+                deletedUsers: [],
+                usersPagination: null,
+                usersLastLoadedAt: Date.now(),
+                isLoadingUsers: false,
+              });
+              return [];
+            }
+
             if (!hasUsers) {
               set({ users: sortUsersByBalanceDesc(mockUsers) });
             }
