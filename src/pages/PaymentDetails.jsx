@@ -14,6 +14,7 @@ import { inputBaseClassName, textareaClassName } from '../components/ui/Input';
 import { findPaymentMethodById } from '../utils/paymentSettings';
 import { devLogger } from '../utils/devLogger';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { formatCurrencyNumber } from '../utils/intl';
 
 const getMethodPresentation = (method) => {
   const token = `${method?.id || ''} ${method?.name || ''}`.toLowerCase();
@@ -106,16 +107,9 @@ const PaymentDetails = () => {
   const formatMoney = (value) => {
     const safeValue = Number(value || 0);
     const currencyCode = String(user?.currency || 'USD').toUpperCase();
-
-    try {
-      return new Intl.NumberFormat(isRTL ? 'ar-EG' : 'en-US', {
-        style: 'currency',
-        currency: currencyCode,
-        maximumFractionDigits: 2,
-      }).format(safeValue);
-    } catch (_error) {
-      return `${safeValue.toFixed(2)} ${currencyCode}`;
-    }
+    return formatCurrencyNumber(safeValue, currencyCode, isRTL ? 'ar-EG' : 'en-US', {
+      maximumFractionDigits: 2,
+    });
   };
 
   const handleInputChange = (field, value) => {

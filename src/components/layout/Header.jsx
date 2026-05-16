@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import ThemeToggle from '../ui/ThemeToggle';
-import brandIconImage from '../../assets/logo.png';
+import NotificationBell from '../notifications/NotificationBell';
+import brandIconImage from '../../assets/logo-optimized.webp';
 import brandWordmarkImage from '../../assets/ibra.png';
 import { formatWalletAmount } from '../../utils/storefront';
 import { getDefaultRouteForRole, isAdminRole } from '../../utils/authRoles';
@@ -13,7 +14,7 @@ import { getDefaultRouteForRole, isAdminRole } from '../../utils/authRoles';
 const Header = ({ toggleSidebar }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
@@ -28,32 +29,30 @@ const Header = ({ toggleSidebar }) => {
   return (
     <header
       dir={isRTL ? 'rtl' : 'ltr'}
-      className="w-full border-b border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-surface-rgb)/0.92)] backdrop-blur-2xl"
+      className="w-full px-3 pt-3 sm:px-4 md:px-6 lg:px-8"
     >
-      <div className="flex w-full items-start justify-between gap-2 px-3 py-1.5 [direction:ltr] sm:px-4 sm:py-2 md:px-6 lg:px-8">
+      <div className="flex w-full items-center justify-between gap-2 rounded-[2rem] border border-[color:rgb(var(--color-border-rgb)/0.86)] bg-[linear-gradient(135deg,rgb(var(--color-surface-rgb)/0.96),rgb(var(--color-card-rgb)/0.88))] px-3 py-1.5 shadow-[var(--shadow-subtle)] ring-1 ring-[color:rgb(var(--color-primary-rgb)/0.08)] backdrop-blur-2xl [direction:ltr] sm:px-4 sm:py-2">
         <div className="flex min-w-0 items-center">
           <button
             type="button"
             onClick={() => navigate(getDefaultRouteForRole(user?.role))}
-            className={`flex min-w-0 max-w-[calc(100vw-11rem)] items-center gap-1.5 rounded-full border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-1.5 py-1 shadow-[var(--shadow-subtle)] transition-all hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:-translate-y-0.5 sm:max-w-none sm:gap-2.5 sm:px-2.5 sm:py-1.5 ${isRTL ? 'flex-row-reverse' : ''}`}
+            className="flex min-w-0 max-w-[calc(100vw-15.5rem)] items-center gap-2 [direction:ltr] transition-all hover:-translate-y-0.5 sm:max-w-none sm:gap-2.5"
           >
-            <div className="flex h-9.5 w-9.5 items-center justify-center overflow-hidden rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] sm:h-10.5 sm:w-10.5">
-              <img
-                src={brandIconImage}
-                alt="IBRA Store"
-                loading="eager"
-                decoding="async"
-                className="h-[112%] w-[112%] translate-y-[9%] object-contain"
-              />
-            </div>
+            <img
+              src={brandIconImage}
+              alt="IBRA Store"
+              loading="eager"
+              decoding="async"
+              className="h-11 w-11 shrink-0 object-contain sm:h-12 sm:w-12"
+            />
 
-            <div className={`min-w-0 ${isRTL ? 'text-right' : 'text-start'}`}>
+            <div className="min-w-0 text-left">
               <img
                 src={brandWordmarkImage}
                 alt="IBRA"
                 loading="eager"
                 decoding="async"
-                className="h-3.5 w-auto max-w-[4.9rem] object-contain sm:h-5 sm:max-w-none"
+                className="h-5.5 w-auto max-w-[7.25rem] object-contain sm:h-6.5 sm:max-w-[8.5rem]"
               />
               <p className="hidden truncate text-[11px] uppercase tracking-[0.18em] text-[var(--color-primary-soft)] sm:block">
                 {isRTL ? 'هوية تجارة رقمية فاخرة' : 'Luxury Digital Store'}
@@ -78,6 +77,8 @@ const Header = ({ toggleSidebar }) => {
               </span>
             </button>
           )}
+
+          {isAuthenticated && <NotificationBell />}
 
           <ThemeToggle compact className="h-10 w-10 sm:h-11 sm:w-11" />
 

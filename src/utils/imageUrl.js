@@ -11,7 +11,7 @@
  *   - Falsy values: → empty string
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://ibra-backend.onrender.com/api';
 
 /**
  * Backend origin (without /api suffix).

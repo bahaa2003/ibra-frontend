@@ -1,7 +1,7 @@
 import buyCardsImage from '../assets/buyCards.webp';
 import chatAppsImage from '../assets/chatApps.webp';
 import gamesChargingImage from '../assets/gamesCharging.webp';
-import brandIconImage from '../assets/logo.png';
+import brandIconImage from '../assets/logo-optimized.webp';
 import { calculateProductPrice } from './pricing';
 import { formatNumber } from './intl';
 import { getMoneyFormatOptions, toFiniteMoneyNumber } from './money';

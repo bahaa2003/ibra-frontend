@@ -26,15 +26,18 @@ import {
   resolveProductUnitPrice,
 } from '../../utils/pricing';
 import { normalizeMoneyAmount } from '../../utils/money';
+import { formatGroupedNumberString } from '../../utils/intl';
 import { getProductStatus } from '../../utils/productStatus';
 import {
   clampProductQuantity,
   getProductQuantityMeta,
+  resolveProductDynamicFields,
   resolveProductOrderFields,
   sanitizeOrderFieldValue,
 } from '../../utils/productPurchase';
 import { isApprovedAccountStatus } from '../../utils/accountStatus';
 import { devLogger } from '../../utils/devLogger';
+import purchaseBrandImage from '../../assets/coins-optimized.webp';
 
 const getCopy = (language = 'ar') => {
   if (language === 'en') {
@@ -155,6 +158,8 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
   const [isPreparing, setIsPreparing] = useState(false);
   const [fieldValues, setFieldValues] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
+  const [dynamicValues, setDynamicValues] = useState({});
+  const [dynamicErrors, setDynamicErrors] = useState({});
   const [quantity, setQuantity] = useState(1);
   const [quantityInput, setQuantityInput] = useState('1');
   const [quantityError, setQuantityError] = useState('');
@@ -166,6 +171,11 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
   const orderFields = useMemo(
     () => resolveProductOrderFields(product, language),
     [language, product]
+  );
+
+  const dynamicFields = useMemo(
+    () => resolveProductDynamicFields(product),
+    [product]
   );
 
   const quantityMeta = useMemo(
@@ -199,16 +209,23 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
       nextFields[field.key] = '';
     });
 
+    const nextDynamicFields = {};
+    dynamicFields.forEach((field) => {
+      nextDynamicFields[field.name] = '';
+    });
+
     setFieldValues(nextFields);
     setFieldErrors({});
+    setDynamicValues(nextDynamicFields);
+    setDynamicErrors({});
     setQuantity(quantityMeta.minQty);
-    setQuantityInput(String(quantityMeta.minQty));
+    setQuantityInput('');
     setQuantityError('');
     setIsSubmitting(false);
     setStatusCard({ tone: 'info', title: '', message: '' });
     setSuccessfulOrderId(null);
     setSuccessMeta({ amount: '', identifier: '', orderNumber: '' });
-  }, [orderFields, product?.id, quantityMeta.minQty]);
+  }, [dynamicFields, orderFields, product?.id, quantityMeta.minQty]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -359,11 +376,27 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     });
   };
 
+  const handleDynamicFieldChange = (fieldName, value) => {
+    setDynamicValues((prev) => ({
+      ...prev,
+      [fieldName]: sanitizeOrderFieldValue(value),
+    }));
+
+    setDynamicErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
+    });
+  };
+
   const applyQuantity = (rawValue) => {
     const raw = String(rawValue ?? '');
-    setQuantityInput(raw);
+    const normalizedRaw = raw.replace(/[^\d]/g, '');
+    const formattedRaw = normalizedRaw ? formatGroupedNumberString(normalizedRaw) : '';
+    setQuantityInput(formattedRaw);
 
-    const trimmed = raw.trim();
+    const trimmed = normalizedRaw.trim();
     if (!trimmed) {
       setQuantityError('');
       return;
@@ -386,9 +419,9 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
   };
 
   const handleQuantityBlur = () => {
-    const trimmed = String(quantityInput ?? '').trim();
+    const trimmed = String(quantityInput ?? '').replace(/[^\d]/g, '').trim();
     if (!trimmed) {
-      setQuantityInput(String(quantity));
+      setQuantityInput('');
       setQuantityError('');
       return;
     }
@@ -402,7 +435,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
 
     const normalized = clampProductQuantity(numeric, product);
     setQuantity(normalized);
-    setQuantityInput(String(normalized));
+    setQuantityInput(formatGroupedNumberString(normalized));
     setQuantityError(normalized !== numeric ? copy.invalidQuantity : '');
   };
 
@@ -417,6 +450,21 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
 
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
+      return;
+    }
+
+    const nextDynamicErrors = {};
+    dynamicFields.forEach((field) => {
+      const rawValue = String(dynamicValues[field.name] || '').trim();
+      if (field.required !== false && !rawValue) {
+        nextDynamicErrors[field.name] = copy.fieldRequired(field.label);
+      } else if (rawValue && field.type === 'number' && !Number.isFinite(Number(rawValue))) {
+        nextDynamicErrors[field.name] = `${field.label} must be a number.`;
+      }
+    });
+
+    if (Object.keys(nextDynamicErrors).length > 0) {
+      setDynamicErrors(nextDynamicErrors);
       return;
     }
 
@@ -460,10 +508,20 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
           sanitizeOrderFieldValue(fieldValues[field.key]).trim(),
         ])
       );
+      const dynamicData = Object.fromEntries(
+        dynamicFields.map((field) => [
+          field.name,
+          field.type === 'number'
+            ? Number(dynamicValues[field.name])
+            : sanitizeOrderFieldValue(dynamicValues[field.name]).trim(),
+        ]).filter(([, value]) => value !== '' && value !== null && value !== undefined && !(typeof value === 'number' && Number.isNaN(value)))
+      );
 
       const userIdentifier = String(
         normalizedFields.playerId
         || normalizedFields.uid
+        || Object.values(normalizedFields).find((value) => String(value || '').trim())
+        || Object.values(dynamicData).find((value) => String(value || '').trim())
         || ''
       ).trim();
       const fieldsSnapshot = Array.isArray(product?.orderFields) && product.orderFields.length > 0
@@ -472,6 +530,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
           key: field.key,
           label: field.label,
           placeholder: field.placeholder,
+          type: field.type,
         }));
 
       const createResult = await addOrder({
@@ -489,9 +548,10 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
         playerId: userIdentifier,
         orderFields: normalizedFields,
         orderFieldsValues: normalizedFields,
+        dynamicData,
         customerInput: {
-          values: normalizedFields,
-          fieldsSnapshot,
+          values: Object.keys(dynamicData).length ? dynamicData : normalizedFields,
+          fieldsSnapshot: Object.keys(dynamicData).length ? dynamicFields.map((field) => ({ ...field })) : fieldsSnapshot,
           quantitySnapshot: quantityMeta,
         },
         quantitySnapshot: quantityMeta,
@@ -566,7 +626,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 22, scale: 0.99 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="relative flex max-h-[min(92vh,48rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.6rem] border border-white/15 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.14),transparent_56%),linear-gradient(180deg,#0c1222_0%,#070c18_56%,#05080f_100%)] text-white shadow-[0_28px_85px_-35px_rgba(0,0,0,0.9)] sm:rounded-[2rem]"
+              className="relative flex max-h-[min(95vh,52rem)] w-full max-w-[26rem] flex-col overflow-hidden rounded-[1.6rem] border border-[#f0c66f]/38 bg-[radial-gradient(circle_at_top,rgba(255,240,189,0.18),transparent_52%),linear-gradient(180deg,#3a2411_0%,#24170d_56%,#120b06_100%)] text-white shadow-[0_0_0_1px_rgba(240,198,111,0.16),0_0_28px_-8px_rgba(240,198,111,0.72),0_28px_85px_-35px_rgba(0,0,0,0.9)] sm:rounded-[2rem]"
             >
               <button
                 type="button"
@@ -578,61 +638,61 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                 <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
 
-              <header className="space-y-1.5 border-b border-white/10 px-2.5 pb-2 pt-2 sm:space-y-3 sm:px-4 sm:pb-3 sm:pt-3">
-                <div className="flex flex-wrap items-start justify-start gap-1.5 [direction:ltr] sm:gap-2">
-                  <div className="rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/12 px-2 py-1 shadow-[0_10px_24px_-18px_rgba(212,175,55,0.8)] sm:rounded-2xl sm:px-3 sm:py-2">
-                    <p className="text-[10px] font-semibold text-white/75 sm:text-[11px]">{copy.unitPrice}</p>
-                    <p className="mt-0.5 text-[13px] font-bold tracking-tight text-[#f7d98a] sm:mt-1 sm:text-base">{formattedUnitPrice}</p>
-                  </div>
-                  <Badge variant={availabilityVariant} className="px-1.5 py-0.5 text-[9px] sm:px-2.5 sm:py-1 sm:text-[11px]">{availabilityLabel}</Badge>
-                  <Badge variant="premium" className="gap-1 px-1.5 py-0.5 text-[9px] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px]">
-                    <Zap className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
+              <header className="space-y-3 border-b border-white/10 px-3 pb-4 pt-1.5 sm:space-y-4 sm:px-5 sm:pb-5 sm:pt-2">
+                <div className="mt-2 flex flex-wrap items-start justify-start gap-2 [direction:ltr] sm:mt-3 sm:gap-2.5">
+                  <Badge variant={availabilityVariant} className="px-2.5 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-sm">{availabilityLabel}</Badge>
+                  <Badge variant="premium" className="gap-1.5 px-2.5 py-1 text-[11px] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-sm">
+                    <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     {copy.quickOrder}
                   </Badge>
                 </div>
 
-                <div className={cn('flex items-center gap-2 sm:gap-3', isRTL ? 'flex-row-reverse text-right' : 'text-left')}>
-                  {product?.image ? (
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/15 bg-white/6 sm:h-16 sm:w-16 sm:rounded-2xl">
-                      <img
-                        src={product.image}
-                        alt={productTitle}
-                        loading="eager"
-                        decoding="async"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/6 sm:h-16 sm:w-16 sm:rounded-2xl">
-                      <Package2 className="h-4 w-4 text-[#f7d98a] sm:h-6 sm:w-6" />
-                    </div>
-                  )}
+                <div className="text-center">
+                  <img
+                    src={purchaseBrandImage}
+                    alt="IBRA"
+                    loading="eager"
+                    decoding="async"
+                    className="-mt-4 mx-auto h-20 w-full max-w-[16rem] object-contain sm:-mt-5 sm:h-24"
+                  />
 
-                  <div className="min-w-0 flex-1">
-                    <h2 className="line-clamp-2 text-base font-bold leading-5 tracking-[-0.02em] text-white sm:text-2xl sm:leading-8">
-                      {productTitle}
-                    </h2>
-                    {productSubtitle ? (
-                      <p className="mt-0.5 truncate text-[11px] text-white/65 sm:mt-1 sm:text-sm">
-                        {productSubtitle}
-                      </p>
-                    ) : null}
-                    {productDescription ? (
-                      <p className="mt-2 line-clamp-3 max-w-[30rem] text-[11px] leading-5 text-white/78 sm:text-sm">
-                        {productDescription}
-                      </p>
-                    ) : null}
+                  <div className="mt-3 flex items-center gap-3 [direction:ltr] sm:mt-4">
+                    {product?.image ? (
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#f0c66f]/22 bg-[#fff0bd]/8 sm:h-14 sm:w-14">
+                        <img
+                          src={product.image}
+                          alt={productTitle}
+                          loading="eager"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0c66f]/22 bg-[#fff0bd]/8 sm:h-14 sm:w-14">
+                        <Package2 className="h-5 w-5 text-[#f7d98a]" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1 text-right [direction:rtl]">
+                      <h2 className="line-clamp-2 text-right text-base font-bold leading-5 tracking-[-0.02em] text-white sm:text-2xl sm:leading-8">
+                        {productTitle}
+                      </h2>
+                      {productSubtitle ? (
+                        <p className="mt-0.5 truncate text-right text-[11px] text-white/65 sm:mt-1 sm:text-sm">
+                          {productSubtitle}
+                        </p>
+                      ) : null}
+                      {productDescription ? (
+                        <p className="mt-2 line-clamp-3 max-w-[30rem] text-right text-[11px] leading-5 text-white/78 sm:text-sm">
+                          {productDescription}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </header>
 
-              <div className="flex-1 space-y-2 overflow-y-auto px-2.5 py-2.5 sm:space-y-3 sm:px-4 sm:py-3">
-                <section className="rounded-xl border border-[#d4af37]/25 bg-[#d4af37]/10 p-2.5 sm:rounded-2xl sm:p-3">
-                  <p className="text-[11px] font-semibold text-[#f7d98a]">{copy.total}</p>
-                  <p className="mt-1 text-lg font-bold text-white sm:mt-1.5 sm:text-xl">{formattedTotalPrice}</p>
-                  <p className="mt-0.5 hidden text-[11px] text-white/70 sm:block">{copy.totalHint}</p>
-                </section>
-
+              <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3.5 sm:space-y-4 sm:px-4 sm:py-4">
                 {!canAfford && isApproved && productState.isPurchasable ? (
                   <div className="rounded-xl border border-[color:rgb(var(--color-error-rgb)/0.38)] bg-[color:rgb(var(--color-error-rgb)/0.14)] p-2.5 sm:rounded-2xl sm:p-3">
                     <p className="text-[11px] font-semibold text-white sm:text-xs">{copy.insufficientTitle}</p>
@@ -654,69 +714,107 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                   </div>
                 ) : null}
 
-                <section className="space-y-1.5 rounded-xl border border-white/12 bg-white/6 p-2.5 sm:space-y-2 sm:rounded-2xl sm:p-3">
-                  <div className={cn('flex items-center justify-between gap-3', isRTL ? 'flex-row-reverse' : 'flex-row')}>
-                    <div>
-                      <h3 className="text-[11px] font-semibold text-white sm:text-xs">{copy.orderFields}</h3>
-                      <p className="mt-0.5 hidden text-[11px] text-white/65 sm:block">{copy.orderFieldsHint}</p>
+                <section className="space-y-1.5 px-0.5 sm:space-y-2">
+                  <div className={cn('flex flex-wrap items-center gap-1 text-[9px] text-white/65 sm:text-[10px]', isRTL ? 'justify-end' : 'justify-start')}>
+                    <span>{copy.min} {formatGroupedNumberString(quantityMeta.minQty)}</span>
+                    <span>•</span>
+                    <span>{copy.max} {formatGroupedNumberString(quantityMeta.maxQty)}</span>
+                  </div>
+
+                  <div className={cn('grid grid-cols-2 gap-2', isRTL && '[direction:rtl]')}>
+                    <div className="p-1">
+                      <p className="mb-1 text-[10px] font-semibold text-white/78 sm:text-[11px]">{copy.quantityTitle}</p>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={quantityInput}
+                        onChange={(event) => applyQuantity(event.target.value)}
+                        onBlur={handleQuantityBlur}
+                        disabled={isSubmitting}
+                        placeholder={language === 'en' ? 'Enter quantity' : 'ادخل العدد'}
+                        className="h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 px-2 text-center text-xs font-bold text-white [appearance:textfield] placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                    </div>
+
+                    <div className="p-1">
+                      <p className="text-[10px] font-semibold text-[#f7d98a] sm:text-[11px]">{copy.total}</p>
+                      <p className="mt-2 truncate text-center text-sm font-black text-white sm:text-base">{formattedTotalPrice}</p>
                     </div>
                   </div>
-
-                  <div className="space-y-1.5 sm:space-y-2">
-                    {orderFields.map((field) => {
-                      const label = resolveFieldLabel(field, language);
-                      return (
-                        <Input
-                          key={field.key}
-                          label={label}
-                          value={fieldValues[field.key] || ''}
-                          onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                          error={fieldErrors[field.key]}
-                          placeholder={field.placeholder || copy.placeholder(label)}
-                          autoComplete="off"
-                          spellCheck={false}
-                          disabled={isSubmitting || statusCard.tone === 'success'}
-                          className="h-9 rounded-md border-white/15 bg-white/8 text-xs text-white placeholder:text-white/45 focus:border-[#d4af37]/45 focus:bg-white/12 sm:h-10 sm:rounded-lg sm:text-[13px]"
-                        />
-                      );
-                    })}
-                  </div>
-                </section>
-
-                <section className="space-y-1.5 rounded-xl border border-white/12 bg-white/6 p-2.5 sm:space-y-2 sm:rounded-2xl sm:p-3">
-                  <div className={cn('flex items-center justify-between gap-3', isRTL ? 'flex-row-reverse' : 'flex-row')}>
-                    <p className="text-[11px] font-semibold text-white sm:text-xs">{copy.quantityTitle}</p>
-                    <div className={cn('flex items-center gap-1 text-[9px] text-white/65 sm:gap-1 sm:text-[10px]', isRTL ? 'flex-row-reverse' : 'flex-row')}>
-                      <span>{copy.min} {quantityMeta.minQty}</span>
-                      <span>•</span>
-                      <span>{copy.max} {quantityMeta.maxQty}</span>
-                      <span>•</span>
-                      <span>{copy.step} {quantityMeta.stepQty}</span>
-                    </div>
-                  </div>
-
-                  <Input
-                    label={language === 'en' ? 'Add' : 'إضافة'}
-                    type="number"
-                    inputMode="numeric"
-                    min={quantityMeta.minQty}
-                    max={quantityMeta.maxQty}
-                    step={quantityMeta.stepQty}
-                    value={quantityInput}
-                    onChange={(event) => applyQuantity(event.target.value)}
-                    onBlur={handleQuantityBlur}
-                    disabled={isSubmitting}
-                    placeholder={language === 'en' ? 'Enter required quantity' : 'اكتب الكمية اللي محتاجها'}
-                    className="h-9 rounded-md border-white/15 bg-white/8 text-xs text-white placeholder:text-white/45 focus:border-[#d4af37]/45 focus:bg-white/12 sm:h-10 sm:rounded-lg sm:text-[13px]"
-                  />
 
                   {quantityError ? (
                     <p className="text-[11px] font-medium text-[#ffb4b4]">{quantityError}</p>
                   ) : null}
                 </section>
+
+                <section className="space-y-1.5 px-0.5 sm:space-y-2">
+                  {dynamicFields.map((field) => {
+                    const label = field.label || field.name;
+                    const commonClassName = 'h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 text-xs text-white placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px]';
+
+                    if (field.type === 'select') {
+                      return (
+                        <div key={field.name} className="space-y-1.5">
+                          <label className="block text-[11px] font-semibold text-white/80">{label}</label>
+                          <select
+                            value={dynamicValues[field.name] || ''}
+                            onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
+                            disabled={isSubmitting || statusCard.tone === 'success'}
+                            className={`${commonClassName} w-full px-2 dark:[color-scheme:dark]`}
+                          >
+                            <option value="" className="bg-[#120b06] text-white">{copy.placeholder(label)}</option>
+                            {(field.options || []).map((option) => (
+                              <option key={option} value={option} className="bg-[#120b06] text-white">{option}</option>
+                            ))}
+                          </select>
+                          {dynamicErrors[field.name] ? (
+                            <p className="text-[11px] font-medium text-[#ffb4b4]">{dynamicErrors[field.name]}</p>
+                          ) : null}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Input
+                        key={field.name}
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        inputMode={field.type === 'number' ? 'numeric' : 'text'}
+                        label={label}
+                        value={dynamicValues[field.name] || ''}
+                        onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
+                        error={dynamicErrors[field.name]}
+                        placeholder={copy.placeholder(label)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={isSubmitting || statusCard.tone === 'success'}
+                        className={commonClassName}
+                      />
+                    );
+                  })}
+
+                  {orderFields.map((field) => {
+                    const label = resolveFieldLabel(field, language);
+                    return (
+                      <Input
+                        key={field.key}
+                        type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                        inputMode={field.type === 'number' ? 'numeric' : field.type === 'email' ? 'email' : 'text'}
+                        label={label}
+                        value={fieldValues[field.key] || ''}
+                        onChange={(event) => handleFieldChange(field.key, event.target.value)}
+                        error={fieldErrors[field.key]}
+                        placeholder={field.placeholder || copy.placeholder(label)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={isSubmitting || statusCard.tone === 'success'}
+                        className="h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 text-xs text-white placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px]"
+                      />
+                    );
+                  })}
+                </section>
               </div>
 
-              <footer className="border-t border-white/12 bg-[#070d19]/94 px-2.5 py-2.5 sm:px-4 sm:py-3">
+              <footer className="border-t border-white/12 bg-[#070d19]/94 px-3 py-3.5 sm:px-4 sm:py-4">
                 {statusCard.message && !successfulOrderId ? (
                   <div className={`mb-2 flex items-start gap-2 rounded-lg border px-2.5 py-2 text-[11px] sm:mb-2.5 sm:gap-2.5 sm:rounded-xl sm:py-2 sm:text-xs ${statusToneStyles[statusCard.tone] || statusToneStyles.info}`}>
                     <StatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', statusCard.tone === 'info' && isSubmitting && 'animate-spin')} />

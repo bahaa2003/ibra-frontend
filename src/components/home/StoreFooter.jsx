@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import brandIconImage from '../../assets/logo.png';
+import brandIconImage from '../../assets/logo-optimized.webp';
 import brandWordmarkImage from '../../assets/ibra.png';
 
 const StoreFooter = ({

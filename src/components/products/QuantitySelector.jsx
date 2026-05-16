@@ -1,6 +1,7 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '../ui/Button';
+import { formatGroupedNumberString } from '../../utils/intl';
 
 const QuantitySelector = ({
   value,
@@ -12,7 +13,7 @@ const QuantitySelector = ({
   copy,
 }) => {
   const handleInputChange = (event) => {
-    onChange(event.target.value);
+    onChange(String(event.target.value || '').replace(/[^\d]/g, ''));
   };
 
   const changeBy = (direction) => {
@@ -25,11 +26,11 @@ const QuantitySelector = ({
         <div>
           <p className="text-sm font-semibold text-white">{copy.quantityLabel}</p>
           <p className="mt-1 text-xs text-white/58">
-            {copy.minLabel} {minQty} • {copy.maxLabel} {maxQty} • {copy.stepLabel} {stepQty}
+          {copy.minLabel} {formatGroupedNumberString(minQty)} • {copy.maxLabel} {formatGroupedNumberString(maxQty)} • {copy.stepLabel} {formatGroupedNumberString(stepQty)}
           </p>
         </div>
         <div className="rounded-full border border-white/12 bg-black/20 px-3 py-1 text-sm font-semibold text-white">
-          {value}
+          {formatGroupedNumberString(value)}
         </div>
       </div>
 
@@ -45,12 +46,9 @@ const QuantitySelector = ({
         </button>
 
         <input
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={minQty}
-          max={maxQty}
-          step={stepQty}
-          value={value}
+          value={formatGroupedNumberString(value)}
           onChange={handleInputChange}
           disabled={disabled}
           className={cn(

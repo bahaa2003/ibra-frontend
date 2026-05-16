@@ -130,6 +130,8 @@ const sanitizeUser = (user) => {
   const { password, passwordHash, ...safeUser } = user;
   return {
     ...safeUser,
+    isApiEnabled: Boolean(safeUser.isApiEnabled),
+    apiToken: safeUser.apiToken || '',
     creditLimit: normalizeCreditLimitValue(safeUser.creditLimit),
   };
 };
@@ -1506,7 +1508,7 @@ const mockApi = {
             return sanitizeUser(user);
         },
 
-        updateRole: async (userId, role, actorContext) => {
+        updateRole: async (userId, role, actorContext, permissions) => {
           await new Promise(resolve => setTimeout(resolve, DELAY));
           const db = getDB('admin-storage', { state: { users: mockUsers } });
           const migrated = await secureUsersInDb(db);
@@ -1515,14 +1517,36 @@ const mockApi = {
           const user = db.state.users.find(u => u.id === userId);
           if (!user) return null;
 
-          if (!actor || actor.role !== 'admin') {
+          if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
           throw new Error('Only admin can change roles');
           }
-          if (user.role === 'admin' && role !== 'admin') {
+          if (String(user.role || '').toUpperCase() === 'ADMIN' && String(role || '').toUpperCase() !== 'ADMIN') {
           throw new Error('Cannot demote an admin in mock security mode');
           }
 
-          user.role = role;
+          user.role = String(role || '').toUpperCase();
+          if (permissions !== undefined) {
+            user.permissions = Array.isArray(permissions) ? permissions : [];
+            user.supervisorPermissions = user.permissions;
+          }
+          saveDB('admin-storage', db);
+          return sanitizeUser(user);
+        },
+
+        updateSupervisorPermissions: async (userId, permissions, actorContext) => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const db = getDB('admin-storage', { state: { users: mockUsers } });
+          const actor = resolveActor(actorContext);
+          const user = db.state.users.find(u => u.id === userId);
+          if (!user) return null;
+          if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+            throw new Error('Only admin can update supervisor permissions');
+          }
+          if (String(user.role || '').toUpperCase() !== 'SUPERVISOR') {
+            throw new Error('Only supervisors can receive permissions');
+          }
+          user.permissions = Array.isArray(permissions) ? permissions : [];
+          user.supervisorPermissions = user.permissions;
           saveDB('admin-storage', db);
           return sanitizeUser(user);
         },
@@ -1687,14 +1711,74 @@ const mockApi = {
             user.passwordHash = await hashPassword(nextPassword);
           }
           if (updates?.creditLimit !== undefined) {
-            if (!actor || actor.role !== 'admin') {
+            if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
               throw new Error('Only admin can update credit limit');
             }
             user.creditLimit = normalizeCreditLimitValue(updates.creditLimit);
           }
+          if (updates?.role !== undefined) {
+            if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+              throw new Error('Only admin can update role');
+            }
+            const normalizedRole = String(updates.role || 'customer').trim().toUpperCase();
+            user.role = normalizedRole || 'CUSTOMER';
+          }
+          if (updates?.supervisorPermissions !== undefined) {
+            if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+              throw new Error('Only admin can update supervisor permissions');
+            }
+            user.supervisorPermissions = Array.isArray(updates.supervisorPermissions)
+              ? updates.supervisorPermissions
+              : [];
+          }
+          if (updates?.permissions !== undefined) {
+            if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+              throw new Error('Only admin can update permissions');
+            }
+            user.permissions = Array.isArray(updates.permissions)
+              ? updates.permissions
+              : [];
+          }
+          if (updates?.permissionsUpdatedAt !== undefined) {
+            user.permissionsUpdatedAt = updates.permissionsUpdatedAt;
+          }
+          if (updates?.isApiEnabled !== undefined) {
+            if (!actor || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+              throw new Error('Only admin can update API access');
+            }
+            user.isApiEnabled = Boolean(updates.isApiEnabled);
+            if (user.isApiEnabled && !user.apiToken) {
+              user.apiToken = `mock_api_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            }
+          }
 
           saveDB('admin-storage', db);
           return sanitizeUser(user);
+      },
+
+      regenerateApiToken: async (userId, actorContext) => {
+          await new Promise(resolve => setTimeout(resolve, DELAY));
+          const db = getDB('admin-storage', { state: { users: mockUsers } });
+          const migrated = await secureUsersInDb(db);
+          if (migrated) saveDB('admin-storage', db);
+          const actor = resolveActor(actorContext);
+          const targetUserId = String(userId || actor?.id || '').trim();
+          const user = db.state.users.find(u => String(u.id) === targetUserId);
+          if (!user) throw new Error('User not found');
+
+          const isSelf = actor && String(actor.id) === targetUserId;
+          if (!isSelf) {
+            ensureCanManageUser(actor, user, 'regenerate API token for');
+          }
+
+          user.isApiEnabled = true;
+          user.apiToken = `mock_api_${Date.now()}_${Math.random().toString(36).slice(2, 18)}`;
+          saveDB('admin-storage', db);
+
+          return {
+            apiToken: user.apiToken,
+            user: sanitizeUser(user),
+          };
       },
 
       resetPassword: async (userId, actorContext, nextPassword = '') => {

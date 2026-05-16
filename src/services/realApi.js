@@ -22,8 +22,9 @@ import {
 
 import { resolveImageUrl } from '../utils/imageUrl';
 import { getAccountAccessRoute, normalizeAccountStatus } from '../utils/accountStatus';
+import { normalizePermissions, normalizeRole, ROLES } from '../utils/authRoles';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://ibra-backend.onrender.com/api';
 
 const http = axios.create({
   baseURL: API_BASE,
@@ -65,7 +66,7 @@ const safeParseJson = (raw, fallback = null) => {
 
 const getAuthPersistedRoot = () => safeParseJson(localStorage.getItem(AUTH_STORAGE_KEY), {});
 const getStoredAuthState = () => getAuthPersistedRoot()?.state || {};
-const getStoredRole = () => String(getStoredAuthState()?.user?.role || '').trim().toUpperCase();
+const getStoredRole = () => normalizeRole(getStoredAuthState()?.user?.role);
 
 const readCachedPaymentSettings = () => safeParseJson(localStorage.getItem(PAYMENT_SETTINGS_CACHE_KEY), null);
 const writeCachedPaymentSettings = (settings) => {
@@ -441,8 +442,13 @@ const normaliseUser = (u) => {
     ...u,
     id,
     _id: undefined,
-    // FE expects lowercase role
-    role: (u.role || 'customer').toLowerCase(),
+    role: normalizeRole(u.role),
+    permissions: normalizePermissions(u.permissions || u.supervisorPermissions),
+    supervisorPermissions: normalizePermissions(u.permissions || u.supervisorPermissions),
+    isTwoFactorEnabled: Boolean(u.isTwoFactorEnabled ?? u.twoFactorEnabled),
+    twoFactorEnabled: Boolean(u.twoFactorEnabled ?? u.isTwoFactorEnabled),
+    isApiEnabled: Boolean(u.isApiEnabled),
+    apiToken: u.apiToken || null,
     // FE expects lowercase status strings
     status: (u.status || 'pending').toLowerCase(),
     signupMethod: (u.signupMethod || u.authProvider || u.provider || u.signupProvider || 'email').toLowerCase(),
@@ -703,14 +709,36 @@ const normaliseProduct = (p) => {
     syncPriceWithProvider: p.syncPriceWithProvider !== undefined ? Boolean(p.syncPriceWithProvider) : usesProviderPricing,
     enableManualPrice: p.enableManualPrice !== undefined ? Boolean(p.enableManualPrice) : Number(manualPriceAdjustment || 0) !== 0,
     manualPriceAdjustment,
+    isAvailableForApi: p.isAvailableForApi !== false,
     syncedProviderBasePrice: p.syncedProviderBasePrice ?? p.rawPrice ?? null,
     fallbackSupplierId: p.fallbackSupplierId || '',
     supplierFieldMappings,
     supplierNotes: p.supplierNotes || '',
     // Category stays as-is (string in both BE and FE)
     category: p.category || '',
+    orderFields: Array.isArray(p.orderFields) ? p.orderFields : [],
+    dynamicFields: Array.isArray(p.dynamicFields) ? p.dynamicFields : [],
     // Resolve image URL so user-facing components get fully-qualified paths
     image: resolveImageUrl(p.image),
+  };
+};
+
+const normaliseNotification = (notification = {}) => {
+  const id = notification._id || notification.id;
+
+  return {
+    ...notification,
+    id,
+    _id: undefined,
+    read: Boolean(notification.read ?? notification.isRead),
+    isRead: Boolean(notification.isRead ?? notification.read),
+    route: notification.route || '',
+    entityType: notification.entityType || '',
+    entityId: notification.entityId || '',
+    metadata: notification.metadata && typeof notification.metadata === 'object'
+      ? notification.metadata
+      : {},
+    createdAt: notification.createdAt || new Date().toISOString(),
   };
 };
 
@@ -1077,7 +1105,7 @@ const normaliseCategory = (c) => {
  * Only sends fields the BE updateProduct whitelist accepts:
  *   name, description, image, category, displayOrder, isActive,
  *   basePrice, minQty, maxQty, pricingMode, markupType, markupValue,
- *   executionType, orderFields, providerMapping
+ *   executionType, orderFields, dynamicFields, providerMapping
  */
 const productToBE = (fe) => {
   const body = {};
@@ -1092,6 +1120,8 @@ const productToBE = (fe) => {
   if (fe.category !== undefined) body.categoryId = fe.category;
   if (fe.displayOrder !== undefined) body.displayOrder = fe.displayOrder;
   if (fe.orderFields !== undefined) body.orderFields = fe.orderFields;
+  if (fe.dynamicFields !== undefined) body.dynamicFields = fe.dynamicFields;
+  if (fe.isAvailableForApi !== undefined) body.isAvailableForApi = Boolean(fe.isAvailableForApi);
   if (fe.productStatus !== undefined) body.productStatus = fe.productStatus;
   if (fe.isVisibleInStore !== undefined) body.isVisibleInStore = Boolean(fe.isVisibleInStore);
   if (fe.showWhenUnavailable !== undefined) body.showWhenUnavailable = Boolean(fe.showWhenUnavailable);
@@ -1231,10 +1261,7 @@ const runProductMutationPlan = async (plan, fallbackMessage = 'Unable to save pr
 
 const isAdmin = () => {
   try {
-    const raw = localStorage.getItem('auth-storage');
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.user?.role?.toLowerCase() === 'admin';
+    return [ROLES.ADMIN, ROLES.SUPERVISOR].includes(getStoredRole());
   } catch { return false; }
 };
 
@@ -1249,12 +1276,60 @@ const realApi = {
     login: async (email, password) => {
       const res = await http.post('/auth/login', { email, password });
       const data = unwrap(res);
+
+      if (data?.requires2FA) {
+        return {
+          requires2FA: true,
+          tempToken: data.tempToken || '',
+          requestId: data.requestId || '',
+          email: data.email || email || '',
+        };
+      }
+
       const user = normaliseUser(data.user);
       const token = data.token || data.accessToken || null;
       const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
       // Persist tokens for subsequent requests
       setStoredAuthTokens(token, refreshToken);
       return { user, token };
+    },
+
+    verify2FA: async ({ tempToken, otp }) => {
+      const res = await http.post('/auth/verify-2fa', {
+        tempToken,
+        otp,
+      });
+      const data = unwrap(res);
+      const user = normaliseUser(data.user);
+      const token = data.token || data.accessToken || null;
+      const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
+      setStoredAuthTokens(token, refreshToken);
+      return { user, token, refreshToken };
+    },
+
+    generate2FA: async () => {
+      const res = await http.post('/auth/2fa/generate');
+      return unwrap(res);
+    },
+
+    enable2FA: async ({ requestId, otp }) => {
+      const res = await http.post('/auth/2fa/enable', { requestId, otp });
+      const data = unwrap(res);
+      return {
+        ...data,
+        user: normaliseUser(data.user),
+        twoFactorEnabled: Boolean(data.twoFactorEnabled ?? data.isTwoFactorEnabled ?? data.user?.isTwoFactorEnabled ?? true),
+      };
+    },
+
+    disable2FA: async ({ currentPassword }) => {
+      const res = await http.post('/auth/2fa/disable', { currentPassword });
+      const data = unwrap(res);
+      return {
+        ...data,
+        user: normaliseUser(data.user),
+        twoFactorEnabled: Boolean(data.twoFactorEnabled ?? data.isTwoFactorEnabled ?? data.user?.isTwoFactorEnabled ?? false),
+      };
     },
 
     loginWithGoogle: async () => {
@@ -1795,6 +1870,20 @@ const realApi = {
       return { users: normaliseUsers(users), pagination: body.pagination || null };
     },
 
+    listSupervisors: async ({ page = 1, limit = 100, sortBy = 'createdAt', sortOrder = 'desc' } = {}) => {
+      const query = new URLSearchParams();
+      query.set('page', String(page));
+      query.set('limit', String(limit));
+      query.set('sortBy', sortBy);
+      query.set('sortOrder', sortOrder);
+
+      const res = await http.get(`/admin/supervisors?${query}`);
+      const body = res.data || {};
+      const data = body.data;
+      const users = Array.isArray(data) ? data : (data?.users || []);
+      return { users: normaliseUsers(users), pagination: body.pagination || null };
+    },
+
     listDeleted: async () => {
       const endpointCandidates = [
         ['/admin/users/deleted', {}],
@@ -1934,10 +2023,20 @@ const realApi = {
 
     /**
      * PATCH /admin/users/:id/role → update user's role.
-     * BE Joi: { role: 'ADMIN' | 'CUSTOMER' }
+     * BE Joi: { role: 'ADMIN' | 'SUPERVISOR' | 'CUSTOMER', permissions?: string[] }
      */
-    updateRole: async (userId, role, _actorContext) => {
-      const res = await http.patch(`/admin/users/${userId}/role`, { role: (role || '').toUpperCase() });
+    updateRole: async (userId, role, _actorContext, permissions) => {
+      const body = { role: normalizeRole(role) };
+      if (permissions !== undefined) body.permissions = normalizePermissions(permissions);
+
+      const res = await http.patch(`/admin/users/${userId}/role`, body);
+      return normaliseUser(unwrap(res)?.user || unwrap(res));
+    },
+
+    updateSupervisorPermissions: async (userId, permissions, _actorContext) => {
+      const res = await http.patch(`/admin/supervisors/${userId}/permissions`, {
+        permissions: normalizePermissions(permissions),
+      });
       return normaliseUser(unwrap(res)?.user || unwrap(res));
     },
 
@@ -2013,11 +2112,28 @@ const realApi = {
       if (updates.coins !== undefined) body.coins = Number(updates.coins);
       if (updates.balance !== undefined) body.balance = Number(updates.balance);
       if (updates.currentBalance !== undefined) body.currentBalance = Number(updates.currentBalance);
+      if (updates.role !== undefined) body.role = normalizeRole(updates.role);
+      if (updates.supervisorPermissions !== undefined) body.supervisorPermissions = updates.supervisorPermissions;
+      if (updates.permissions !== undefined) body.permissions = updates.permissions;
+      if (updates.permissionsUpdatedAt !== undefined) body.permissionsUpdatedAt = updates.permissionsUpdatedAt;
+      if (updates.isApiEnabled !== undefined) body.isApiEnabled = Boolean(updates.isApiEnabled);
 
       const isSelf = actorContext?.id === userId;
       const url = isSelf ? '/users/me' : `/admin/users/${userId}`;
       const res = await http.patch(url, body);
       return normaliseUser(unwrap(res)?.user || unwrap(res));
+    },
+
+    regenerateApiToken: async () => {
+      const res = await http.patch('/users/me/api-token');
+      const data = unwrap(res);
+      const user = data?.user ? normaliseUser(data.user) : null;
+      const apiToken = data?.apiToken || data?.token || user?.apiToken || '';
+
+      return {
+        apiToken,
+        user: user || (apiToken ? { apiToken, isApiEnabled: true } : null),
+      };
     },
 
     updateCreditLimit: async (userId, creditLimit, _actorContext) => {
@@ -2334,6 +2450,9 @@ const realApi = {
       if (orderData.orderFieldsValues) {
         body.orderFieldsValues = orderData.orderFieldsValues;
       }
+      if (orderData.dynamicData) {
+        body.dynamicData = orderData.dynamicData;
+      }
 
       const endpoints = isAdmin() ? ['/orders', '/me/orders'] : ['/me/orders', '/orders'];
       const requestConfig = orderData?.idempotencyKey
@@ -2389,6 +2508,59 @@ const realApi = {
         devLogger.warnUnlessBenign('[realApi] syncSupplierStatus failed:', err);
         return null;
       }
+    },
+  },
+
+  notifications: {
+    list: async ({ page = 1, limit = 20, isRead, type } = {}) => {
+      const params = { page, limit };
+      if (isRead !== undefined && isRead !== null) params.isRead = isRead;
+      if (type) params.type = type;
+
+      const res = await http.get('/me/notifications', { params });
+      const body = res.data || {};
+      const data = unwrap(res);
+      const notifications = Array.isArray(data)
+        ? data
+        : (data?.notifications || []);
+
+      return {
+        notifications: notifications.map(normaliseNotification),
+        unreadCount: Number(data?.unreadCount ?? 0),
+        pagination: body.pagination || null,
+      };
+    },
+
+    unreadCount: async () => {
+      const res = await http.get('/me/notifications/unread-count');
+      const data = unwrap(res);
+      return Number(data?.unreadCount ?? 0);
+    },
+
+    markAsRead: async (notificationId) => {
+      const res = await http.patch(`/me/notifications/${notificationId}/read`);
+      return normaliseNotification(unwrap(res));
+    },
+
+    markAllAsRead: async () => {
+      const res = await http.patch('/me/notifications/read-all');
+      return unwrap(res);
+    },
+
+    clearRead: async () => {
+      const res = await http.delete('/me/notifications/read');
+      return unwrap(res);
+    },
+
+    createBroadcast: async (payload = {}) => {
+      const res = await http.post('/notifications', {
+        title: payload.title,
+        message: payload.message,
+        type: payload.type || 'system',
+        priority: payload.priority || 'normal',
+        broadcast: true,
+      });
+      return unwrap(res);
     },
   },
 

@@ -14,26 +14,21 @@ const loadAdminOrders = () => import('../../pages/admin/AdminOrders');
 const loadAdminProducts = () => import('../../pages/admin/AdminProducts');
 
 const warmupByRole = {
-  guest: [loadAuth, loadLayout],
-  customer: [loadLayout, loadDashboard, loadProducts, loadOrders, loadWallet],
-  manager: [loadLayout, loadManagerDashboard, loadSettings],
+  guest: [loadAuth],
+  customer: [loadLayout, loadProducts],
+  manager: [loadLayout, loadManagerDashboard],
   admin: [
     loadLayout,
-    loadDashboard,
-    loadProducts,
     loadAdminDashboard,
-    loadAdminOrders,
-    loadAdminProducts,
-    loadSettings,
   ],
 };
 
 const scheduleIdle = (callback) => {
   if (typeof window === 'undefined') return null;
   if ('requestIdleCallback' in window) {
-    return window.requestIdleCallback(callback, { timeout: 1500 });
+    return window.requestIdleCallback(callback, { timeout: 4000 });
   }
-  return window.setTimeout(callback, 400);
+  return window.setTimeout(callback, 2400);
 };
 
 const clearIdle = (handle) => {

@@ -1,8 +1,8 @@
 import React from 'react';
-import { CalendarDays, ShieldCheck } from 'lucide-react';
-import { cn } from '../ui/Button';
+import { CalendarDays, Megaphone, ShieldCheck } from 'lucide-react';
+import Button, { cn } from '../ui/Button';
 
-const DashboardHeader = ({ isArabic, userName, currentDateLabel }) => {
+const DashboardHeader = ({ isArabic, userName, currentDateLabel, onBroadcastClick }) => {
   return (
     <section className="premium-card-premium relative mx-auto w-[calc(100vw-1.5rem)] max-w-[42rem] overflow-hidden p-3 sm:w-full sm:p-6 lg:max-w-none lg:p-8">
       <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(circle_at_top,rgba(var(--color-primary-rgb),0.16),transparent_70%)] sm:h-24" />
@@ -46,6 +46,17 @@ const DashboardHeader = ({ isArabic, userName, currentDateLabel }) => {
               {currentDateLabel}
             </p>
           </div>
+
+          {onBroadcastClick && (
+            <Button
+              type="button"
+              onClick={onBroadcastClick}
+              className="col-span-2 h-10 rounded-[var(--radius-lg)] text-xs font-bold sm:h-11 sm:text-sm"
+            >
+              <Megaphone className="h-4 w-4" />
+              {isArabic ? 'إرسال إشعار عام' : 'Send Alert'}
+            </Button>
+          )}
         </div>
       </div>
     </section>

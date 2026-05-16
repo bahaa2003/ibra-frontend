@@ -164,6 +164,9 @@ const AdminSuppliers = () => {
   const [runtimeSupplierState, setRuntimeSupplierState] = useState({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [globalProductsBySupplier, setGlobalProductsBySupplier] = useState({});
+  const [globalProductsLoading, setGlobalProductsLoading] = useState(false);
+  const [globalProductsError, setGlobalProductsError] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(defaultForm);
@@ -200,6 +203,81 @@ const AdminSuppliers = () => {
   useEffect(() => {
     load();
   }, []);
+
+  const globalSupplierProducts = useMemo(() => (
+    (suppliers || []).flatMap((supplier) => {
+      const supplierId = supplier?.id;
+      const snapshot = globalProductsBySupplier[supplierId];
+      const items = Array.isArray(snapshot) ? snapshot : [];
+      return items.map((product) => ({
+        ...product,
+        supplierId,
+        supplierName: supplier?.supplierName || supplier?.name || 'مورد',
+      }));
+    })
+  ), [suppliers, globalProductsBySupplier]);
+
+  const filteredGlobalProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return [];
+
+    return globalSupplierProducts.filter((product) => (
+      String(product?.externalProductName || '').toLowerCase().includes(term)
+    ));
+  }, [globalSupplierProducts, search]);
+
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) return;
+    if (!Array.isArray(suppliers) || suppliers.length === 0) return;
+
+    const missingSuppliers = suppliers.filter((supplier) => {
+      const supplierId = supplier?.id;
+      return supplierId && globalProductsBySupplier[supplierId] === undefined;
+    });
+
+    if (missingSuppliers.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchMissingCatalogs = async () => {
+      setGlobalProductsLoading(true);
+      setGlobalProductsError('');
+
+      const nextCachePatch = {};
+      let hadAnyFailure = false;
+
+      for (const supplier of missingSuppliers) {
+        if (cancelled) return;
+        try {
+          const rawItems = await apiClient.suppliers.getLiveProducts(supplier.id, user);
+          nextCachePatch[supplier.id] = normalizeSupplierProducts(rawItems);
+        } catch (error) {
+          hadAnyFailure = true;
+          nextCachePatch[supplier.id] = [];
+        }
+      }
+
+      if (cancelled) return;
+
+      setGlobalProductsBySupplier((current) => ({
+        ...current,
+        ...nextCachePatch,
+      }));
+
+      if (hadAnyFailure) {
+        setGlobalProductsError('تعذر تحميل بعض كتالوجات الموردين.');
+      }
+
+      setGlobalProductsLoading(false);
+    };
+
+    void fetchMissingCatalogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [search, suppliers, user, globalProductsBySupplier]);
 
   const filteredSuppliers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -603,6 +681,58 @@ const AdminSuppliers = () => {
         </Table>
       </div>
 
+      {search.trim() ? (
+        <section className="rounded-[1.25rem] border border-gray-200 bg-white/95 p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800/95">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.16em] text-gray-500 dark:text-gray-400">بحث عام</p>
+              <h2 className="mt-1 text-sm font-black text-gray-950 dark:text-white">نتائج بحث المنتجات عبر جميع الموردين</h2>
+            </div>
+            <Badge variant="info">{formatNumber(filteredGlobalProducts.length, 'ar-EG')} نتيجة</Badge>
+          </div>
+
+          {globalProductsLoading ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-[color:rgb(var(--color-primary-rgb)/0.34)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-4 py-6 text-center text-xs text-[var(--color-primary)]">
+              جاري البحث داخل كتالوجات الموردين...
+            </div>
+          ) : globalProductsError ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-5 text-center text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+              {globalProductsError}
+            </div>
+          ) : filteredGlobalProducts.length ? (
+            <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {filteredGlobalProducts.map((product) => {
+                const qtyLabel = (product?.minQty > 0 && product?.maxQty > 0)
+                  ? `${formatNumber(product.minQty, 'ar-EG')} - ${formatNumber(product.maxQty, 'ar-EG')}`
+                  : (product?.maxQty > 0
+                    ? formatNumber(product.maxQty, 'ar-EG')
+                    : (product?.minQty > 0 ? formatNumber(product.minQty, 'ar-EG') : '-'));
+
+                return (
+                  <article key={`${product.supplierId}-${product.id}`} className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/60">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-semibold text-gray-950 dark:text-white">{product.externalProductName}</p>
+                        <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{product.externalProductId}</p>
+                      </div>
+                      <Badge variant="success">{formatNumber(product.supplierPrice || 0, 'ar-EG')} Coins</Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Badge variant="premium">{product.supplierName}</Badge>
+                      <Badge variant="secondary">الكمية: {qtyLabel}</Badge>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50/70 px-4 py-6 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+              لا توجد منتجات مطابقة للاسم المطلوب.
+            </div>
+          )}
+        </section>
+      ) : null}
+
       <Modal isOpen={isProductsOpen} onClose={() => setIsProductsOpen(false)} title={selectedSupplier ? `منتجات المورد ${selectedSupplier.supplierName}` : 'منتجات المورد'} size="xl" footer={productsModalFooter}>
         {selectedSupplier ? (
           <div className="space-y-4">
@@ -763,11 +893,10 @@ const AdminSuppliers = () => {
                   const balance = deepData?.user_balance ?? innerData?.balance ?? innerData?.user_balance ?? innerData?.remains ?? innerData?.credits ?? raw?.user_balance ?? 'N/A';
                   const parsedBalance = Number(balance);
                   const formattedBalance = Number.isFinite(parsedBalance)
-                    ? new Intl.NumberFormat('en-US', {
+                    ? formatNumber(parsedBalance, 'en-US', {
                         minimumFractionDigits: 3,
                         maximumFractionDigits: 3,
-                        useGrouping: true,
-                      }).format(parsedBalance)
+                      })
                     : balance ?? 'N/A';
                   const currency = deepData?.user_currency ?? innerData?.currency ?? innerData?.user_currency ?? raw?.currency ?? '';
                   const email = deepData?.user_email ?? innerData?.email ?? innerData?.user_email ?? raw?.email ?? '';

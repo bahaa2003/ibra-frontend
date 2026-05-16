@@ -47,6 +47,16 @@ export const toRawPriceString = (value) => {
   return str;
 };
 
+export const formatRawPriceStringForDisplay = (value) => {
+  const rawPrice = toRawPriceString(value);
+  const sign = rawPrice.startsWith('-') ? '-' : '';
+  const unsignedPrice = sign ? rawPrice.slice(1) : rawPrice;
+  const [integerPart = '0', fractionPart = ''] = unsignedPrice.split('.');
+  const groupedInteger = String(integerPart || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  return fractionPart ? `${sign}${groupedInteger},${fractionPart}` : `${sign}${groupedInteger}`;
+};
+
 const getResolvedMoneyFractionDigits = (value, maxFractionDigits = DEFAULT_MONEY_FRACTION_DIGITS) => {
   const safeValue = Math.abs(toFiniteMoneyNumber(value, 0));
   const normalized = safeValue.toFixed(maxFractionDigits).replace(/0+$/, '').replace(/\.$/, '');

@@ -10,6 +10,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { useToast } from '../ui/Toast';
 import { useLanguage } from '../../context/LanguageContext';
 import accountSecurityApi from '../../services/accountSecurityApi';
+import useAuthStore from '../../store/useAuthStore';
 
 const STATUS = {
   DISABLED: 'disabled',
@@ -32,6 +33,7 @@ const maskEmailForDisplay = (value) => {
 const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
   const { language } = useLanguage();
   const { addToast } = useToast();
+  const updateUserSession = useAuthStore((state) => state.updateUserSession);
   const isEnglish = language === 'en';
 
   const text = useMemo(
@@ -81,7 +83,7 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
             invalidCode: 'خطأ في الرمز',
             expiredCode: 'انتهاء صلاحية الرمز',
             enableBtn: 'تفعيل المصادقة الثنائية',
-            disableBtn: 'إيقاف المصادقة الثنائية',
+            disableBtn: 'إلغاء التفعيل',
             sendCode: 'إرسال رمز التحقق',
             verifyBtn: 'تأكيد التفعيل',
             resendBtn: 'إعادة إرسال الرمز',
@@ -214,7 +216,8 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
     setFeedback({ type: 'info', message: '' });
 
     try {
-      await accountSecurityApi.verifyEmailCode({ userId, email, requestId, code: otp });
+      const response = await accountSecurityApi.verifyEmailCode({ userId, email, requestId, code: otp });
+      updateUserSession(response?.user || { isTwoFactorEnabled: true, twoFactorEnabled: true });
       setIsEnabled(true);
       setStatus(STATUS.ENABLED);
       setFeedback({ type: 'success', message: text.activatedMsg });
@@ -264,7 +267,8 @@ const TwoFactorCard = ({ userId, email, emailChangedPending = false }) => {
 
     setIsDisabling(true);
     try {
-      await accountSecurityApi.disableTwoFactor({ userId, currentPassword: disablePassword });
+      const response = await accountSecurityApi.disableTwoFactor({ userId, currentPassword: disablePassword });
+      updateUserSession(response?.user || { isTwoFactorEnabled: false, twoFactorEnabled: false });
       setIsEnabled(false);
       setStatus(STATUS.DISABLED);
       setIsDisableDialogOpen(false);

@@ -1,4 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Check, CheckCircle2, Clock3, Eye, Pencil, Search, Wallet, X } from 'lucide-react';
 import useTopupStore from '../../store/useTopupStore';
 import useAdminStore from '../../store/useAdminStore';
@@ -41,6 +42,7 @@ const AdminPayments = () => {
   const { users, loadUsers } = useAdminStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { addToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   // ── Filter state ────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,6 +116,27 @@ const AdminPayments = () => {
     });
     setIsReviewModalOpen(true);
   };
+
+  useEffect(() => {
+    const topupIdFromQuery = String(searchParams.get('topupId') || '').trim();
+    if (!topupIdFromQuery) return;
+
+    setSearchTerm(topupIdFromQuery);
+
+    if (selectedRequest?.id === topupIdFromQuery && isReviewModalOpen) return;
+
+    const matchedRequest = requests.find((request) => String(request?.id || '') === topupIdFromQuery);
+    if (matchedRequest) {
+      void openApproveModal(matchedRequest);
+      return;
+    }
+
+    void getTopupById(topupIdFromQuery)
+      .then((request) => {
+        if (request) void openApproveModal(request);
+      })
+      .catch(() => {});
+  }, [getTopupById, isReviewModalOpen, requests, searchParams, selectedRequest?.id]);
 
   const openEditModal = async (request) => {
     let nextRequest = request;

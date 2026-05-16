@@ -21,7 +21,7 @@ import useGroupStore from '../../store/useGroupStore';
 import useOrderStore from '../../store/useOrderStore';
 import useTopupStore from '../../store/useTopupStore';
 import useSystemStore from '../../store/useSystemStore';
-import { formatDateTime, formatNumber, getNumericLocale } from '../../utils/intl';
+import { formatDateTime, formatGroupedNumberString, formatNumber, getNumericLocale } from '../../utils/intl';
 import { formatCurrencyAmount } from '../../utils/pricing';
 import {
   resolveOrderExecutionCurrency,
@@ -36,6 +36,16 @@ const DASHBOARD_DEFAULT_RANGE_DAYS = 30;
 const asNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeAmountInput = (value) => {
+  const raw = String(value ?? '').trim().replace(/\./g, '').replace(/,/g, '.');
+  const [integerPart = '', ...fractionParts] = raw.split('.');
+  const integerDigits = integerPart.replace(/[^\d]/g, '');
+  const fractionDigits = fractionParts.join('').replace(/[^\d]/g, '');
+
+  if (!integerDigits && !fractionDigits) return '';
+  return fractionDigits ? `${integerDigits || '0'}.${fractionDigits}` : integerDigits;
 };
 
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
@@ -750,11 +760,10 @@ const AdminWallet = () => {
 
             <div className="flex w-full flex-col gap-2.5 sm:flex-row lg:max-w-[28rem]">
               <Input
-                type="number"
-                min="0"
-                step="0.000001"
-                value={selfTopupAmount}
-                onChange={(event) => setSelfTopupAmount(event.target.value)}
+                type="text"
+                inputMode="decimal"
+                value={selfTopupAmount ? formatGroupedNumberString(selfTopupAmount) : ''}
+                onChange={(event) => setSelfTopupAmount(normalizeAmountInput(event.target.value))}
                 placeholder={isArabic ? 'أدخل مبلغ الإضافة' : 'Enter topup amount'}
                 suffix={<span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{adminCurrencyCode}</span>}
                 className="h-11 px-3 py-2 text-sm"

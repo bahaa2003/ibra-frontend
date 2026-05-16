@@ -19,6 +19,7 @@ import { getProductStatus } from '../../utils/productStatus';
 import {
   clampProductQuantity,
   getProductQuantityMeta,
+  resolveProductDynamicFields,
   resolveProductOrderFields,
   sanitizeOrderFieldValue,
 } from '../../utils/productPurchase';
@@ -96,6 +97,8 @@ const getSheetCopy = (language = 'ar') => (
   const [currencies, setCurrencies] = useState([]);
   const [fieldValues, setFieldValues] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
+  const [dynamicValues, setDynamicValues] = useState({});
+  const [dynamicErrors, setDynamicErrors] = useState({});
   const [quantity, setQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -106,6 +109,11 @@ const getSheetCopy = (language = 'ar') => (
   const orderFields = useMemo(
     () => resolveProductOrderFields(product, language),
     [language, product]
+  );
+
+  const dynamicFields = useMemo(
+    () => resolveProductDynamicFields(product),
+    [product]
   );
 
   const quantityMeta = useMemo(
@@ -121,11 +129,18 @@ const getSheetCopy = (language = 'ar') => (
       nextFields[field.key] = '';
     });
 
+    const nextDynamicFields = {};
+    dynamicFields.forEach((field) => {
+      nextDynamicFields[field.name] = '';
+    });
+
     setFieldValues(nextFields);
     setFieldErrors({});
+    setDynamicValues(nextDynamicFields);
+    setDynamicErrors({});
     setQuantity(quantityMeta.minQty);
     setIsSubmitting(false);
-  }, [orderFields, product?.id, quantityMeta.minQty]);
+  }, [dynamicFields, orderFields, product?.id, quantityMeta.minQty]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -206,6 +221,7 @@ const getSheetCopy = (language = 'ar') => (
   const userIdentifier = String(
     fieldValues.playerId ||
     fieldValues.uid ||
+    Object.values(fieldValues).find((value) => String(value || '').trim()) ||
     ''
   ).trim();
 
@@ -223,6 +239,20 @@ const getSheetCopy = (language = 'ar') => (
     });
   };
 
+  const handleDynamicFieldChange = (fieldName, nextValue) => {
+    setDynamicValues((current) => ({
+      ...current,
+      [fieldName]: sanitizeOrderFieldValue(nextValue),
+    }));
+
+    setDynamicErrors((current) => {
+      if (!current[fieldName]) return current;
+      const nextErrors = { ...current };
+      delete nextErrors[fieldName];
+      return nextErrors;
+    });
+  };
+
   const handleSubmit = async () => {
     const nextErrors = {};
 
@@ -234,6 +264,21 @@ const getSheetCopy = (language = 'ar') => (
 
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
+      return;
+    }
+
+    const nextDynamicErrors = {};
+    dynamicFields.forEach((field) => {
+      const rawValue = String(dynamicValues[field.name] || '').trim();
+      if (field.required !== false && !rawValue) {
+        nextDynamicErrors[field.name] = copy.fieldRequired(field.label);
+      } else if (rawValue && field.type === 'number' && !Number.isFinite(Number(rawValue))) {
+        nextDynamicErrors[field.name] = `${field.label} must be a number.`;
+      }
+    });
+
+    if (Object.keys(nextDynamicErrors).length > 0) {
+      setDynamicErrors(nextDynamicErrors);
       return;
     }
 
@@ -261,12 +306,26 @@ const getSheetCopy = (language = 'ar') => (
           sanitizeOrderFieldValue(fieldValues[field.key]).trim(),
         ])
       );
+      const dynamicData = Object.fromEntries(
+        dynamicFields.map((field) => [
+          field.name,
+          field.type === 'number'
+            ? Number(dynamicValues[field.name])
+            : sanitizeOrderFieldValue(dynamicValues[field.name]).trim(),
+        ]).filter(([, value]) => value !== '' && value !== null && value !== undefined && !(typeof value === 'number' && Number.isNaN(value)))
+      );
+      const orderIdentifier = String(
+        userIdentifier
+        || Object.values(dynamicData).find((value) => String(value || '').trim())
+        || ''
+      ).trim();
       const fieldsSnapshot = Array.isArray(product?.orderFields) && product.orderFields.length > 0
         ? product.orderFields.map((field) => ({ ...field }))
         : orderFields.map((field) => ({
           key: field.key,
           label: field.label,
           placeholder: field.placeholder,
+          type: field.type,
         }));
 
       const createResult = await addOrder({
@@ -281,18 +340,19 @@ const getSheetCopy = (language = 'ar') => (
         priceCoins: totalPrice,
         currencyCode: userCurrencyCode,
         exchangeRateAtExecution: userCurrencyMeta.rate,
-        playerId: userIdentifier,
+        playerId: orderIdentifier,
         orderFields: normalizedFields,
         orderFieldsValues: normalizedFields,
+        dynamicData,
         customerInput: {
-          values: normalizedFields,
-          fieldsSnapshot,
+          values: Object.keys(dynamicData).length ? dynamicData : normalizedFields,
+          fieldsSnapshot: Object.keys(dynamicData).length ? dynamicFields.map((field) => ({ ...field })) : fieldsSnapshot,
           quantitySnapshot: quantityMeta,
         },
         quantitySnapshot: quantityMeta,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        idempotencyKey: `${user.id}-${product.id}-${userIdentifier}-${Date.now()}`,
+        idempotencyKey: `${user.id}-${product.id}-${orderIdentifier}-${Date.now()}`,
       });
 
       const nextBalance = Number(createResult?.updatedBalance);
@@ -402,9 +462,54 @@ const getSheetCopy = (language = 'ar') => (
                   </div>
 
                   <div className="space-y-3">
+                    {dynamicFields.map((field) => {
+                      const label = field.label || field.name;
+
+                      if (field.type === 'select') {
+                        return (
+                          <div key={field.name} className="space-y-1.5">
+                            <label className="block text-xs font-medium text-white/78">{label}</label>
+                            <select
+                              value={dynamicValues[field.name] || ''}
+                              onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
+                              disabled={isSubmitting}
+                              className="h-12 w-full rounded-[1rem] border border-white/10 bg-black/20 px-3 text-sm text-white focus:border-red-400/50 focus:ring-red-400/10 dark:[color-scheme:dark]"
+                            >
+                              <option value="" className="bg-gray-950 text-white">{copy.fieldRequired(label)}</option>
+                              {(field.options || []).map((option) => (
+                                <option key={option} value={option} className="bg-gray-950 text-white">{option}</option>
+                              ))}
+                            </select>
+                            {dynamicErrors[field.name] ? (
+                              <p className="text-xs font-medium text-red-200">{dynamicErrors[field.name]}</p>
+                            ) : null}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Input
+                          key={field.name}
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          inputMode={field.type === 'number' ? 'numeric' : 'text'}
+                          label={label}
+                          placeholder={copy.fieldRequired(label)}
+                          value={dynamicValues[field.name] || ''}
+                          onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
+                          error={dynamicErrors[field.name]}
+                          disabled={isSubmitting}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="h-12 rounded-[1rem] border-white/10 bg-black/20 text-white placeholder:text-white/35 focus:border-red-400/50 focus:ring-red-400/10"
+                        />
+                      );
+                    })}
+
                     {orderFields.map((field) => (
                       <Input
                         key={field.key}
+                        type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                        inputMode={field.type === 'number' ? 'numeric' : field.type === 'email' ? 'email' : 'text'}
                         label={field.label}
                         placeholder={field.placeholder || copy.fieldRequired(field.label)}
                         value={fieldValues[field.key] || ''}

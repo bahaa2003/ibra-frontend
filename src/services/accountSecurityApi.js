@@ -1,39 +1,17 @@
-const ACCOUNT_SECURITY_STORAGE_KEY = 'ibra-account-security-v1';
+import apiClient from './client';
 
 export const accountSecurityEndpoints = {
-  sendCode: '/account/2fa/email/send-code',
-  verifyCode: '/account/2fa/email/verify',
-  disableTwoFactor: '/account/2fa/disable',
-  securityStatus: '/account/security-status'
+  sendCode: '/auth/2fa/generate',
+  verifyCode: '/auth/2fa/enable',
+  disableTwoFactor: '/auth/2fa/disable',
+  securityStatus: '/users/me',
 };
-
-const wait = (ms = 700) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const createApiError = (code, message) => {
   const error = new Error(message);
   error.code = code;
   return error;
 };
-
-const readSecurityStore = () => {
-  try {
-    const raw = localStorage.getItem(ACCOUNT_SECURITY_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeSecurityStore = (value) => {
-  localStorage.setItem(ACCOUNT_SECURITY_STORAGE_KEY, JSON.stringify(value));
-};
-
-const getUserSecurityState = (store, userId) => ({
-  twoFactorEnabled: false,
-  emailVerified: true,
-  pendingOtp: null,
-  ...(store?.[userId] || {})
-});
 
 const maskEmail = (email) => {
   const value = String(email || '').trim();
@@ -45,108 +23,83 @@ const maskEmail = (email) => {
 
 const normalizeCode = (value) => String(value || '').replace(/\D/g, '').slice(0, 6);
 
+const readPersistedAuthUser = () => {
+  if (typeof localStorage === 'undefined') return null;
+
+  try {
+    const raw = localStorage.getItem('auth-storage');
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed?.state?.user || null;
+  } catch {
+    return null;
+  }
+};
+
+const getTwoFactorEnabled = (user) => Boolean(user?.isTwoFactorEnabled ?? user?.twoFactorEnabled);
+
 const accountSecurityApi = {
   async getSecurityStatus(userId) {
-    await wait(450);
     if (!userId) throw createApiError('INVALID_USER', 'Missing user identifier');
 
-    const store = readSecurityStore();
-    const state = getUserSecurityState(store, userId);
+    const user = readPersistedAuthUser();
     return {
-      twoFactorEnabled: Boolean(state.twoFactorEnabled),
-      emailVerified: Boolean(state.emailVerified)
+      twoFactorEnabled: getTwoFactorEnabled(user),
+      emailVerified: Boolean(user?.verified ?? true),
     };
   },
 
   async sendEmailCode({ userId, email }) {
-    await wait(950);
-
     if (!userId) throw createApiError('INVALID_USER', 'Missing user identifier');
     if (!email || !String(email).includes('@')) {
       throw createApiError('INVALID_EMAIL', 'A valid email is required to send OTP');
     }
 
-    const store = readSecurityStore();
-    const state = getUserSecurityState(store, userId);
-    const requestId = `otp-${Date.now()}`;
-    const expiresIn = 120;
-
-    state.pendingOtp = {
-      requestId,
-      email: String(email).trim().toLowerCase(),
-      code: '123456',
-      expiresAt: Date.now() + expiresIn * 1000
-    };
-
-    store[userId] = state;
-    writeSecurityStore(store);
+    const response = await apiClient.auth.generate2FA();
+    const requestId = response?.requestId || response?.tempToken || '';
 
     return {
       requestId,
-      expiresIn,
-      maskedEmail: maskEmail(email)
+      expiresIn: Number(response?.expiresIn || response?.expiresInSeconds || 600),
+      maskedEmail: response?.maskedEmail || maskEmail(response?.email || email),
     };
   },
 
-  async verifyEmailCode({ userId, email, requestId, code }) {
-    await wait(900);
-
+  async verifyEmailCode({ userId, requestId, code }) {
     if (!userId) throw createApiError('INVALID_USER', 'Missing user identifier');
 
-    const normalizedCode = normalizeCode(code);
-    if (normalizedCode.length !== 6) {
+    const otp = normalizeCode(code);
+    if (otp.length !== 6) {
       throw createApiError('OTP_INVALID', 'Verification code must be 6 digits');
     }
 
-    const store = readSecurityStore();
-    const state = getUserSecurityState(store, userId);
-    const pending = state.pendingOtp;
-
-    if (!pending || !requestId || pending.requestId !== requestId) {
-      throw createApiError('OTP_REQUEST_NOT_FOUND', 'Verification session not found');
-    }
-
-    if (pending.email !== String(email || '').trim().toLowerCase()) {
-      throw createApiError('OTP_EMAIL_MISMATCH', 'Email changed during verification');
-    }
-
-    if (Date.now() > pending.expiresAt || normalizedCode === '000000') {
-      state.pendingOtp = null;
-      store[userId] = state;
-      writeSecurityStore(store);
-      throw createApiError('OTP_EXPIRED', 'OTP has expired');
-    }
-
-    if (normalizedCode !== pending.code) {
-      throw createApiError('OTP_INVALID', 'OTP is invalid');
-    }
-
-    state.twoFactorEnabled = true;
-    state.emailVerified = true;
-    state.pendingOtp = null;
-    store[userId] = state;
-    writeSecurityStore(store);
-
-    return { twoFactorEnabled: true };
+    const response = await apiClient.auth.enable2FA({ requestId, otp });
+    return {
+      ...response,
+      twoFactorEnabled: true,
+    };
   },
 
   async disableTwoFactor({ userId, currentPassword }) {
-    await wait(700);
-
     if (!userId) throw createApiError('INVALID_USER', 'Missing user identifier');
     if (!String(currentPassword || '').trim()) {
       throw createApiError('PASSWORD_REQUIRED', 'Current password is required');
     }
 
-    const store = readSecurityStore();
-    const state = getUserSecurityState(store, userId);
-    state.twoFactorEnabled = false;
-    state.pendingOtp = null;
-    store[userId] = state;
-    writeSecurityStore(store);
+    const response = await apiClient.auth.disable2FA({ currentPassword });
+    return {
+      ...response,
+      twoFactorEnabled: false,
+    };
+  },
 
-    return { twoFactorEnabled: false };
-  }
+  async regenerateApiToken({ userId }) {
+    if (!userId) throw createApiError('INVALID_USER', 'Missing user identifier');
+    if (!apiClient.users?.regenerateApiToken) {
+      throw createApiError('API_TOKEN_UNAVAILABLE', 'API token regeneration is not available');
+    }
+
+    return apiClient.users.regenerateApiToken(userId, readPersistedAuthUser());
+  },
 };
 
 export default accountSecurityApi;

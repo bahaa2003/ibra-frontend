@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import useAdminStore from './useAdminStore';
 import apiClient from '../services/client';
 import {
   getAccountAccessRoute,
@@ -8,7 +7,7 @@ import {
   isApprovedAccountStatus,
   normalizeAccountStatus,
 } from '../utils/accountStatus';
-import { getDefaultRouteForRole } from '../utils/authRoles';
+import { getDefaultRouteForRole, normalizeAuthUser, userHasPermission } from '../utils/authRoles';
 import { formatAuthErrorMessage } from '../utils/authErrorMessages';
 import { devLogger } from '../utils/devLogger';
 
@@ -16,24 +15,28 @@ const PROFILE_CACHE_TTL = 60 * 1000;
 let profileRefreshRequest = null;
 
 const buildAuthOutcome = (user) => {
-  const status = normalizeAccountStatus(user?.status);
+  const normalizedUser = normalizeAuthUser(user);
+  const status = normalizeAccountStatus(normalizedUser?.status);
   return {
     ok: true,
     status,
-    user: user || null,
-    redirectTo: getAccountAccessRoute(status) || getDefaultRouteForRole(user?.role),
+    user: normalizedUser,
+    redirectTo: getAccountAccessRoute(status) || getDefaultRouteForRole(normalizedUser?.role),
     canAccessApp: isApprovedAccountStatus(status),
   };
 };
 
-const buildBlockedOutcome = (status, user = null, error = null) => ({
-  ok: false,
-  status: normalizeAccountStatus(status),
-  user,
-  error,
-  redirectTo: getAccountAccessRoute(status),
-  canAccessApp: false,
-});
+const buildBlockedOutcome = (status, user = null, error = null) => {
+  const normalizedStatus = normalizeAccountStatus(status);
+  return {
+    ok: false,
+    status: normalizedStatus,
+    user: normalizeAuthUser(user),
+    error,
+    redirectTo: getAccountAccessRoute(normalizedStatus),
+    canAccessApp: false,
+  };
+};
 
 const buildVerificationRequiredOutcome = (user = null) => ({
   ok: true,
@@ -54,15 +57,31 @@ const useAuthStore = create(
       error: null,
       blockedStatus: null,
       blockedUser: null,
+      twoFactorChallenge: null,
       profileLastLoadedAt: 0,
+
+      hasPermission: (permission) => userHasPermission(get().user, permission),
+
+      hasAnyPermission: (permissions = []) => (
+        (Array.isArray(permissions) ? permissions : [permissions])
+          .filter(Boolean)
+          .some((permission) => userHasPermission(get().user, permission))
+      ),
+
+      hasAllPermissions: (permissions = []) => (
+        (Array.isArray(permissions) ? permissions : [permissions])
+          .filter(Boolean)
+          .every((permission) => userHasPermission(get().user, permission))
+      ),
 
       setBlockedAccess: (status, user = null) => {
         const normalizedStatus = normalizeAccountStatus(status);
+        const normalizedUser = normalizeAuthUser(user);
         set({
           blockedStatus: normalizedStatus,
-          blockedUser: user || null,
+          blockedUser: normalizedUser,
         });
-        return buildBlockedOutcome(normalizedStatus, user);
+        return buildBlockedOutcome(normalizedStatus, normalizedUser);
       },
 
       clearBlockedAccess: () => {
@@ -75,18 +94,48 @@ const useAuthStore = create(
           error: null,
           blockedStatus: null,
           blockedUser: null,
+          twoFactorChallenge: null,
         });
         try {
           const response = await apiClient.auth.login(email, password);
+
+          if (response?.requires2FA) {
+            const challenge = {
+              requires2FA: true,
+              tempToken: response.tempToken,
+              requestId: response.requestId,
+              email: response.email || email,
+            };
+
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+              isLoading: false,
+              blockedStatus: null,
+              blockedUser: null,
+              twoFactorChallenge: challenge,
+              profileLastLoadedAt: 0,
+            });
+
+            return {
+              ok: true,
+              requires2FA: true,
+              ...challenge,
+              canAccessApp: false,
+            };
+          }
+
           const outcome = buildAuthOutcome(response.user);
 
           set({
-            user: response.user,
+            user: outcome.user,
             token: response.token || null,
             isAuthenticated: true,
             isLoading: false,
             blockedStatus: outcome.canAccessApp ? null : outcome.status,
-            blockedUser: outcome.canAccessApp ? null : response.user,
+            blockedUser: outcome.canAccessApp ? null : outcome.user,
+            twoFactorChallenge: null,
             profileLastLoadedAt: Date.now(),
           });
 
@@ -103,6 +152,7 @@ const useAuthStore = create(
               isLoading: false,
               blockedStatus,
               blockedUser,
+              twoFactorChallenge: null,
               isAuthenticated: false,
               profileLastLoadedAt: 0,
             });
@@ -117,10 +167,62 @@ const useAuthStore = create(
             isAuthenticated: false,
             blockedStatus: null,
             blockedUser: null,
+            twoFactorChallenge: null,
             profileLastLoadedAt: 0,
           });
           return { ok: false, error: formattedError };
         }
+      },
+
+      verifyTwoFactorChallenge: async (otp) => {
+        const challenge = get().twoFactorChallenge;
+        if (!challenge?.tempToken) {
+          const message = 'Two-factor verification session is missing or expired.';
+          set({ error: message, isLoading: false });
+          return { ok: false, error: message };
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const response = await apiClient.auth.verify2FA({
+            tempToken: challenge.tempToken,
+            requestId: challenge.requestId,
+            otp,
+          });
+          const outcome = buildAuthOutcome(response.user);
+
+          set({
+            user: outcome.user,
+            token: response.token || null,
+            isAuthenticated: true,
+            isLoading: false,
+            blockedStatus: outcome.canAccessApp ? null : outcome.status,
+            blockedUser: outcome.canAccessApp ? null : outcome.user,
+            twoFactorChallenge: null,
+            profileLastLoadedAt: Date.now(),
+          });
+
+          return outcome;
+        } catch (err) {
+          const formattedError = formatAuthErrorMessage(err, { action: 'login' });
+          set({
+            user: null,
+            token: null,
+            error: formattedError,
+            isLoading: false,
+            isAuthenticated: false,
+          });
+          return { ok: false, error: formattedError };
+        }
+      },
+
+      clearTwoFactorChallenge: () => {
+        set({
+          twoFactorChallenge: null,
+          isLoading: false,
+          error: null,
+        });
       },
 
       loginWithGoogle: async () => {
@@ -129,6 +231,7 @@ const useAuthStore = create(
           error: null,
           blockedStatus: null,
           blockedUser: null,
+          twoFactorChallenge: null,
         });
         try {
           const response = await apiClient.auth.loginWithGoogle();
@@ -142,6 +245,7 @@ const useAuthStore = create(
               isLoading: false,
               blockedStatus: callbackStatus || null,
               blockedUser: null,
+              twoFactorChallenge: null,
               profileLastLoadedAt: 0,
             });
 
@@ -158,16 +262,16 @@ const useAuthStore = create(
           const outcome = buildAuthOutcome(response.user);
 
           set({
-            user: response.user,
+            user: outcome.user,
             token: response.token || null,
             isAuthenticated: true,
             isLoading: false,
             blockedStatus: outcome.canAccessApp ? null : outcome.status,
-            blockedUser: outcome.canAccessApp ? null : response.user,
+            blockedUser: outcome.canAccessApp ? null : outcome.user,
+            twoFactorChallenge: null,
             profileLastLoadedAt: Date.now(),
           });
 
-          await useAdminStore.getState().loadUsers({ force: true });
           return outcome;
         } catch (err) {
           const blockedStatus = inferBlockedStatusFromError(err);
@@ -180,6 +284,7 @@ const useAuthStore = create(
               isLoading: false,
               blockedStatus,
               blockedUser: null,
+              twoFactorChallenge: null,
               isAuthenticated: false,
               profileLastLoadedAt: 0,
             });
@@ -194,6 +299,7 @@ const useAuthStore = create(
             isAuthenticated: false,
             blockedStatus: null,
             blockedUser: null,
+            twoFactorChallenge: null,
             profileLastLoadedAt: 0,
           });
           return { ok: false, error: formattedError };
@@ -206,6 +312,7 @@ const useAuthStore = create(
           error: null,
           blockedStatus: null,
           blockedUser: null,
+          twoFactorChallenge: null,
         });
         try {
           const response = await apiClient.auth.register(userData);
@@ -213,18 +320,17 @@ const useAuthStore = create(
           const requiresEmailVerification = response?.user?.verified === false
             && String(response?.user?.signupMethod || userData?.signupMethod || 'email').toLowerCase() !== 'google';
 
-          await useAdminStore.getState().loadUsers({ force: true });
-
           set({
             user: null,
             token: null,
             isAuthenticated: false,
             isLoading: false,
             blockedStatus: requiresEmailVerification ? 'verification_required' : status,
-            blockedUser: response?.user || {
+            blockedUser: normalizeAuthUser(response?.user || {
               email: userData?.email,
               name: userData?.name || userData?.username,
-            },
+            }),
+            twoFactorChallenge: null,
           });
 
           if (requiresEmailVerification) {
@@ -248,6 +354,7 @@ const useAuthStore = create(
             isLoading: false,
             blockedStatus: null,
             blockedUser: null,
+            twoFactorChallenge: null,
           });
           return { ok: false, error: formattedError };
         }
@@ -263,6 +370,7 @@ const useAuthStore = create(
           error: null,
           blockedStatus: null,
           blockedUser: null,
+          twoFactorChallenge: null,
           profileLastLoadedAt: 0,
         });
 
@@ -276,7 +384,7 @@ const useAuthStore = create(
       updateUserSession: (updates) => {
         const { user } = get();
         if (user) {
-          const nextUser = { ...user, ...updates };
+          const nextUser = normalizeAuthUser({ ...user, ...updates });
           const nextStatus = normalizeAccountStatus(nextUser?.status);
           set({
             user: nextUser,
@@ -312,9 +420,9 @@ const useAuthStore = create(
               const nextStatus = normalizeAccountStatus(profile?.status);
 
               set((state) => ({
-                user: { ...state.user, ...profile },
+                user: normalizeAuthUser({ ...state.user, ...profile }),
                 blockedStatus: isApprovedAccountStatus(nextStatus) ? null : nextStatus,
-                blockedUser: isApprovedAccountStatus(nextStatus) ? null : { ...state.user, ...profile },
+                blockedUser: isApprovedAccountStatus(nextStatus) ? null : normalizeAuthUser({ ...state.user, ...profile }),
                 profileLastLoadedAt: Date.now(),
               }));
 
@@ -338,12 +446,18 @@ const useAuthStore = create(
     {
       name: 'auth-storage',
       partialize: (state) => ({
-        user: state.user,
+        user: normalizeAuthUser(state.user),
         token: state.token,
         isAuthenticated: state.isAuthenticated,
         blockedStatus: state.blockedStatus,
         blockedUser: state.blockedUser,
         profileLastLoadedAt: state.profileLastLoadedAt,
+      }),
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...(persistedState || {}),
+        user: normalizeAuthUser(persistedState?.user),
+        blockedUser: normalizeAuthUser(persistedState?.blockedUser),
       }),
     }
   )

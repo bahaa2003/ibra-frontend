@@ -6,6 +6,7 @@ import SettingsSection from '../components/settings/SettingsSection';
 import SettingsItem from '../components/settings/SettingsItem';
 import Button, { cn } from '../components/ui/Button';
 import Switch from '../components/ui/Switch';
+import LogoutConfirmDialog from '../components/auth/LogoutConfirmDialog';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../components/ui/Toast';
@@ -26,6 +27,7 @@ const Settings = () => {
     balance: true,
     offers: false
   });
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -147,6 +149,11 @@ const Settings = () => {
   };
 
   const handleLogout = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const confirmLogout = () => {
+    setIsLogoutConfirmOpen(false);
     logout();
     navigate('/auth');
   };
@@ -155,6 +162,16 @@ const Settings = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      <LogoutConfirmDialog
+        open={isLogoutConfirmOpen}
+        onConfirm={confirmLogout}
+        onCancel={() => setIsLogoutConfirmOpen(false)}
+        title={text.logoutAccount}
+        description={text.logoutAccountDescription}
+        confirmLabel={isEnglish ? 'OK' : 'موافق'}
+        cancelLabel={isEnglish ? 'Cancel' : 'إلغاء'}
+      />
+
       <motion.header
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}

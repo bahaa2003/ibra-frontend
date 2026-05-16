@@ -9,7 +9,7 @@
  */
 
 import { formatNumber } from './intl';
-import { getMoneyFormatOptions, normalizeMoneyAmount, toRawPriceString } from './money';
+import { formatRawPriceStringForDisplay, getMoneyFormatOptions, normalizeMoneyAmount, toRawPriceString } from './money';
 import useGroupStore from '../store/useGroupStore';
 
 export const GROUP_MARKUPS = {
@@ -144,8 +144,8 @@ export const convertPriceByCurrency = (baseAmount, currencyCode = 'USD', currenc
 /**
  * Format a currency amount for display.
  *
- * For product prices (strings): renders the raw string as-is using
- * toRawPriceString — NO Number() truncation, NO Intl.NumberFormat caps.
+ * For product prices (strings): renders the raw string with display-only
+ * thousand grouping — NO Number() truncation, NO Intl.NumberFormat caps.
  * The client explicitly requires the raw, full-precision string everywhere.
  *
  * For fiat/wallet amounts (numbers): uses Intl.NumberFormat as before.
@@ -153,16 +153,15 @@ export const convertPriceByCurrency = (baseAmount, currencyCode = 'USD', currenc
 export const formatCurrencyAmount = (amount, currencyCode = 'USD', currencies = [], locale = 'ar-EG', formatOptions = {}) => {
   const meta = getCurrencyMeta(currencyCode, currencies);
 
-  // String product prices — always render raw, no truncation
+  // String product prices — keep raw precision and add display-only grouping.
   if (typeof amount === 'string') {
-    const cleanPrice = toRawPriceString(amount);
+    const cleanPrice = formatRawPriceStringForDisplay(amount);
     return `${cleanPrice} ${meta.symbol}`;
   }
 
-  // Number values (fiat/wallet) — standard Intl.NumberFormat
+  // Number values (fiat/wallet) — centralized grouped display.
   const value = Number(amount || 0);
   const formatted = formatNumber(value, locale, getMoneyFormatOptions(value, formatOptions));
 
   return `${formatted} ${meta.symbol}`;
 };
-

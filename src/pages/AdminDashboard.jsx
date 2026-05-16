@@ -25,6 +25,7 @@ import useMediaStore from '../store/useMediaStore';
 import useSystemStore from '../store/useSystemStore';
 import apiClient from '../services/client';
 import DashboardHeader from '../components/admin-dashboard/DashboardHeader';
+import AdminBroadcastModal from '../components/admin/AdminBroadcastModal';
 import StatsGrid from '../components/admin-dashboard/StatsGrid';
 import PendingApprovalsSection from '../components/admin-dashboard/PendingApprovalsSection';
 import RecentOrdersSection from '../components/admin-dashboard/RecentOrdersSection';
@@ -36,7 +37,7 @@ import DashboardDateRangeFilter from '../components/admin-dashboard/DashboardDat
 import OrderDetailsDrawer from '../components/orders/OrderDetailsDrawer';
 import Card from '../components/ui/Card';
 import { useToast } from '../components/ui/Toast';
-import { formatDateTime, formatNumber, getNumericLocale } from '../utils/intl';
+import { formatCurrencyNumber, formatDateTime, formatNumber, getNumericLocale } from '../utils/intl';
 import { enrichOrders } from '../utils/orders';
 import { getUserRegistrationDate, isApprovedAccountStatus, isPendingAccountStatus } from '../utils/accountStatus';
 
@@ -200,6 +201,7 @@ const AdminDashboard = () => {
   const [rejectingUserId, setRejectingUserId] = useState('');
   const [supplierBalances, setSupplierBalances] = useState([]);
   const [isLoadingSupplierBalances, setIsLoadingSupplierBalances] = useState(false);
+  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
@@ -434,25 +436,17 @@ const AdminDashboard = () => {
     const currency = String(currencyCode || 'USD').toUpperCase();
     const amount = asNumber(value);
 
-    try {
-      return new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency,
-        numberingSystem: 'latn',
-        maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-      }).format(amount);
-    } catch (_error) {
-      return `${formatCount(amount)} ${currency}`;
-    }
+    return formatCurrencyNumber(amount, currency, locale, {
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    });
   };
 
   const formatSupplierBalance = (entry) => {
     if (Number.isFinite(entry?.balance)) {
-      const formatted = new Intl.NumberFormat(locale, {
+      const formatted = formatNumber(entry.balance, locale, {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
-        numberingSystem: 'latn',
-      }).format(entry.balance);
+      });
 
       return entry?.currency ? `${formatted} ${entry.currency}` : formatted;
     }
@@ -899,6 +893,7 @@ const AdminDashboard = () => {
         isArabic={isArabic}
         userName={user?.name}
         currentDateLabel={currentDateLabel}
+        onBroadcastClick={() => setIsBroadcastModalOpen(true)}
       />
 
       <Card variant="premium" className="overflow-visible p-4 sm:p-6">
@@ -963,6 +958,11 @@ const AdminDashboard = () => {
         onSync={handleDashboardOrderSync}
         isActionLoading={loadingOrderActionId === selectedOrderId}
         isSyncing={syncingOrderId === selectedOrderId}
+      />
+
+      <AdminBroadcastModal
+        isOpen={isBroadcastModalOpen}
+        onClose={() => setIsBroadcastModalOpen(false)}
       />
     </div>
   );

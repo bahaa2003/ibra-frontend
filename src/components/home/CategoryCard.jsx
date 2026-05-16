@@ -1,17 +1,13 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '../ui/Button';
 
 const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelect }) => (
-  <motion.button
+  <button
     type="button"
     onClick={() => onSelect(category.id)}
-    initial={{ opacity: 0, y: 18 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: index * 0.05, duration: 0.28 }}
-    whileHover={{ y: -3 }}
+    style={{ animationDelay: `${Math.min(index, 10) * 28}ms` }}
     className={cn(
-      'group relative flex h-full flex-col overflow-hidden rounded-2xl bg-transparent text-start shadow-[0_18px_34px_-30px_rgba(15,23,42,0.34)] transition-all hover:z-10',
+      'category-card-enter group relative flex h-full flex-col overflow-hidden rounded-2xl bg-transparent text-start shadow-[0_18px_34px_-30px_rgba(15,23,42,0.34)] transition-all hover:z-10 motion-safe:hover:-translate-y-0.5',
       active
         ? 'shadow-[0_20px_38px_-28px_rgba(212,175,55,0.24)]'
         : 'hover:shadow-[0_20px_38px_-30px_rgba(15,23,42,0.32)]'
@@ -49,7 +45,7 @@ const CategoryCard = ({ category, active, activeLabel = 'Active', index, onSelec
         {category.title}
       </h3>
     </div>
-  </motion.button>
+  </button>
 );
 
 export default React.memo(CategoryCard);

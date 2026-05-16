@@ -55,7 +55,7 @@ const Layout = () => {
     '/manager/dashboard',
     '/admin/dashboard',
   ].includes(location.pathname);
-  const shellOffset = !isMobile ? (isSidebarOpen ? '288px' : '88px') : '0';
+  const shellOffset = !isMobile ? (isSidebarOpen ? '312px' : '112px') : '0';
 
   const handleGoBack = () => {
     const path = String(location.pathname || '');
@@ -111,18 +111,18 @@ const Layout = () => {
 
       <div
         className="min-h-screen min-w-0 max-w-full transition-all duration-300"
-        style={{ [dir === 'rtl' ? 'marginRight' : 'marginLeft']: shellOffset }}
+        style={{ marginRight: shellOffset }}
       >
         <div
           className="fixed top-0 z-40 transition-all duration-300"
           style={{
-            [dir === 'rtl' ? 'right' : 'left']: shellOffset,
-            [dir === 'rtl' ? 'left' : 'right']: '0',
+            right: shellOffset,
+            left: '0',
           }}
         >
           <Header toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         </div>
-        <div className="h-[4.5rem] sm:h-[4.75rem]" aria-hidden="true" />
+        <div className="h-[4.15rem] sm:h-[4.4rem]" aria-hidden="true" />
 
         {!isHomePage && (
           <div className="mx-auto mt-4 max-w-[var(--shell-max-width)] px-4 md:px-6 lg:px-8">

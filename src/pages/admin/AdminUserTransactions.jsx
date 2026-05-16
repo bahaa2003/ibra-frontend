@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Eye,
   PlusCircle,
@@ -21,6 +23,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
+import DashboardDateRangeFilter from '../../components/admin-dashboard/DashboardDateRangeFilter';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/Table';
 import { useToast } from '../../components/ui/Toast';
 import { formatDateTime, formatNumber, getNumericLocale } from '../../utils/intl';
@@ -33,6 +36,8 @@ import {
   resolveWalletTransactionExecutionCurrency,
   resolveWalletTransactionOriginalCurrency,
 } from '../../utils/transactionCurrency';
+
+const ROWS_OPTIONS = [20, 50, 100, 500];
 
 const asNumber = (value) => {
   const parsed = Number(value);
@@ -60,6 +65,71 @@ const convertAmountBetweenCurrencies = (amount, fromCurrencyCode, toCurrencyCode
   if (!fromRate || !toRate) return numericAmount;
 
   return asNumber((numericAmount / fromRate) * toRate);
+};
+
+const toDateInputValue = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInputValue = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return null;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getDateRangeBoundary = (value, { endOfDay = false } = {}) => {
+  const parsed = parseDateInputValue(value);
+  if (!parsed) return null;
+  if (endOfDay) {
+    parsed.setHours(23, 59, 59, 999);
+  } else {
+    parsed.setHours(0, 0, 0, 0);
+  }
+  return parsed;
+};
+
+const isDateWithinRange = (value, { startDate, endDate }) => {
+  if (!startDate && !endDate) return true;
+  if (!value) return false;
+
+  const itemDate = new Date(value);
+  if (Number.isNaN(itemDate.getTime())) return false;
+
+  const startBoundary = getDateRangeBoundary(startDate);
+  const endBoundary = getDateRangeBoundary(endDate, { endOfDay: true });
+
+  if (startBoundary && itemDate < startBoundary) return false;
+  if (endBoundary && itemDate > endBoundary) return false;
+  return true;
+};
+
+const buildPageNumbers = (currentPage, totalPages) => {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+
+  const pages = [];
+  const addPage = (pageNumber) => {
+    if (!pages.includes(pageNumber)) pages.push(pageNumber);
+  };
+
+  addPage(1);
+  addPage(2);
+
+  if (currentPage - 1 > 2) pages.push('...');
+  for (let pageNumber = Math.max(3, currentPage - 1); pageNumber <= Math.min(totalPages - 2, currentPage + 1); pageNumber += 1) {
+    addPage(pageNumber);
+  }
+
+  if (currentPage + 1 < totalPages - 1) pages.push('...');
+  addPage(totalPages - 1);
+  addPage(totalPages);
+
+  return pages;
 };
 
 const topupStatusMeta = (status, isArabic) => {
@@ -140,6 +210,47 @@ const resolveOrderMeta = (raw, orders = []) => {
   return { orderNumber, playerId };
 };
 
+const formatReferenceText = (value) => {
+  if (value === null || value === undefined || value === '') return '-';
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (typeof value === 'object') {
+    const values = value.customerInput?.values || {};
+    const label =
+      value.orderNumber ??
+      value.siteOrderNumber ??
+      value.referenceNumber ??
+      value.referenceId ??
+      value.id ??
+      value._id ??
+      value.code ??
+      value.name ??
+      value.title;
+
+    const playerId =
+      values.playerId ??
+      values.player_id ??
+      values.uid ??
+      values.game_id ??
+      values.userId;
+
+    if (label !== null && label !== undefined && label !== '') {
+      return playerId ? `${label} - ${playerId}` : String(label);
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '-';
+    }
+  }
+
+  return String(value);
+};
+
 
 const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
   const type = String(transaction?.type || transaction?.kind || transaction?.transactionType || '').trim().toLowerCase();
@@ -169,11 +280,14 @@ const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
   const sourceAmount = hasSnapshotOriginalAmount
     ? (signedAmount < 0 ? -Math.abs(snapshotOriginalAmount) : Math.abs(snapshotOriginalAmount))
     : signedAmount;
+  const referenceText = formatReferenceText(transaction?.reference);
+  const descriptionText = formatReferenceText(transaction?.description);
+  const sourceId = transaction?.id || transaction?._id || transaction?.referenceId || referenceText;
 
   return {
     id: `wallet-${transaction?.id || transaction?._id || Date.now()}`,
     source: 'wallet',
-    sourceId: transaction?.id || transaction?._id || transaction?.reference || '-',
+    sourceId,
     status: String(transaction?.status || 'completed').toLowerCase(),
     date: transaction?.createdAt || transaction?.date || null,
     amount: signedAmount,
@@ -181,7 +295,7 @@ const buildWalletOperation = (transaction, fallbackCurrency, isArabic) => {
     originalCurrencyCode,
     currencyCode: fallbackCurrency,
     title: typeMeta.label,
-    subtitle: transaction?.description || transaction?.reference || '-',
+    subtitle: descriptionText !== '-' ? descriptionText : referenceText,
     raw: transaction,
   };
 };
@@ -232,9 +346,15 @@ const AdminUserTransactions = () => {
   const [targetBalance, setTargetBalance] = useState('');
   const [isBalanceUpdating, setIsBalanceUpdating] = useState(false);
   const [detailsItem, setDetailsItem] = useState(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
+  const todayInputValue = useMemo(() => toDateInputValue(new Date()), []);
+  const formatRangeDate = (value) => formatDateTime(value, locale, { day: 'numeric', month: 'long', year: 'numeric' });
 
   useEffect(() => {
     let active = true;
@@ -366,6 +486,30 @@ const AdminUserTransactions = () => {
     }),
     [currencies, displayCurrencyCode, operations, walletOperations]
   );
+
+  const filteredOperations = useMemo(
+    () => displayOperations.filter((entry) => isDateWithinRange(entry?.date, { startDate, endDate })),
+    [displayOperations, endDate, startDate]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredOperations.length / rowsPerPage));
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(currentPage, totalPages),
+    [currentPage, totalPages]
+  );
+  const paginatedOperations = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    return filteredOperations.slice(startIndex, startIndex + rowsPerPage);
+  }, [currentPage, filteredOperations, rowsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [endDate, rowsPerPage, startDate]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(Math.max(page, 1), totalPages));
+  }, [totalPages]);
+
   const creditTotal = useMemo(
     () => displayOperations.reduce((sum, entry) => (entry.convertedAmount > 0 ? sum + entry.convertedAmount : sum), 0),
     [displayOperations]
@@ -601,22 +745,41 @@ const AdminUserTransactions = () => {
       </Card>
 
       <Card className="admin-premium-panel p-2 sm:p-4">
-        <div className="mb-1.5 flex items-center justify-between gap-1.5 sm:mb-3 sm:gap-2">
+        <div className="mb-1.5 flex flex-col gap-2 sm:mb-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-[13px] font-semibold text-[var(--color-text)] sm:text-base">{isArabic ? 'سجل الحركة' : 'Movement ledger'}</h2>
             <p className="mt-0.5 text-[10px] text-[var(--color-text-secondary)]">{operationsSourceNote}</p>
           </div>
-          <Badge variant="secondary" className="px-2 py-0.5 text-[10px]">{formatNumber(displayOperations.length, locale)}</Badge>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <DashboardDateRangeFilter
+              isArabic={isArabic}
+              formatRangeDate={formatRangeDate}
+              todayInputValue={todayInputValue}
+              startDate={startDate}
+              endDate={endDate}
+              onRangeChange={(nextStart, nextEnd) => {
+                setStartDate(nextStart);
+                setEndDate(nextEnd);
+              }}
+              className="w-full sm:w-auto"
+              buttonClassName="!h-10 !min-w-0 !w-full !rounded-xl !px-2.5 !py-1.5 sm:!w-auto sm:!min-w-[210px]"
+            />
+            <Badge variant="secondary" className="justify-center px-2 py-0.5 text-[10px]">
+              {formatNumber(filteredOperations.length, locale)}
+            </Badge>
+          </div>
         </div>
 
-        {!displayOperations.length ? (
+        {!filteredOperations.length ? (
           <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:rgb(var(--color-border-rgb)/0.72)] p-4 text-center text-[11px] text-[var(--color-text-secondary)] sm:text-sm">
-            {isArabic ? 'لا توجد حركات محفوظة لهذه المحفظة حتى الآن.' : 'No wallet movements found for this user yet.'}
+            {displayOperations.length
+              ? (isArabic ? 'لا توجد حركات في التاريخ المحدد.' : 'No movements found in the selected date range.')
+              : (isArabic ? 'لا توجد حركات محفوظة لهذه المحفظة حتى الآن.' : 'No wallet movements found for this user yet.')}
           </div>
         ) : null}
 
         <div className="space-y-1 lg:hidden">
-          {displayOperations.map((item) => (
+          {paginatedOperations.map((item) => (
             <div key={item.id} className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.74)] p-2">
               <div className="flex items-start justify-between gap-1.5">
                 <div className="min-w-0">
@@ -671,7 +834,7 @@ const AdminUserTransactions = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayOperations.map((item) => (
+              {paginatedOperations.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     {item.source === 'wallet'
@@ -721,6 +884,67 @@ const AdminUserTransactions = () => {
             </TableBody>
           </Table>
         </div>
+
+        {filteredOperations.length ? (
+          <div className="mt-3 flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.72)] px-3 py-3 sm:flex-row sm:justify-between">
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-[var(--color-text-secondary)]">
+              <span>{isArabic ? 'عدد الصفوف:' : 'Rows per page:'}</span>
+              <select
+                value={rowsPerPage}
+                onChange={(event) => setRowsPerPage(Number(event.target.value))}
+                className="h-9 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.28)] bg-[color:rgb(var(--color-bg-rgb)/0.76)] px-3 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)]"
+              >
+                {ROWS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{formatNumber(option, locale)}</option>
+                ))}
+              </select>
+              <span className="text-[11px] opacity-70">
+                ({formatNumber(filteredOperations.length, locale)} {isArabic ? 'حركة' : 'moves'})
+              </span>
+            </div>
+
+            <div className="flex items-center justify-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage <= 1}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-bg-rgb)/0.62)] text-[var(--color-text-secondary)] transition hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label={isArabic ? 'الصفحة السابقة' : 'Previous page'}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {pageNumbers.map((pageNumber, index) => (
+                pageNumber === '...' ? (
+                  <span key={`page-gap-${index}`} className="px-1 text-sm text-[var(--color-text-secondary)]">...</span>
+                ) : (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-3 text-sm font-semibold transition ${
+                      currentPage === pageNumber
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-button-text)] shadow-[0_12px_26px_-18px_rgb(var(--color-primary-rgb)/0.82)]'
+                        : 'border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-bg-rgb)/0.62)] text-[var(--color-text-secondary)] hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]'
+                    }`}
+                  >
+                    {formatNumber(pageNumber, locale)}
+                  </button>
+                )
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage >= totalPages}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-bg-rgb)/0.62)] text-[var(--color-text-secondary)] transition hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label={isArabic ? 'الصفحة التالية' : 'Next page'}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Card>
       </>
       ) : null}
@@ -736,7 +960,7 @@ const AdminUserTransactions = () => {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-3">
                 <p className="text-xs text-[var(--color-text-secondary)]">{isArabic ? 'رقم العملية' : 'Operation ID'}</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--color-text)]">#{detailsItem.sourceId}</p>
+                <p className="mt-1 break-words text-sm font-semibold text-[var(--color-text)]">#{formatReferenceText(detailsItem.sourceId)}</p>
               </div>
               <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-3">
                 <p className="text-xs text-[var(--color-text-secondary)]">{isArabic ? 'التاريخ' : 'Date'}</p>
@@ -765,14 +989,14 @@ const AdminUserTransactions = () => {
             <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-3">
               {detailsItem.source === 'wallet' ? (
                 <div className="space-y-2 text-sm text-[var(--color-text)]">
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الوصف:' : 'Description:'}</span> {detailsItem.raw?.description || detailsItem.subtitle || '-'}</p>
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المرجع:' : 'Reference:'}</span> {detailsItem.raw?.reference || '-'}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الوصف:' : 'Description:'}</span> {formatReferenceText(detailsItem.raw?.description || detailsItem.subtitle)}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المرجع:' : 'Reference:'}</span> {formatReferenceText(detailsItem.raw?.reference)}</p>
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الرصيد بعد العملية:' : 'Balance after:'}</span> {detailsItem.raw?.balanceAfter !== null && detailsItem.raw?.balanceAfter !== undefined ? formatMoney(convertAmountBetweenCurrencies(detailsItem.raw.balanceAfter, detailsItem.raw?.currency || detailsItem.originalCurrencyCode || detailsItem.currencyCode, displayCurrencyCode, currencies), displayCurrencyCode) : '-'}</p>
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'مصدر السجل:' : 'Ledger source:'}</span> {detailsItem.raw?.sourceType || (isArabic ? 'محفظة مباشرة' : 'Direct wallet entry')}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'مصدر السجل:' : 'Ledger source:'}</span> {formatReferenceText(detailsItem.raw?.sourceType || (isArabic ? 'محفظة مباشرة' : 'Direct wallet entry'))}</p>
                 </div>
               ) : detailsItem.source === 'order' ? (
                 <div className="space-y-2 text-sm text-[var(--color-text)]">
-                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المنتج:' : 'Product:'}</span> {detailsItem.raw?.productNameAr || detailsItem.raw?.productName || detailsItem.raw?.productId || '-'}</p>
+                  <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'المنتج:' : 'Product:'}</span> {formatReferenceText(detailsItem.raw?.productNameAr || detailsItem.raw?.productName || detailsItem.raw?.productId)}</p>
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الكمية:' : 'Quantity:'}</span> {asNumber(detailsItem.raw?.quantity || 1)}</p>
                   <p><span className="text-[var(--color-text-secondary)]">{isArabic ? 'الحقول:' : 'Fields:'}</span> {JSON.stringify(detailsItem.raw?.orderFieldsValues || detailsItem.raw?.orderFields || {})}</p>
                 </div>

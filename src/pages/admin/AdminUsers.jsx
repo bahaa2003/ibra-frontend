@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Search,
   UserCheck,
+  UserMinus,
   UserX,
   Wallet,
 } from 'lucide-react';
@@ -107,6 +108,18 @@ const getDetailsMetricTone = (value) => (
     : ''
 );
 
+const isSupervisorAccount = (entry) => {
+  if (!entry) return false;
+  const role = String(entry.role || '').trim().toLowerCase();
+  const hasSupervisorPermissions = [
+    entry.permissions,
+    entry.supervisorPermissions,
+  ].some((items) => Array.isArray(items) && items.length > 0);
+
+  if (['admin', 'super_admin'].includes(role)) return false;
+  return ['supervisor', 'manager'].includes(role) || hasSupervisorPermissions;
+};
+
 const AdminUsers = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -128,6 +141,8 @@ const AdminUsers = () => {
     updateUserCoins,
     updateUserCurrency,
     updateUserCreditLimit,
+    updateUserProfile,
+    updateUserRole,
     deleteUser,
     restoreUser,
     resetUserPassword,
@@ -155,6 +170,7 @@ const AdminUsers = () => {
   const [settingsGroup, setSettingsGroup] = useState('');
   const [settingsCurrency, setSettingsCurrency] = useState('USD');
   const [settingsCreditLimit, setSettingsCreditLimit] = useState('0');
+  const [settingsApiEnabled, setSettingsApiEnabled] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [manualPassword, setManualPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,11 +199,14 @@ const AdminUsers = () => {
       setSettingsGroup(resolveInitialGroupValue(nextSelected, groups));
       setSettingsCurrency(nextSelected.currency || currencies[0]?.code || 'USD');
       setSettingsCreditLimit(String(toFiniteNumber(nextSelected?.creditLimit, 0)));
+      setSettingsApiEnabled(Boolean(nextSelected?.isApiEnabled));
     }
   }, [currencies, groups, selectedUser?.id, users]);
 
   const customerUsers = useMemo(
-    () => (users || []).filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer'),
+    () => (users || []).filter((entry) => (
+      String(entry?.role || '').trim().toLowerCase() === 'customer' || isSupervisorAccount(entry)
+    )),
     [users]
   );
 
@@ -204,7 +223,9 @@ const AdminUsers = () => {
     [customerUsers]
   );
   const deletedCustomerUsers = useMemo(
-    () => (deletedUsers || []).filter((entry) => String(entry?.role || '').trim().toLowerCase() === 'customer'),
+    () => (deletedUsers || []).filter((entry) => (
+      String(entry?.role || '').trim().toLowerCase() === 'customer' || isSupervisorAccount(entry)
+    )),
     [deletedUsers]
   );
   const deletedCount = useMemo(
@@ -251,6 +272,7 @@ const AdminUsers = () => {
     setSettingsGroup(resolveInitialGroupValue(entry, groups));
     setSettingsCurrency(entry?.currency || currencies[0]?.code || 'USD');
     setSettingsCreditLimit(String(toFiniteNumber(entry?.creditLimit, 0)));
+    setSettingsApiEnabled(Boolean(entry?.isApiEnabled));
     setTemporaryPassword('');
     setManualPassword('');
     setIsDetailsOpen(true);
@@ -272,6 +294,7 @@ const AdminUsers = () => {
         setSettingsGroup(resolveInitialGroupValue(userResult.value, groups));
         setSettingsCurrency(userResult.value?.currency || currencies[0]?.code || 'USD');
         setSettingsCreditLimit(String(toFiniteNumber(userResult.value?.creditLimit, 0)));
+        setSettingsApiEnabled(Boolean(userResult.value?.isApiEnabled));
       }
     } finally {
       setIsDetailsLoading(false);
@@ -462,6 +485,51 @@ const AdminUsers = () => {
       await loadUsers({ force: true });
     } catch (error) {
       addToast(error?.message || 'تعذر تحديث حد الدين.', 'error');
+    }
+  };
+
+  const handleSettingsApiAccessSave = async () => {
+    if (!selectedUser?.id) return;
+
+    try {
+      const updated = await updateUserProfile(selectedUser.id, { isApiEnabled: settingsApiEnabled }, actor);
+      syncSelectedUser(updated || { ...selectedUser, isApiEnabled: settingsApiEnabled });
+      addToast(
+        settingsApiEnabled
+          ? (isArabic ? 'تم تفعيل الـ API لهذا المستخدم.' : 'API access enabled for this user.')
+          : (isArabic ? 'تم إيقاف الـ API لهذا المستخدم.' : 'API access disabled for this user.'),
+        'success'
+      );
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || (isArabic ? 'تعذر تحديث إعدادات الـ API.' : 'Could not update API access.'), 'error');
+    }
+  };
+
+  const handleRevokeSupervisor = async (entry = selectedUser) => {
+    if (!entry?.id || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const updated = await updateUserRole(entry.id, 'customer', actor, []);
+      const demotedUser = {
+        ...entry,
+        ...(updated || {}),
+        role: updated?.role || 'customer',
+        permissions: [],
+        supervisorPermissions: [],
+      };
+
+      if (selectedUser?.id === entry.id) {
+        syncSelectedUser(demotedUser);
+      }
+
+      addToast('تم إلغاء صلاحيات الإشراف بنجاح، وعاد كعميل عادي.', 'success');
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || 'تعذر إلغاء صلاحيات الإشراف.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -729,6 +797,12 @@ const AdminUsers = () => {
                   </Button>
                 </>
               )}
+              {filter !== 'deleted' && isSupervisorAccount(entry) ? (
+                <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => handleRevokeSupervisor(entry)} disabled={isSubmitting}>
+                  <UserMinus className="h-3.5 w-3.5" />
+                  إلغاء الإشراف
+                </Button>
+              ) : null}
               <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                 <Eye className="h-3.5 w-3.5" />
                 عرض التفاصيل
@@ -808,6 +882,12 @@ const AdminUsers = () => {
                         </Button>
                       </>
                     )}
+                    {filter !== 'deleted' && isSupervisorAccount(entry) ? (
+                      <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => handleRevokeSupervisor(entry)} disabled={isSubmitting}>
+                        <UserMinus className="h-3.5 w-3.5" />
+                        إلغاء الإشراف
+                      </Button>
+                    ) : null}
                     <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                       عرض التفاصيل
                     </Button>
@@ -1077,6 +1157,29 @@ const AdminUsers = () => {
                   </Button>
                 </div>
               </div>
+              <div className="space-y-2 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-surface-rgb)/0.52)] p-2.5">
+                <label className="flex items-start gap-2 text-xs text-[var(--color-text)]">
+                  <input
+                    type="checkbox"
+                    checked={settingsApiEnabled}
+                    onChange={(event) => setSettingsApiEnabled(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[color:rgb(var(--color-border-rgb)/0.9)] accent-[var(--color-primary)]"
+                  />
+                  <span>
+                    <span className="block font-semibold">
+                      {isArabic ? 'تفعيل الـ API' : 'Enable API Access'}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-5 text-[var(--color-text-secondary)]">
+                      {isArabic
+                        ? 'يسمح لهذا المستخدم باستخدام توكن الوصول مع واجهة الموزعين.'
+                        : 'Allow this user to authenticate with an API token for reseller endpoints.'}
+                    </span>
+                  </span>
+                </label>
+                <Button variant="outline" className={compactButtonClassName} onClick={handleSettingsApiAccessSave}>
+                  {isArabic ? 'حفظ إعدادات الـ API' : 'Save API Access'}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2.5 rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.84)] p-3.5">
@@ -1154,6 +1257,12 @@ const AdminUsers = () => {
                 حذف المستخدم
               </Button>
             )}
+            {filter !== 'deleted' && isSupervisorAccount(selectedUser) ? (
+              <Button variant="outline" className={compactButtonClassName} onClick={() => handleRevokeSupervisor(selectedUser)} disabled={isSubmitting}>
+                <UserMinus className="h-3.5 w-3.5" />
+                إلغاء الإشراف
+              </Button>
+            ) : null}
           </div>
         </div>
       </Modal>

@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock3,
@@ -204,6 +205,7 @@ const AdminOrders = () => {
   const { currencies, loadCurrencies } = useSystemStore();
   const { addToast } = useToast();
   const { i18n } = useTranslation();
+  const [searchParams] = useSearchParams();
 
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -220,6 +222,7 @@ const AdminOrders = () => {
   // New: provider filter
   const [providerFilter, setProviderFilter] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [directSelectedOrder, setDirectSelectedOrder] = useState(null);
   const [actionOrderId, setActionOrderId] = useState('');
   const [syncingOrderId, setSyncingOrderId] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -295,6 +298,19 @@ const AdminOrders = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit, appliedStartDate, appliedEndDate]); // serverSearchTerm changes are handled in the debounce effect above
 
+  useEffect(() => {
+    const orderIdFromQuery = String(searchParams.get('orderId') || '').trim();
+    if (!orderIdFromQuery) return;
+
+    setSearchTerm(orderIdFromQuery);
+    setSelectedOrderId(orderIdFromQuery);
+    void getOrderById(orderIdFromQuery)
+      .then((order) => {
+        if (order) setDirectSelectedOrder(order);
+      })
+      .catch(() => {});
+  }, [getOrderById, searchParams]);
+
   // ── Date range handlers ──────────────────────────────────────────────────
   const handleApplyDateFilter = useCallback(() => {
     setAppliedStartDate(startDate);
@@ -335,8 +351,8 @@ const AdminOrders = () => {
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
 
   const selectedOrder = useMemo(
-    () => enrichedOrders.find((order) => order.id === selectedOrderId) || null,
-    [enrichedOrders, selectedOrderId]
+    () => enrichedOrders.find((order) => order.id === selectedOrderId) || directSelectedOrder,
+    [directSelectedOrder, enrichedOrders, selectedOrderId]
   );
 
   const formatCount = (value) => formatNumber(value, locale);
@@ -465,9 +481,11 @@ const AdminOrders = () => {
 
   const handleViewOrder = useCallback(async (order) => {
     setSelectedOrderId(order.id);
+    setDirectSelectedOrder(order);
 
     try {
-      await getOrderById(order.id);
+      const nextOrder = await getOrderById(order.id);
+      if (nextOrder) setDirectSelectedOrder(nextOrder);
     } catch (error) {
       addToast(error?.message || (isArabic ? 'تعذر تحميل تفاصيل الطلب' : 'Unable to load order details'), 'error');
     }
@@ -475,6 +493,7 @@ const AdminOrders = () => {
 
   const handleCloseOrderDetails = useCallback(() => {
     setSelectedOrderId(null);
+    setDirectSelectedOrder(null);
   }, []);
 
   return (

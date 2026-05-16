@@ -9,7 +9,7 @@ import {
   Globe,
   Lock,
   Mail,
-  Phone,
+  ShieldCheck,
   User,
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
@@ -22,6 +22,7 @@ import LanguageSwitcher from '../components/ui/LanguageSwitcher';
 import AuthHeroVisual from '../components/auth/AuthHeroVisual';
 import AuthGoldDustBackground from '../components/auth/AuthGoldDustBackground';
 import authAtmosphereConfig from '../components/auth/authAtmosphereConfig';
+import OtpInput from '../components/account/OtpInput';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../components/ui/Toast';
 import useSystemStore from '../store/useSystemStore';
@@ -29,14 +30,12 @@ import { useTranslation } from 'react-i18next';
 import {
   validateEmail,
   validateFullName,
-  validateMobilePhone,
   validatePassword,
-  validateUsername,
 } from '../utils/validation';
 import { COUNTRY_CATALOG } from '../data/countryCatalog';
 import { getDefaultRouteForRole } from '../utils/authRoles';
 import { getAccountAccessRoute, normalizeAccountStatus } from '../utils/accountStatus';
-import brandIconImage from '../assets/logo.png';
+import brandIconImage from '../assets/logo-optimized.webp';
 
 const GoogleMark = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -58,6 +57,8 @@ const Auth = () => {
   const { addToast } = useToast();
   const {
     login,
+    verifyTwoFactorChallenge,
+    clearTwoFactorChallenge,
     loginWithGoogle,
     signup,
     isLoading,
@@ -65,60 +66,55 @@ const Auth = () => {
     isAuthenticated,
     user,
     blockedStatus,
+    twoFactorChallenge,
   } = useAuthStore();
   const { currencies: systemCurrencies, loadCurrencies } = useSystemStore();
+  const isRTL = dir === 'rtl';
 
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('mode') !== 'register';
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
+  const [registerStep, setRegisterStep] = useState(0);
   const [country, setCountry] = useState('US');
   const [currency, setCurrency] = useState('USD');
   const [countries] = useState(COUNTRY_CATALOG);
-  const [phoneCode, setPhoneCode] = useState('+1');
-  const [phone, setPhone] = useState('');
   const [errors, setErrors] = useState({});
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+  const [twoFactorOtp, setTwoFactorOtp] = useState('');
+
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/');
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setIsLogin(params.get('mode') !== 'register');
+  }, [location.search]);
+
+  useEffect(() => {
+    if (isLogin) {
+      setRegisterStep(0);
+    }
+  }, [isLogin]);
 
 const countryOptions = useMemo(() => {
     const source = countries.length ? countries : fallbackCountries;
     return [...source].sort((a, b) => (a?.name?.common || '').localeCompare(b?.name?.common || ''));
   }, [countries, fallbackCountries]);
-
-  const selectedCountry = useMemo(
-    () => countryOptions.find((item) => item.cca2 === country) || countryOptions[0],
-    [countryOptions, country]
-  );
-
-  const getDialCodes = (countryItem) => {
-    const root = countryItem?.idd?.root || '';
-    const suffixes = countryItem?.idd?.suffixes || [];
-    if (!root && !suffixes.length) return [];
-    if (!suffixes.length) return [root];
-    return suffixes.map((suffix) => `${root}${suffix}`);
-  };
-
-  const dialCodeOptions = useMemo(() => {
-    const map = new Map();
-    countryOptions.forEach((countryItem) => {
-      const countryName = countryItem?.name?.common || countryItem?.cca2;
-      getDialCodes(countryItem).forEach((code) => {
-        if (!code) return;
-        map.set(`${code}-${countryItem.cca2}`, {
-          code,
-          label: `${code} (${countryName})`,
-        });
-      });
-    });
-
-    return Array.from(map.values()).sort((left, right) => left.code.localeCompare(right.code));
-  }, [countryOptions]);
 
   const availableCurrencyOptions = useMemo(() => {
     const list = Array.isArray(systemCurrencies) ? systemCurrencies : [];
@@ -169,14 +165,10 @@ const countryOptions = useMemo(() => {
   }, [availableCurrencyOptions]);
 
   useEffect(() => {
-    if (!selectedCountry) return;
-    const preferredDialCode = getDialCodes(selectedCountry)[0];
-    if (preferredDialCode) {
-      setPhoneCode(preferredDialCode);
+    if (location.search.includes('mode=')) {
+      return;
     }
-  }, [selectedCountry]);
 
-  useEffect(() => {
     if (location.search.includes('token=')) return;
     if (location.search.includes('status=')) return;
 
@@ -240,12 +232,8 @@ const countryOptions = useMemo(() => {
 
     if (!isLogin) {
       const nameError = validateFullName(name);
-      const usernameError = validateUsername(username);
-      const phoneError = validateMobilePhone(phone, phoneCode);
 
       if (nameError) nextErrors.name = nameError;
-      if (usernameError) nextErrors.username = usernameError;
-      if (phoneError) nextErrors.phone = phoneError;
 
       if (!confirmPassword) {
         nextErrors.confirmPassword = t('auth.passwordConfirmRequired');
@@ -258,8 +246,49 @@ const countryOptions = useMemo(() => {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const validateRegisterStep = (step) => {
+    const nextErrors = {};
+
+    if (step === 0) {
+      const nameError = validateFullName(name);
+      if (nameError) nextErrors.name = nameError;
+
+      if (!currency) {
+        addToast(t('auth.noCurrenciesConfigured'), 'error');
+      }
+    }
+
+    if (step === 1) {
+      const emailError = validateEmail(email);
+      const passwordError = validatePassword(password);
+
+      if (emailError) nextErrors.email = emailError;
+      if (passwordError) nextErrors.password = passwordError;
+
+      if (!confirmPassword) {
+        nextErrors.confirmPassword = t('auth.passwordConfirmRequired');
+      } else if (password !== confirmPassword) {
+        nextErrors.confirmPassword = t('auth.passwordsDoNotMatch');
+      }
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0 && (step !== 0 || Boolean(currency));
+  };
+
   const consumeAuthResult = (result, { source = 'email', mode = 'login' } = {}) => {
     if (!result) return;
+
+    if (result.requires2FA) {
+      setTwoFactorOtp('');
+      addToast(
+        dir === 'rtl'
+          ? 'تم إرسال رمز التحقق إلى بريدك الإلكتروني.'
+          : 'A verification code has been sent to your email.',
+        'success'
+      );
+      return;
+    }
 
     if (result.redirectTo) {
       if (result.status === 'verification_required') {
@@ -307,8 +336,35 @@ const countryOptions = useMemo(() => {
     }
   };
 
+  const isTwoFactorStep = isLogin && Boolean(twoFactorChallenge);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (isTwoFactorStep) {
+      if (twoFactorOtp.length !== 6) {
+        addToast(
+          dir === 'rtl'
+            ? 'أدخل رمز التحقق المكون من 6 أرقام.'
+            : 'Enter the 6-digit verification code.',
+          'error'
+        );
+        return;
+      }
+
+      const result = await verifyTwoFactorChallenge(twoFactorOtp);
+      consumeAuthResult(result, { source: 'email', mode: 'login' });
+      return;
+    }
+
+    if (!isLogin && registerStep < 1) {
+      if (validateRegisterStep(registerStep)) {
+        setRegisterStep((previous) => previous + 1);
+      }
+
+      return;
+    }
+
     if (!validateForm()) return;
 
     if (!isLogin && !currency) {
@@ -320,13 +376,11 @@ const countryOptions = useMemo(() => {
       ? await login(email, password)
       : await signup({
           name,
-          username,
           email,
           password,
           country,
           currency,
           signupMethod: 'email',
-          phone: `${phoneCode}${phone}`,
         });
 
     consumeAuthResult(result, { source: 'email', mode: isLogin ? 'login' : 'signup' });
@@ -352,7 +406,10 @@ const countryOptions = useMemo(() => {
   };
 
   const toggleMode = () => {
+    clearTwoFactorChallenge?.();
+    setTwoFactorOtp('');
     setIsLogin((previous) => !previous);
+    setRegisterStep(0);
     setConfirmPassword('');
     setErrors({});
     useAuthStore.setState({ error: null, blockedStatus: null, blockedUser: null });
@@ -362,6 +419,16 @@ const countryOptions = useMemo(() => {
   const authSelectClassName =
     'h-11 w-full rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.9)] bg-[color:rgb(var(--color-card-rgb)/0.84)] px-4 text-sm text-[var(--color-text)] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] outline-none transition-all duration-200 hover:border-[color:rgb(var(--color-primary-rgb)/0.22)] focus:border-[color:rgb(var(--color-primary-rgb)/0.42)] focus:bg-[color:rgb(var(--color-surface-rgb)/0.98)] focus:outline-none focus:ring-4 focus:ring-[color:rgb(var(--color-primary-rgb)/0.12)] disabled:cursor-not-allowed disabled:opacity-55';
   const authLinkClassName = 'font-semibold text-[var(--color-primary)] transition hover:text-[var(--color-primary-hover)]';
+  const registerSteps = [
+    {
+      title: dir === 'rtl' ? 'بيانات الحساب' : 'Account details',
+      hint: dir === 'rtl' ? 'الاسم والدولة والعملة' : 'Name, country, and currency',
+    },
+    {
+      title: dir === 'rtl' ? 'بيانات الدخول' : 'Sign-in details',
+      hint: dir === 'rtl' ? 'البريد وكلمة المرور' : 'Email and password',
+    },
+  ];
   const modeConfig = isLogin
     ? {
         heading: t('auth.welcomeBack'),
@@ -429,6 +496,18 @@ const countryOptions = useMemo(() => {
           />
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={handleGoBack}
+        className={cn(
+          'absolute top-3 z-20 inline-flex items-center gap-2 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[rgba(255,250,241,0.74)] px-3 py-2 text-sm font-medium text-[var(--color-text)] shadow-[0_18px_40px_-30px_rgba(23,23,23,0.26)] backdrop-blur-xl transition hover:bg-[rgba(255,250,241,0.9)] dark:bg-[rgba(12,14,18,0.74)] dark:text-white dark:hover:bg-[rgba(12,14,18,0.9)]',
+          dir === 'rtl' ? 'right-4' : 'left-4'
+        )}
+      >
+        <ArrowRight className={cn('h-4 w-4', dir === 'rtl' ? '' : 'rotate-180')} />
+        <span>{dir === 'rtl' ? 'رجوع' : 'Back'}</span>
+      </button>
 
       <div className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 gap-5 pt-14 sm:pt-16 lg:min-h-[calc(100vh-2rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(23rem,0.92fr)] lg:items-center lg:gap-8">
         <AuthHeroVisual mode={authMode} />
@@ -518,19 +597,64 @@ const countryOptions = useMemo(() => {
             className="space-y-6 border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[linear-gradient(180deg,rgb(var(--color-card-rgb)/0.98),rgb(var(--color-surface-rgb)/0.94))] p-5 shadow-[0_34px_84px_-42px_rgba(0,0,0,0.84)] sm:p-7 md:p-8"
           >
             {!isLogin && (
-              <div className="rounded-[1.25rem] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[linear-gradient(180deg,rgba(212,175,55,0.14),rgba(212,175,55,0.06))] px-4 py-3 text-[0.82rem] leading-6 text-[var(--color-text-secondary)] sm:text-[0.84rem]">
-                {t('auth.pendingApprovalNotice', {
-                  defaultValue: dir === 'rtl'
-                    ? 'التسجيل الجديد يحتاج موافقة الإدارة قبل استخدام الحساب، سواء تم عبر البريد أو عبر Google.'
-                    : 'New registrations require admin approval before the account can be used, whether created by email or Google.',
-                })}
+              <div className="space-y-4">
+                <div className="rounded-[1.25rem] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[linear-gradient(180deg,rgba(212,175,55,0.14),rgba(212,175,55,0.06))] px-4 py-3 text-[0.82rem] leading-6 text-[var(--color-text-secondary)] sm:text-[0.84rem]">
+                  {t('auth.pendingApprovalNotice', {
+                    defaultValue: dir === 'rtl'
+                      ? 'التسجيل الجديد يحتاج موافقة الإدارة قبل استخدام الحساب، سواء تم عبر البريد أو عبر Google.'
+                      : 'New registrations require admin approval before the account can be used, whether created by email or Google.',
+                  })}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {registerSteps.map((step, index) => {
+                    const active = registerStep === index;
+                    const done = registerStep > index;
+
+                    return (
+                      <button
+                        key={step.title}
+                        type="button"
+                        onClick={() => {
+                          if (index < registerStep || validateRegisterStep(registerStep)) {
+                            setRegisterStep(index);
+                          }
+                        }}
+                        className={cn(
+                          'group relative overflow-hidden rounded-[1.1rem] border px-3 py-3 text-start transition',
+                          active || done
+                            ? 'border-[color:rgb(var(--color-primary-rgb)/0.28)] bg-[linear-gradient(135deg,rgba(212,175,55,0.18),rgba(255,255,255,0.72))] shadow-[0_18px_38px_-30px_rgba(212,175,55,0.55)] dark:bg-[linear-gradient(135deg,rgba(212,175,55,0.14),rgba(255,255,255,0.04))]'
+                            : 'border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.62)] hover:border-[color:rgb(var(--color-primary-rgb)/0.2)]'
+                        )}
+                      >
+                        <span className="relative z-10 flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                              active || done
+                                ? 'bg-[var(--color-primary)] text-[var(--color-button-text)]'
+                                : 'bg-[color:rgb(var(--color-primary-rgb)/0.08)] text-[var(--color-text-secondary)]'
+                            )}
+                          >
+                            {done ? <ShieldCheck className="h-4 w-4" /> : index + 1}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-[var(--color-text)]">{step.title}</span>
+                            <span className="mt-0.5 block truncate text-[0.72rem] text-[var(--color-text-secondary)]">{step.hint}</span>
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <AnimatePresence initial={false}>
-                {!isLogin && (
+                {!isLogin && registerStep === 0 && (
                   <motion.div
+                    key="register-profile-step"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
@@ -544,16 +668,6 @@ const countryOptions = useMemo(() => {
                       onChange={(event) => setName(event.target.value)}
                       icon={<User className="h-4 w-4" />}
                       error={errors.name}
-                    />
-
-                    <Input
-                      label={t('auth.username')}
-                      type="text"
-                      placeholder="johndoe"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      icon={<User className="h-4 w-4" />}
-                      error={errors.username}
                     />
 
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -599,86 +713,108 @@ const countryOptions = useMemo(() => {
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-[var(--color-text-secondary)]">
-                        {t('auth.phone')}
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <select
-                          value={phoneCode}
-                          onChange={(event) => setPhoneCode(event.target.value)}
-                          className={cn(authSelectClassName, 'col-span-1 px-3')}
-                        >
-                          {dialCodeOptions.map((item) => (
-                            <option key={`${item.code}-${item.label}`} value={item.code}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          type="tel"
-                          placeholder="555000000"
-                          value={phone}
-                          onChange={(event) => setPhone(event.target.value)}
-                          icon={<Phone className="h-4 w-4" />}
-                          error={errors.phone}
-                          className="col-span-2"
-                        />
-                      </div>
-                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <Input
-                label={t('auth.email')}
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                icon={<Mail className="h-4 w-4" />}
-                error={errors.email}
-              />
-
-              <Input
-                label={t('auth.password')}
-                type={showPassword ? 'text' : 'password'}
-                placeholder="********"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                icon={<Lock className="h-4 w-4" />}
-                error={errors.password}
-                suffix={(
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((previous) => !previous)}
-                    className="flex items-center justify-center p-1 text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+              <AnimatePresence initial={false}>
+                {!isTwoFactorStep && (isLogin || registerStep === 1) && (
+                  <motion.div
+                    key={isLogin ? 'login-fields' : 'register-access-step'}
+                    initial={isLogin ? false : { opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-4 overflow-hidden"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                )}
-              />
+                    <Input
+                      label={t('auth.email')}
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      icon={<Mail className="h-4 w-4" />}
+                      error={errors.email}
+                    />
 
-              {!isLogin && (
-                <Input
-                  label={t('auth.confirmPassword')}
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="********"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  icon={<Lock className="h-4 w-4" />}
-                  error={errors.confirmPassword}
-                  suffix={(
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword((previous) => !previous)}
-                      className="flex items-center justify-center p-1 text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  )}
-                />
-              )}
+                    <Input
+                      label={t('auth.password')}
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="********"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      icon={<Lock className="h-4 w-4" />}
+                      error={errors.password}
+                      suffix={(
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((previous) => !previous)}
+                          className="flex items-center justify-center p-1 text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      )}
+                    />
+
+                    {!isLogin && (
+                      <Input
+                        label={t('auth.confirmPassword')}
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="********"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        icon={<Lock className="h-4 w-4" />}
+                        error={errors.confirmPassword}
+                        suffix={(
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword((previous) => !previous)}
+                            className="flex items-center justify-center p-1 text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+                          >
+                            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        )}
+                      />
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence initial={false}>
+                {isTwoFactorStep && (
+                  <motion.div
+                    key="two-factor-fields"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-4 overflow-hidden"
+                  >
+                    <div className="rounded-2xl border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.07)] p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-card-rgb)/0.76)] text-[var(--color-primary)]">
+                          <ShieldCheck className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--color-text)]">
+                            {dir === 'rtl' ? 'رمز التحقق مطلوب' : 'Verification code required'}
+                          </p>
+                          <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                            {dir === 'rtl'
+                              ? 'تحقق من بريدك الإلكتروني وأدخل الرمز المكون من 6 أرقام لإكمال تسجيل الدخول.'
+                              : 'Check your email and enter the 6-digit code to complete sign-in.'}
+                          </p>
+                          {twoFactorChallenge?.email ? (
+                            <p className="mt-2 truncate text-xs font-semibold text-[var(--color-primary)]">
+                              {twoFactorChallenge.email}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <OtpInput value={twoFactorOtp} onChange={setTwoFactorOtp} disabled={isLoading} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <AnimatePresence initial={false}>
                 {storeError && (
@@ -711,13 +847,33 @@ const countryOptions = useMemo(() => {
                 )}
               </AnimatePresence>
 
+              {!isLogin && registerStep > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrors({});
+                    setRegisterStep((previous) => Math.max(0, previous - 1));
+                  }}
+                  className="w-full rounded-xl border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[color:rgb(var(--color-primary-rgb)/0.06)] px-4 py-3 text-sm font-semibold text-[var(--color-text)] transition hover:bg-[color:rgb(var(--color-primary-rgb)/0.1)]"
+                >
+                  {dir === 'rtl' ? 'الخطوة السابقة' : 'Previous step'}
+                </button>
+              )}
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading
                   ? (isLogin ? t('common.loading') : t('common.processing'))
-                  : (isLogin ? t('auth.signIn') : t('auth.signUp'))}
+                  : (isTwoFactorStep
+                    ? (dir === 'rtl' ? 'تأكيد الرمز' : 'Verify code')
+                    : isLogin
+                      ? t('auth.signIn')
+                    : registerStep === 0
+                      ? (dir === 'rtl' ? 'التالي' : 'Next')
+                      : t('auth.signUp'))}
                 {!isLoading && <ArrowRight className={`h-4 w-4 ${dir === 'rtl' ? 'mr-1 rotate-180' : 'ml-1'}`} />}
               </Button>
 
+              {!isTwoFactorStep && (
               <div className="space-y-3 pt-2">
                 <div className="flex items-center gap-3">
                   <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[rgba(212,175,55,0.3)] to-transparent" />
@@ -747,9 +903,10 @@ const countryOptions = useMemo(() => {
                   </span>
                 </motion.button>
               </div>
+              )}
 
               <div className="mt-6 space-y-2 text-center">
-                {isLogin && (
+                {isLogin && !isTwoFactorStep && (
                   <button
                     type="button"
                     onClick={() => setForgotModalOpen(true)}
@@ -759,6 +916,7 @@ const countryOptions = useMemo(() => {
                   </button>
                 )}
 
+                {!isTwoFactorStep && (
                 <span className="block text-sm text-[var(--color-text-secondary)]">
                   {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}{' '}
                   <button
@@ -769,6 +927,7 @@ const countryOptions = useMemo(() => {
                     {isLogin ? t('auth.signUp') : t('auth.signIn')}
                   </button>
                 </span>
+                )}
               </div>
             </form>
           </Card>

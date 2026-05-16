@@ -81,13 +81,6 @@ const AuthHeroVisual = ({ mode = 'login' }) => {
               Store
             </span>
           </div>
-
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.18)] bg-[rgba(255,248,236,0.8)] px-2 py-1.5 text-[0.62rem] font-medium text-[var(--color-text-secondary)] backdrop-blur-lg dark:border-[color:rgb(var(--color-primary-rgb)/0.14)] dark:bg-[rgba(8,10,14,0.62)] dark:text-[#f8f1da]/75 sm:gap-2 sm:px-2.5 sm:text-[0.68rem] lg:px-3.5 lg:py-2 lg:text-xs">
-            <ShieldCheck className="h-3 w-3 text-[var(--color-primary)] dark:text-[#f3de9b] sm:h-3.5 sm:w-3.5" />
-            {t('auth.hero.premiumNote', {
-              defaultValue: dir === 'rtl' ? 'تصميم هادئ وسريع' : 'Calm and fast by design',
-            })}
-          </div>
         </div>
 
         <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(18rem,1fr)] lg:items-end lg:gap-7">

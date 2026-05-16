@@ -42,9 +42,64 @@ export const sanitizeOrderFieldValue = (value, maxLength = 120) => String(value 
   .replace(/\s+/g, ' ')
   .slice(0, maxLength);
 
+export const DYNAMIC_FIELD_TYPES = ['text', 'number', 'select'];
+
+export const toSnakeCase = (value = '') => {
+  const ascii = String(value || '')
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+
+  return ascii || 'field';
+};
+
+export const normalizeDynamicFieldOptions = (options) => {
+  if (Array.isArray(options)) {
+    return [...new Set(options.map((option) => String(option || '').trim()).filter(Boolean))];
+  }
+
+  return [...new Set(String(options || '')
+    .split(',')
+    .map((option) => option.trim())
+    .filter(Boolean))];
+};
+
+export const normalizeProductDynamicFields = (fields = []) => (
+  Array.isArray(fields) ? fields : []
+).map((field, index) => {
+  const label = String(field?.label || '').trim();
+  const name = toSnakeCase(field?.name || label || `field_${index + 1}`);
+  const type = DYNAMIC_FIELD_TYPES.includes(String(field?.type || '').toLowerCase())
+    ? String(field.type).toLowerCase()
+    : 'text';
+
+  return {
+    name,
+    label: label || name,
+    type,
+    required: field?.required !== false,
+    options: type === 'select' ? normalizeDynamicFieldOptions(field?.options) : [],
+    isActive: field?.isActive !== false,
+  };
+}).filter((field) => field.name && field.label);
+
+export const resolveProductDynamicFields = (product) => normalizeProductDynamicFields(product?.dynamicFields)
+  .filter((field) => field.isActive !== false);
+
 export const resolveProductOrderFields = (product, language = 'ar') => {
+  if (resolveProductDynamicFields(product).length > 0) {
+    return [];
+  }
+
   if (Array.isArray(product?.orderFields) && product.orderFields.length > 0) {
-    return product.orderFields.map((field, index) => {
+    const visibleFields = product.orderFields.filter((field) => field?.visible !== false);
+
+    if (visibleFields.length === 0) return [];
+
+    return visibleFields.map((field, index) => {
       const key = String(field?.name || field?.key || field?.id || `orderField_${index}`);
       const localizedLabel = language === 'ar'
         ? field?.labelAr || field?.placeholderAr
@@ -54,6 +109,9 @@ export const resolveProductOrderFields = (product, language = 'ar') => {
         key,
         label: localizedLabel || field?.label || field?.placeholder || key,
         placeholder: (language === 'ar' ? field?.placeholderAr : field?.placeholder) || field?.placeholder || '',
+        type: ['email', 'number', 'text'].includes(String(field?.type || '').toLowerCase())
+          ? String(field.type).toLowerCase()
+          : 'text',
       };
     });
   }
@@ -68,6 +126,7 @@ export const resolveProductOrderFields = (product, language = 'ar') => {
         key: field,
         label: FIELD_COPY[field]?.[language] || field,
         placeholder: '',
+        type: field === 'email' ? 'email' : 'text',
       }));
     }
   }
@@ -76,5 +135,6 @@ export const resolveProductOrderFields = (product, language = 'ar') => {
     key: 'playerId',
     label: FIELD_COPY.playerId[language] || FIELD_COPY.playerId.en,
     placeholder: '',
+    type: 'text',
   }];
 };

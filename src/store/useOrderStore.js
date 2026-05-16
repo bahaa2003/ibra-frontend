@@ -215,7 +215,10 @@ const useOrderStore = create(
           useNotificationStore.getState().addNotification({
             title: 'طلب جديد',
             message: `تم إنشاء طلب جديد بواسطة ${nextOrder?.userName || nextOrder?.userId || 'عميل'}`,
-            type: 'info',
+            type: 'order',
+            route: `/admin/orders?orderId=${encodeURIComponent(nextOrder.id)}`,
+            entityType: 'order',
+            entityId: nextOrder.id,
           });
 
           return created || { order: nextOrder };
@@ -272,18 +275,27 @@ const useOrderStore = create(
             title: 'قبول طلب',
             message: `تم قبول الطلب ${target?.id || id}`,
             type: 'success',
+            route: `/admin/orders?orderId=${encodeURIComponent(target?.id || id)}`,
+            entityType: 'order',
+            entityId: target?.id || id,
           });
         } else if (normalizedStatus === 'rejected') {
           useNotificationStore.getState().addNotification({
             title: 'رفض طلب',
             message: `تم رفض الطلب ${target?.id || id}`,
             type: 'warning',
+            route: `/admin/orders?orderId=${encodeURIComponent(target?.id || id)}`,
+            entityType: 'order',
+            entityId: target?.id || id,
           });
         } else {
           useNotificationStore.getState().addNotification({
             title: 'تحديث حالة الطلب',
             message: `تم تحديث الطلب ${target?.id || id} إلى ${getManualOrderStatusLabel(normalizedStatus)}`,
             type: 'info',
+            route: `/admin/orders?orderId=${encodeURIComponent(target?.id || id)}`,
+            entityType: 'order',
+            entityId: target?.id || id,
           });
         }
 

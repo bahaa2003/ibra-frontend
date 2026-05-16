@@ -170,6 +170,8 @@ const normalizeProductRecord = (product = {}, categories = mockCategories) => {
     supplierMarginType: product.supplierMarginType || 'fixed',
     supplierMarginValue: asNumber(product.supplierMarginValue, 0),
     supplierNotes: product.supplierNotes || '',
+    dynamicFields: Array.isArray(product.dynamicFields) ? product.dynamicFields : [],
+    isAvailableForApi: product.isAvailableForApi !== false,
     syncPriceWithProvider,
     enableManualPrice: product.enableManualPrice !== undefined
       ? Boolean(product.enableManualPrice)
@@ -482,13 +484,13 @@ const useMediaStore = create(
         return normalizedProduct;
       },
 
-      deleteProduct: (id) => {
-        apiClient.products.delete(id).then(() => {
-          set((state) => ({
-            products: state.products.filter((p) => p.id !== id),
-            lastLoadedAt: Date.now(),
-          }));
-        });
+      deleteProduct: async (id) => {
+        await apiClient.products.delete(id);
+        set((state) => ({
+          products: state.products.filter((p) => p.id !== id),
+          lastLoadedAt: Date.now(),
+        }));
+        return { success: true };
       },
 
       // Category Actions

@@ -4,7 +4,9 @@ import { mockUsers } from '../data/mockData';
 import apiClient from '../services/client';
 import useNotificationStore from './useNotificationStore';
 import useGroupStore from './useGroupStore';
+import useAuthStore from './useAuthStore';
 import { normalizeAccountStatus } from '../utils/accountStatus';
+import { normalizePermissions, normalizeRole, ROLES } from '../utils/authRoles';
 import { normalizeMoneyAmount } from '../utils/money';
 
 const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase();
@@ -251,6 +253,24 @@ const useAdminStore = create(
         return get().loadUsers({ force: true, page: requestedPage });
       },
 
+      loadSupervisors: async ({ force = false } = {}) => {
+        if (!force && Array.isArray(get().users) && get().users.some((entry) => normalizeRole(entry?.role) === ROLES.SUPERVISOR)) {
+          return get().users.filter((entry) => normalizeRole(entry?.role) === ROLES.SUPERVISOR);
+        }
+
+        const result = apiClient.users.listSupervisors
+          ? await apiClient.users.listSupervisors({ limit: 100 })
+          : await apiClient.users.list({ page: 1, limit: 100 });
+
+        const supervisors = Array.isArray(result) ? result : (result?.users || []);
+        set((state) => ({
+          users: supervisors.reduce((acc, supervisor) => upsertUser(acc, supervisor), state.users || []),
+          usersLastLoadedAt: Date.now(),
+        }));
+
+        return supervisors;
+      },
+
       getUserById: async (userId, { force = false } = {}) => {
         const normalizedUserId = String(userId || '').trim();
         if (!normalizedUserId) return null;
@@ -409,7 +429,7 @@ const useAdminStore = create(
         }
       },
 
-      getUserWalletTransactions: async (userId, { force = false } = {}) => {
+      getUserWalletTransactions: async (userId, { force = false, limit = 500 } = {}) => {
         const normalizedUserId = String(userId || '').trim();
         if (!normalizedUserId) return [];
 
@@ -427,7 +447,7 @@ const useAdminStore = create(
           return walletTransactionsRequests.get(normalizedUserId);
         }
 
-        const request = Promise.resolve(apiClient.adminWallets?.getTransactionsByUserId?.(normalizedUserId) || [])
+        const request = Promise.resolve(apiClient.adminWallets?.getTransactionsByUserId?.(normalizedUserId, { limit }) || [])
           .then((items) => {
             const nextItems = Array.isArray(items) ? items : [];
 
@@ -513,12 +533,18 @@ const useAdminStore = create(
             title: 'تمت الموافقة على الحساب',
             message: `تمت الموافقة على حساب ${target?.name || userId}`,
             type: 'success',
+            route: `/admin/users?userId=${encodeURIComponent(userId)}`,
+            entityType: 'user',
+            entityId: userId,
           });
         } else if (nextStatus === 'rejected') {
           useNotificationStore.getState().addNotification({
             title: 'تم رفض الحساب',
             message: `تم رفض حساب ${target?.name || userId}`,
             type: 'warning',
+            route: `/admin/users?userId=${encodeURIComponent(userId)}`,
+            entityType: 'user',
+            entityId: userId,
           });
         }
 
@@ -594,7 +620,6 @@ const useAdminStore = create(
         } catch (_) { /* ignore if storage is unavailable */ }
 
         try {
-          const useAuthStore = (await import('./useAuthStore')).default;
           const currentUser = useAuthStore.getState().user;
           if (currentUser && (currentUser.id === userId || currentUser._id === userId)) {
             useAuthStore.getState().updateUserSession({
@@ -610,14 +635,50 @@ const useAdminStore = create(
         return updatedUser;
       },
 
-      updateUserRole: async (userId, newRole, actor = null) => {
-        await apiClient.users.updateRole(userId, newRole, actor);
+      updateUserRole: async (userId, newRole, actor = null, permissions) => {
+        const normalizedRole = normalizeRole(newRole);
+        const normalizedPermissions = permissions !== undefined
+          ? normalizePermissions(permissions)
+          : undefined;
+        const updatedUser = await apiClient.users.updateRole(userId, normalizedRole, actor, normalizedPermissions);
         set((state) => ({
           users: state.users.map((entry) => (
-            entry.id === userId ? { ...entry, role: newRole } : entry
+            entry.id === userId
+              ? {
+                ...entry,
+                ...(updatedUser || {}),
+                role: updatedUser?.role || normalizedRole,
+                ...(normalizedPermissions !== undefined ? { permissions: normalizedPermissions, supervisorPermissions: normalizedPermissions } : {}),
+              }
+              : entry
           )),
           usersLastLoadedAt: Date.now(),
         }));
+
+        return updatedUser;
+      },
+
+      updateSupervisorPermissions: async (userId, permissions, actor = null) => {
+        const normalizedPermissions = normalizePermissions(permissions);
+        const updatedUser = apiClient.users.updateSupervisorPermissions
+          ? await apiClient.users.updateSupervisorPermissions(userId, normalizedPermissions, actor)
+          : await apiClient.users.updateProfile(userId, { permissions: normalizedPermissions }, actor);
+
+        set((state) => ({
+          users: state.users.map((entry) => (
+            String(entry.id) === String(userId)
+              ? {
+                ...entry,
+                ...(updatedUser || {}),
+                permissions: normalizedPermissions,
+                supervisorPermissions: normalizedPermissions,
+              }
+              : entry
+          )),
+          usersLastLoadedAt: Date.now(),
+        }));
+
+        return updatedUser;
       },
 
       updateUserCurrency: async (userId, currencyCode, actor = null) => {
@@ -661,7 +722,6 @@ const useAdminStore = create(
         // 3. If the updated user is the currently logged-in user,
         //    force re-fetch their profile so navbar/balance updates instantly.
         try {
-          const useAuthStore = (await import('./useAuthStore')).default;
           const currentUser = useAuthStore.getState().user;
           if (currentUser && (currentUser.id === normalizedUserId || currentUser._id === normalizedUserId)) {
             await useAuthStore.getState().refreshProfile({ force: true });
@@ -699,7 +759,6 @@ const useAdminStore = create(
         }));
 
         try {
-          const useAuthStore = (await import('./useAuthStore')).default;
           const currentUser = useAuthStore.getState().user;
           if (currentUser && (currentUser.id === userId || currentUser._id === userId)) {
             await useAuthStore.getState().refreshProfile({ force: true });
@@ -773,6 +832,7 @@ const useAdminStore = create(
         }));
 
         if (typeof onSelfUpdate === 'function') onSelfUpdate(updatedUser);
+        return updatedUser;
       },
 
       resetUserPassword: async (userId, actor = null, password = '') => apiClient.users.resetPassword(userId, actor, password),

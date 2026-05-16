@@ -32,7 +32,7 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
     if (!product) return [{ key: 'playerId', label: t('product.userId') }];
 
     if (Array.isArray(product.orderFields) && product.orderFields.length > 0) {
-      return product.orderFields.map((field, index) => {
+      return product.orderFields.filter((field) => field?.visible !== false).map((field, index) => {
         const key = String(field?.name || field?.key || field?.id || `orderField_${index}`);
         return {
           key,
@@ -41,7 +41,8 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
             field?.label ||
             field?.placeholder ||
             key,
-          placeholder: (language === 'ar' ? field?.placeholderAr : field?.placeholder) || field?.placeholder || ''
+          placeholder: (language === 'ar' ? field?.placeholderAr : field?.placeholder) || field?.placeholder || '',
+          type: ['email', 'number', 'text'].includes(String(field?.type || '').toLowerCase()) ? String(field.type).toLowerCase() : 'text',
         };
       });
     }
@@ -63,7 +64,7 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
   }, [language, product, t]);
 
   const userIdentifier = useMemo(
-    () => String(fieldValues.playerId || fieldValues.uid || '').trim(),
+    () => String(fieldValues.playerId || fieldValues.uid || Object.values(fieldValues).find((value) => String(value || '').trim()) || '').trim(),
     [fieldValues]
   );
 
@@ -202,6 +203,7 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
           key: field.key,
           label: field.label,
           placeholder: field.placeholder,
+          type: field.type,
         }));
 
       const newOrder = {
@@ -348,6 +350,8 @@ const ProductPurchaseModal = ({ isOpen, onClose, product }) => {
                   {dynamicFields.map((field) => (
                     <Input
                       key={field.key}
+                      type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                      inputMode={field.type === 'number' ? 'numeric' : field.type === 'email' ? 'email' : 'text'}
                       label={field.label}
                       placeholder={field.placeholder || t('product.fillField', { field: field.label })}
                       value={fieldValues[field.key] || ''}

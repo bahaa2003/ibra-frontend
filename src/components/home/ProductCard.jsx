@@ -15,20 +15,35 @@ const ProductCard = ({
   const productName = product.displayName;
   const productDescription = product.displayDescription;
   const status = product.storefrontStatus;
+  const isPaused = (
+    status?.badge === 'paused'
+    || product?.productStatus === 'paused'
+    || product?.pauseSales
+  );
 
   return (
-    <article className="product-led-card group flex h-full flex-col p-2 sm:p-4">
+    <article className={cn(
+      'product-led-card group flex h-full flex-col p-2 sm:p-4',
+      isPaused && 'border-red-500/30 bg-[color:rgb(var(--color-card-rgb)/0.72)]'
+    )}>
       <div className="relative overflow-hidden rounded-[1rem] sm:rounded-[1.5rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.18),transparent_52%)]" />
         <img
           src={product.image}
           alt={productName}
           className={cn(
-            'aspect-[1.08] w-full object-cover transition-transform duration-500',
-            status.isPurchasable ? 'group-hover:scale-105' : 'opacity-72'
+            'product-image-gold-trace aspect-[1.08] w-full object-cover transition-transform duration-500',
+            status.isPurchasable ? 'group-hover:scale-105' : 'opacity-72',
+            isPaused && 'brightness-[0.36] grayscale-[0.78] saturate-[0.45]'
           )}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,11,11,0.06)_0%,rgba(11,11,11,0.18)_48%,rgba(11,11,11,0.82)_100%)]" />
+        <div className={cn(
+          'absolute inset-0 bg-[linear-gradient(180deg,rgba(11,11,11,0.06)_0%,rgba(11,11,11,0.18)_48%,rgba(11,11,11,0.82)_100%)]',
+          isPaused && 'bg-black/48'
+        )} />
+        {isPaused ? (
+          <span className="pointer-events-none absolute left-[-14%] top-1/2 h-1.5 w-[128%] -translate-y-1/2 -rotate-[18deg] rounded-full bg-red-600 shadow-[0_0_16px_rgba(220,38,38,0.65)]" aria-hidden="true" />
+        ) : null}
 
         <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-1 p-2 sm:gap-2 sm:p-3">
           <span className="max-w-[60%] truncate rounded-full border border-white/12 bg-black/28 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] text-white/76 backdrop-blur-md sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.14em]">
@@ -44,7 +59,10 @@ const ProductCard = ({
 
       <div className="flex flex-1 flex-col px-0.5 pt-2 sm:px-1 sm:pt-4">
         <div className="space-y-1 sm:space-y-2">
-          <h3 className="line-clamp-2 text-xs font-semibold leading-5 text-[var(--color-text)] sm:text-lg sm:leading-7">{productName}</h3>
+          <h3 className={cn(
+            'line-clamp-2 text-xs font-semibold leading-5 text-[var(--color-text)] sm:text-lg sm:leading-7',
+            isPaused && 'text-red-500 line-through decoration-red-600 decoration-2'
+          )}>{productName}</h3>
           <p className="hidden line-clamp-2 text-sm leading-6 text-[var(--color-text-secondary)] sm:block">
             {productDescription}
           </p>

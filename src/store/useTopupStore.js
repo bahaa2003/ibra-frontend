@@ -200,6 +200,9 @@ const useTopupStore = create(
                 title: 'تم شحن الرصيد تلقائياً',
                 message: `تم إضافة ${finalTopup.financialSnapshot.finalAmountAtExecution} عملة إلى رصيدك`,
                 type: 'success',
+                route: '/wallet',
+                entityType: 'topup',
+                entityId: finalTopup.id,
               });
             }
           );
@@ -208,7 +211,10 @@ const useTopupStore = create(
         useNotificationStore.getState().addNotification({
           title: topupType === 'game_topup' ? 'طلب شحن لعبة جديد' : 'طلب شحن جديد',
           message: `طلب شحن ${topupType === 'game_topup' ? 'لعبة ' : ''}جديد من ${finalTopup?.userName || userName || 'عميل'}`,
-          type: 'info',
+          type: 'wallet',
+          route: `/admin/payments?topupId=${encodeURIComponent(finalTopup.id)}`,
+          entityType: 'topup',
+          entityId: finalTopup.id,
         });
       },
 
@@ -276,12 +282,18 @@ const useTopupStore = create(
               ? `تم قبول طلب ${target?.id || id} بالمبلغ الفعلي ${actualAmount} فقط`
               : `تم قبول طلب الشحن ${target?.id || id}`,
             type: 'success',
+            route: `/admin/payments?topupId=${encodeURIComponent(target?.id || id)}`,
+            entityType: 'topup',
+            entityId: target?.id || id,
           });
         } else if (status === 'rejected' || status === 'denied') {
           useNotificationStore.getState().addNotification({
             title: 'رفض طلب شحن',
             message: `تم رفض طلب الشحن ${target?.id || id}`,
             type: 'warning',
+            route: `/admin/payments?topupId=${encodeURIComponent(target?.id || id)}`,
+            entityType: 'topup',
+            entityId: target?.id || id,
           });
         }
       },
@@ -298,6 +310,9 @@ const useTopupStore = create(
           title: 'تعديل طلب شحن',
           message: `تم تعديل مبلغ الطلب ${id} إلى ${requestedAmount}`,
           type: 'info',
+          route: `/admin/payments?topupId=${encodeURIComponent(id)}`,
+          entityType: 'topup',
+          entityId: id,
         });
       }
     }),
