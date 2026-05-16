@@ -108,7 +108,7 @@ export const hasRequiredRole = (userRole, allowedRoles = []) => {
 };
 
 export const getDefaultRouteForRole = (role) => {
-  if (isAdminRole(role) || isSupervisorRole(role)) {
+  if (isAdminRole(role)) {
     return '/admin/dashboard';
   }
 

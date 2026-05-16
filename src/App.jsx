@@ -112,7 +112,7 @@ function App() {
                 <Route
                   path="/dashboard"
                   element={(
-                    <ProtectedRoute roles={[ROLES.CUSTOMER, ROLES.ADMIN]}>
+                    <ProtectedRoute roles={[ROLES.CUSTOMER, ROLES.ADMIN, ROLES.SUPERVISOR]}>
                       {renderSuspended(<Dashboard />)}
                     </ProtectedRoute>
                   )}
@@ -120,7 +120,7 @@ function App() {
                 <Route
                   path="/products"
                   element={(
-                    <ProtectedRoute roles={[ROLES.CUSTOMER, ROLES.ADMIN]}>
+                    <ProtectedRoute roles={[ROLES.CUSTOMER, ROLES.ADMIN, ROLES.SUPERVISOR]}>
                       {renderSuspended(<Products />)}
                     </ProtectedRoute>
                   )}

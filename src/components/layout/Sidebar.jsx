@@ -110,8 +110,7 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
     {
       icon: Home,
       label: t('header.home', { defaultValue: dir === 'rtl' ? 'الرئيسية' : 'Home' }),
-      path: '/dashboard',
-      roles: ['customer', 'admin']
+      path: '/dashboard'
     },
     {
       icon: Wallet,
