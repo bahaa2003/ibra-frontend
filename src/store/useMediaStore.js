@@ -7,8 +7,16 @@ const dataProvider = (import.meta.env.VITE_DATA_PROVIDER || 'mock').toLowerCase(
 const isRealProvider = dataProvider === 'real';
 
 const PRODUCTS_CACHE_TTL = 5 * 60 * 1000;
-let productsRequest = null;
+const productsRequests = new Map();
 let hasFetchedFromBackendThisSession = false;
+
+const normalizeProductLoadContext = (options = {}) => {
+  const rawContext = typeof options === 'string'
+    ? options
+    : (options.context || (options.admin ? 'admin' : 'auto'));
+  const context = String(rawContext || 'auto').trim().toLowerCase();
+  return ['auto', 'admin', 'storefront'].includes(context) ? context : 'auto';
+};
 
 const asNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -288,21 +296,26 @@ const useMediaStore = create(
       isLoading: false,
       error: null,
       lastLoadedAt: 0,
+      lastLoadedContext: 'initial',
 
       resetProducts: () => {
         set({
           products: normalizeProducts(mockProducts, mockCategories),
           categories: mockCategories,
           lastLoadedAt: 0,
+          lastLoadedContext: 'initial',
         });
       },
 
-      loadProducts: ({ force = false } = {}) => {
+      loadProducts: (options = {}) => {
+        const { force = false } = options || {};
+        const loadContext = normalizeProductLoadContext(options);
         const state = get();
         const hasProducts = Array.isArray(state.products);
         const hasCategories = Array.isArray(state.categories) && state.categories.length > 0;
         const shouldBypassHydratedCache = isRealProvider && !hasFetchedFromBackendThisSession;
         const isFresh = !shouldBypassHydratedCache
+          && state.lastLoadedContext === loadContext
           && hasProducts
           && hasCategories
           && (Date.now() - Number(state.lastLoadedAt || 0) < PRODUCTS_CACHE_TTL);
@@ -314,13 +327,13 @@ const useMediaStore = create(
           });
         }
 
-        if (productsRequest) {
-          return productsRequest;
+        if (productsRequests.has(loadContext)) {
+          return productsRequests.get(loadContext);
         }
 
         set({ isLoading: true, error: null });
 
-        productsRequest = Promise.all([apiClient.products.list(), apiClient.categories.list()])
+        const productsRequest = Promise.all([apiClient.products.list({ context: loadContext }), apiClient.categories.list()])
           .then(async ([products, categories]) => {
             const resolvedCategories = Array.isArray(categories) && categories.length ? categories : [];
 
@@ -374,6 +387,7 @@ const useMediaStore = create(
               isLoading: false,
               error: null,
               lastLoadedAt: Date.now(),
+              lastLoadedContext: loadContext,
             });
 
             if (isRealProvider) {
@@ -395,9 +409,10 @@ const useMediaStore = create(
             });
           })
           .finally(() => {
-            productsRequest = null;
+            productsRequests.delete(loadContext);
           });
 
+        productsRequests.set(loadContext, productsRequest);
         return productsRequest;
       },
 

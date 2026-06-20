@@ -3,14 +3,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
 import Loader from '../components/ui/Loader';
+import { normalizeRole, ROLES } from '../utils/authRoles';
 
 const ProductDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const products = useMediaStore((state) => state.products);
   const isLoading = useMediaStore((state) => state.isLoading);
   const loadProducts = useMediaStore((state) => state.loadProducts);
+
+  const productLoadContext = normalizeRole(user?.role) === ROLES.SUPERVISOR ? 'storefront' : 'auto';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -19,9 +22,9 @@ const ProductDetails = () => {
     }
 
     if (!products.length) {
-      loadProducts();
+      loadProducts({ context: productLoadContext });
     }
-  }, [loadProducts, products.length, isAuthenticated, navigate]);
+  }, [loadProducts, productLoadContext, products.length, isAuthenticated, navigate]);
 
   useEffect(() => {
     if (!isAuthenticated || isLoading) return;

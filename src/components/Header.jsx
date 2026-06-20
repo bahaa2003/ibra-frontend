@@ -16,7 +16,7 @@ const Header = ({ user, onMenuClick, showUserInfo = true, onLoginClick }) => {
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
   const logoUser = user || authUser;
-  const logoTargetPath = getLogoTargetForRole(logoUser?.role, isAuthenticated || Boolean(user));
+  const logoTargetPath = getLogoTargetForRole(logoUser?.role, isAuthenticated || Boolean(logoUser));
 
   return (
     <>

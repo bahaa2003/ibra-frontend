@@ -6,6 +6,7 @@ import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
 import useGroupStore from '../store/useGroupStore';
 import useSystemStore from '../store/useSystemStore';
+import { normalizeRole, ROLES } from '../utils/authRoles';
 import ProductSearchBar from '../components/products/ProductSearchBar';
 import CategoryCard from '../components/home/CategoryCard';
 import ProductCardSimple from '../components/products/ProductCardSimple';
@@ -80,6 +81,7 @@ const Products = () => {
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
   const copy = useMemo(() => getProductsPageCopy(language), [language]);
+  const productLoadContext = normalizeRole(user?.role) === ROLES.SUPERVISOR ? 'storefront' : 'auto';
 
   const activeCategoryParam = searchParams.get('category') || '';
   const activeRequestId = searchParams.get('request') || '';
@@ -89,8 +91,8 @@ const Products = () => {
   const [activeSubcategoryId, setActiveSubcategoryId] = useState(null);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    loadProducts({ context: productLoadContext });
+  }, [loadProducts, productLoadContext]);
 
   useEffect(() => {
     let cancelled = false;

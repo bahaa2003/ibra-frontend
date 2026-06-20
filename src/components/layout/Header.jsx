@@ -25,7 +25,7 @@ const Header = ({ toggleSidebar }) => {
   const isAdminHomePage = isAdminRole(user?.role) && location.pathname === '/dashboard';
   const shouldShowHeaderWallet = isCustomer || isAdminHomePage;
   const walletTargetPath = isCustomer ? '/wallet' : '/admin/wallet';
-  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated || Boolean(user));
 
   return (
     <header

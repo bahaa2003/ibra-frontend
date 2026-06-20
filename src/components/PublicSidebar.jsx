@@ -15,7 +15,7 @@ const PublicSidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
-  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated || Boolean(user));
 
   const navItems = [
     {

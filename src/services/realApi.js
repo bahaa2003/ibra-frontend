@@ -1462,10 +1462,19 @@ const realApi = {
      *
      * Both return products array in `data`.
      */
-    list: async () => {
-      const requestPlan = isAdmin()
+    list: async (options = {}) => {
+      const context = typeof options === 'string' ? options : options?.context;
+      const forceAdminContext = context === 'admin';
+      const forceStorefrontContext = context === 'storefront';
+      const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? ['/admin/products']
-        : [
+        : (forceStorefrontContext && getStoredRole() === ROLES.SUPERVISOR)
+          ? [
+          // Supervisors using storefront pages must receive personal, group-priced products.
+          '/me/products',
+          '/products',
+        ]
+          : [
           // Documented endpoint for customers.
           '/products',
           // Fallback for deployments that expose customer-scoped products.
@@ -1499,10 +1508,18 @@ const realApi = {
      * GET /products/:id — sendSuccess(res, product).
      * Product is placed directly in data (no wrapping object).
      */
-    get: async (id) => {
-      const requestPlan = isAdmin()
+    get: async (id, options = {}) => {
+      const context = typeof options === 'string' ? options : options?.context;
+      const forceAdminContext = context === 'admin';
+      const forceStorefrontContext = context === 'storefront';
+      const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? [`/products/${id}`]
-        : [
+        : (forceStorefrontContext && getStoredRole() === ROLES.SUPERVISOR)
+          ? [
+          `/me/products/${id}`,
+          `/products/${id}`,
+        ]
+          : [
           `/products/${id}`,
           `/me/products/${id}`,
         ];

@@ -48,7 +48,7 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const navigate = useNavigate();
   const { dir } = useLanguage();
   const { t } = useTranslation();
-  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated || Boolean(user));
 
   const closeSidebarOnMobile = () => {
     if (isMobile) {
