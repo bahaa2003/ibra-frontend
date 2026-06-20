@@ -15,10 +15,14 @@ import { useLanguage } from '../../context/LanguageContext';
 import { formatNumber } from '../../utils/intl';
 import { validateProductForm } from '../../utils/productStatus';
 import { normalizeDynamicFieldOptions, normalizeProductDynamicFields, toSnakeCase } from '../../utils/productPurchase';
+import { normalizeRole, ROLES, userHasPermission } from '../../utils/authRoles';
 import ConfirmDialog from '../../components/account/ConfirmDialog';
 
 const getProviderProductSearchToken = (product) =>
     `${product?.name || ''} ${getProviderProductPriceValue(product) || ''}`.toLowerCase();
+
+const getSafeProviderProductSearchToken = (product) =>
+    `${product?.name || ''} ${product?.providerName || ''} ${product?.categoryLabel || ''}`.toLowerCase();
 
 const getProviderProductPriceValue = (product) => (
     product?.rawPrice
@@ -359,6 +363,17 @@ const formatProviderProductPrice = (value, language) => {
     return language === 'en' ? `$${formatted} USD` : `${formatted} دولار`;
 };
 
+const getLinkageModeLabel = (mode, isEnglish) => {
+    const normalizedMode = String(mode || '').trim().toLowerCase();
+    if (['automatic', 'auto'].includes(normalizedMode)) {
+        return isEnglish ? 'Automatic' : 'آلي';
+    }
+    if (normalizedMode === 'manual') {
+        return isEnglish ? 'Manual' : 'يدوي';
+    }
+    return normalizedMode || (isEnglish ? 'Not set' : 'غير محدد');
+};
+
 const AdminProducts = () => {
     const {
         products,
@@ -377,6 +392,19 @@ const AdminProducts = () => {
     const { addToast } = useToast();
     const { t, language } = useLanguage();
     const isEnglish = language === 'en';
+    const normalizedUserRole = normalizeRole(user?.role);
+    const isAdmin = normalizedUserRole === ROLES.ADMIN;
+    const isSupervisor = normalizedUserRole === ROLES.SUPERVISOR;
+    const canViewInternalPricing = isAdmin;
+    const canManageProducts = isAdmin || userHasPermission(user, 'products.manage');
+    const canUseBlindProviderSync = isSupervisor && userHasPermission(user, 'products.provider.sync');
+    const canLoadProviderOptions = canViewInternalPricing || canUseBlindProviderSync;
+    const canOpenProductModal = canManageProducts || canUseBlindProviderSync;
+    const canDeleteProducts = isAdmin;
+    const canCreateProducts = isAdmin;
+    const showProviderColumn = canViewInternalPricing;
+    const showPriceColumn = canViewInternalPricing;
+    const productTableColumnCount = 5 + (showProviderColumn ? 1 : 0) + (showPriceColumn ? 1 : 0);
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
@@ -405,6 +433,8 @@ const AdminProducts = () => {
     const [providerProducts, setProviderProducts] = useState([]);
     const [providerProductQuery, setProviderProductQuery] = useState('');
     const [isSyncingPrice, setIsSyncingPrice] = useState(false);
+    const [isLinkingProvider, setIsLinkingProvider] = useState(false);
+    const [isBlindSyncingProviderPrice, setIsBlindSyncingProviderPrice] = useState(false);
     const [productForm, setProductForm] = useState({
         name: '',
         nameAr: '',
@@ -523,8 +553,18 @@ const AdminProducts = () => {
     useEffect(() => {
         let isMounted = true;
 
-        apiClient.suppliers
-            .list()
+        if (!canLoadProviderOptions) {
+            setProviders([]);
+            return () => {
+                isMounted = false;
+            };
+        }
+
+        const providerRequest = canViewInternalPricing
+            ? apiClient.suppliers.list()
+            : apiClient.products.listProviderOptions();
+
+        providerRequest
             .then((data) => {
                 if (!isMounted) return;
 
@@ -545,16 +585,19 @@ const AdminProducts = () => {
         return () => {
             isMounted = false;
         };
-    }, [isProductModalOpen, addToast]);
+    }, [canLoadProviderOptions, canViewInternalPricing, isProductModalOpen, addToast]);
 
     useEffect(() => {
         const selectedSupplier = productForm.supplierId || productForm.providerId;
-        if (!isProductModalOpen || !selectedSupplier) {
+        if (!canLoadProviderOptions || !isProductModalOpen || !selectedSupplier) {
             setProviderProducts([]);
             return;
         }
-        apiClient.products
-            .listProviderProducts(selectedSupplier)
+        const providerProductsRequest = canViewInternalPricing
+            ? apiClient.products.listProviderProducts(selectedSupplier)
+            : apiClient.products.listSafeProviderProductOptions(selectedSupplier);
+
+        providerProductsRequest
             .then((items) => {
                 const nextItems = Array.isArray(items) ? items : [];
                 setProviderProducts(nextItems);
@@ -574,7 +617,7 @@ const AdminProducts = () => {
         // Fix 4: Only re-fetch when the provider ID changes or the modal opens/closes.
         // providerProductId/externalProductId are removed to prevent race conditions
         // when they are cleared by the provider onChange handler.
-    }, [isProductModalOpen, productForm.providerId, productForm.supplierId, addToast]);
+    }, [canLoadProviderOptions, canViewInternalPricing, isProductModalOpen, productForm.providerId, productForm.supplierId, addToast]);
 
     useEffect(() => {
         setProviderProductQuery('');
@@ -582,7 +625,7 @@ const AdminProducts = () => {
 
     const selectedSupplierId = productForm.supplierId || productForm.providerId;
     const selectedProviderProductId = productForm.providerProductId || productForm.externalProductId;
-    const canSyncWithProvider = Boolean(productForm.syncPriceWithProvider && selectedSupplierId && selectedProviderProductId);
+    const canSyncWithProvider = canViewInternalPricing && Boolean(productForm.syncPriceWithProvider && selectedSupplierId && selectedProviderProductId);
     const selectedProviderProduct = useMemo(
         () => providerProducts.find((product) => hasMatchingProviderProduct(
             product,
@@ -597,8 +640,11 @@ const AdminProducts = () => {
             return providerProducts;
         }
 
-        return providerProducts.filter((product) => getProviderProductSearchToken(product).includes(normalizedQuery));
-    }, [providerProducts, providerProductQuery]);
+        const getSearchToken = canViewInternalPricing
+            ? getProviderProductSearchToken
+            : getSafeProviderProductSearchToken;
+        return providerProducts.filter((product) => getSearchToken(product).includes(normalizedQuery));
+    }, [canViewInternalPricing, providerProducts, providerProductQuery]);
     const activeProviders = useMemo(
         () => providers.filter((provider) => provider.isActive !== false),
         [providers]
@@ -609,6 +655,8 @@ const AdminProducts = () => {
     );
 
     const getProviderDisplayName = (product) => {
+        if (!canViewInternalPricing) return '-';
+
         const providerId = String(product?.providerId || product?.supplierId || '').trim();
         if (!providerId) return '-';
 
@@ -676,25 +724,88 @@ const AdminProducts = () => {
     };
 
     useEffect(() => {
-        if (!isProductModalOpen || !productForm.syncPriceWithProvider || !selectedSupplierId || !selectedProviderProductId) {
+        if (!canViewInternalPricing || !isProductModalOpen || !productForm.syncPriceWithProvider || !selectedSupplierId || !selectedProviderProductId) {
             return;
         }
 
         void syncProviderPrice(undefined, selectedSupplierId, selectedProviderProductId);
-    }, [isProductModalOpen, productForm.syncPriceWithProvider, selectedSupplierId, selectedProviderProductId, selectedProviderProduct]);
+    }, [canViewInternalPricing, isProductModalOpen, productForm.syncPriceWithProvider, selectedSupplierId, selectedProviderProductId, selectedProviderProduct]);
+
+    const handleBlindProviderLink = async () => {
+        if (!canUseBlindProviderSync || !editingProduct?.id || !selectedSupplierId || !selectedProviderProductId) {
+            addToast(
+                isEnglish
+                    ? 'Choose a provider and provider product first.'
+                    : 'اختر المورد ومنتج المورد أولاً.',
+                'warning'
+            );
+            return;
+        }
+
+        setIsLinkingProvider(true);
+        try {
+            const linkageSummary = await apiClient.products.linkProvider(editingProduct.id, {
+                providerId: selectedSupplierId,
+                providerProductId: selectedProviderProductId,
+            });
+            if (linkageSummary && typeof linkageSummary === 'object') {
+                setEditingProduct((prev) => (prev ? { ...prev, ...linkageSummary } : prev));
+            }
+            addToast(
+                isEnglish
+                    ? 'Product linked to provider successfully.'
+                    : 'تم ربط المنتج بالمورد بنجاح',
+                'success'
+            );
+            void loadProducts({ force: true });
+        } catch (error) {
+            addToast(
+                error?.message || (isEnglish ? 'Failed to link product to provider.' : 'فشل ربط المنتج بالمورد.'),
+                'error'
+            );
+        } finally {
+            setIsLinkingProvider(false);
+        }
+    };
+
+    const handleBlindProviderPriceSync = async () => {
+        if (!canUseBlindProviderSync || !editingProduct?.id) return;
+
+        setIsBlindSyncingProviderPrice(true);
+        try {
+            const linkageSummary = await apiClient.products.syncProviderPrice(editingProduct.id);
+            if (linkageSummary && typeof linkageSummary === 'object') {
+                setEditingProduct((prev) => (prev ? { ...prev, ...linkageSummary } : prev));
+            }
+            addToast(
+                isEnglish
+                    ? 'Provider price synced successfully.'
+                    : 'تمت مزامنة السعر بنجاح',
+                'success'
+            );
+            void loadProducts({ force: true });
+        } catch (error) {
+            addToast(
+                error?.message || (isEnglish ? 'Failed to sync provider price.' : 'فشل مزامنة السعر.'),
+                'error'
+            );
+        } finally {
+            setIsBlindSyncingProviderPrice(false);
+        }
+    };
 
     const handleProviderProductSelect = (value) => {
         const selected = providerProducts.find((product) => hasMatchingProviderProduct(product, value));
         // Fix 2: Extract only primitives from the catalogue item to prevent
         // any accidental mutation of the source providerProducts array.
-        const selectedSnapshot = selected ? {
+        const selectedSnapshot = canViewInternalPricing && selected ? {
             rawPrice: getProviderProductPriceValue(selected),
             minQty: getProviderProductMinQtyValue(selected),
             maxQty: getProviderProductMaxQtyValue(selected),
         } : null;
         setProductForm((prev) => ({
             ...prev,
-            externalProductId: String(selected?.externalProductId || value).trim(),
+            externalProductId: canViewInternalPricing ? String(selected?.externalProductId || value).trim() : '',
             providerProductId: value,
             externalProductName: selected?.name || '',
             ...(prev.syncPriceWithProvider && selectedSnapshot
@@ -734,6 +845,16 @@ const AdminProducts = () => {
     };
 
     const openProductModal = (product = null) => {
+        if (product && !canOpenProductModal) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
+        if (!product && !canCreateProducts) {
+            addToast(isEnglish ? 'Only admins can create products.' : 'إنشاء المنتجات متاح للأدمن فقط.', 'error');
+            return;
+        }
+
         if (product) {
             const linkedProviderId = String(product.providerId || product.supplierId || '').trim();
             const linkedProviderProductId = String(product.providerProductId || product.externalProductId || '').trim();
@@ -882,6 +1003,16 @@ const AdminProducts = () => {
 
         if (isSavingProduct) return;
 
+        if (editingProduct && !canManageProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
+        if (!editingProduct && !canCreateProducts) {
+            addToast(isEnglish ? 'Only admins can create products.' : 'إنشاء المنتجات متاح للأدمن فقط.', 'error');
+            return;
+        }
+
         // validation شامل
         const validationErrors = validateProductForm(productForm, { requireImage: !editingProduct });
         if (validationErrors.length > 0) {
@@ -905,6 +1036,73 @@ const AdminProducts = () => {
         let minQty = Number(productForm.minimumOrderQty === '' || productForm.minimumOrderQty == null ? 1 : productForm.minimumOrderQty);
         let maxQty = Number(productForm.maximumOrderQty === '' || productForm.maximumOrderQty == null ? 999 : productForm.maximumOrderQty);
         const stepQty = Number(productForm.stepQty === '' || productForm.stepQty == null ? 1 : productForm.stepQty);
+
+        const usedDynamicFieldNames = new Map();
+        const dynamicFields = (Array.isArray(productForm.dynamicFields) ? productForm.dynamicFields : [])
+            .map((field) => {
+                const label = String(field?.label || '').trim();
+                if (!label) return null;
+                const type = dynamicFieldTypeOptions.some((option) => option.value === String(field?.type || '').toLowerCase())
+                    ? String(field.type).toLowerCase()
+                    : 'text';
+                const baseName = toSnakeCase(field?.name || label);
+                const nameCount = (usedDynamicFieldNames.get(baseName) || 0) + 1;
+                usedDynamicFieldNames.set(baseName, nameCount);
+
+                return {
+                    name: nameCount > 1 ? `${baseName}_${nameCount}` : baseName,
+                    label,
+                    type,
+                    required: field?.required !== false,
+                    options: type === 'select' ? normalizeDynamicFieldOptions(field?.optionsText || field?.options) : [],
+                    isActive: field?.isActive !== false,
+                };
+            })
+            .filter(Boolean);
+
+        const invalidSelectField = dynamicFields.find((field) => field.type === 'select' && field.options.length === 0);
+        if (invalidSelectField) {
+            addToast(`${invalidSelectField.label} needs at least one option.`, 'error');
+            return;
+        }
+
+        if (isSupervisor) {
+            if (!editingProduct) {
+                addToast(
+                    isEnglish
+                        ? 'Supervisor product creation needs pricing rules. Please ask an admin to create the product first.'
+                        : 'إنشاء منتج جديد يحتاج إعدادات تسعير. يرجى طلب إنشاء المنتج من الأدمن أولاً.',
+                    'error'
+                );
+                return;
+            }
+
+            const supervisorPayload = {
+                name: fallbackName,
+                nameAr: String(productForm.nameAr || productForm.name || '').trim(),
+                description: productForm.description,
+                descriptionAr: '',
+                category: fallbackCategory,
+                image: productImage,
+                status: productForm.status,
+                displayOrder: Number(productForm.displayOrder || 0),
+            };
+
+            setIsSavingProduct(true);
+
+            try {
+                await updateProduct(editingProduct.id, supervisorPayload);
+                setIsProductModalOpen(false);
+                addToast(t('productUpdated') || 'تم تحديث المنتج', 'success');
+                void loadProducts({ force: true });
+            } catch (error) {
+                addToast(error?.message || 'فشل حفظ المنتج', 'error');
+            } finally {
+                setIsSavingProduct(false);
+            }
+
+            return;
+        }
 
         let basePriceCoinsValue = normalizePriceInput(productForm.basePriceCoins);
         let basePriceCoins = Number(basePriceCoinsValue || 0);
@@ -938,35 +1136,6 @@ const AdminProducts = () => {
 
         if (Number.isNaN(basePriceCoins) || basePriceCoins <= 0) {
             addToast('يرجى إدخال سعر يدوي صحيح', 'error');
-            return;
-        }
-
-        const usedDynamicFieldNames = new Map();
-        const dynamicFields = (Array.isArray(productForm.dynamicFields) ? productForm.dynamicFields : [])
-            .map((field) => {
-                const label = String(field?.label || '').trim();
-                if (!label) return null;
-                const type = dynamicFieldTypeOptions.some((option) => option.value === String(field?.type || '').toLowerCase())
-                    ? String(field.type).toLowerCase()
-                    : 'text';
-                const baseName = toSnakeCase(field?.name || label);
-                const nameCount = (usedDynamicFieldNames.get(baseName) || 0) + 1;
-                usedDynamicFieldNames.set(baseName, nameCount);
-
-                return {
-                    name: nameCount > 1 ? `${baseName}_${nameCount}` : baseName,
-                    label,
-                    type,
-                    required: field?.required !== false,
-                    options: type === 'select' ? normalizeDynamicFieldOptions(field?.optionsText || field?.options) : [],
-                    isActive: field?.isActive !== false,
-                };
-            })
-            .filter(Boolean);
-
-        const invalidSelectField = dynamicFields.find((field) => field.type === 'select' && field.options.length === 0);
-        if (invalidSelectField) {
-            addToast(`${invalidSelectField.label} needs at least one option.`, 'error');
             return;
         }
 
@@ -1057,6 +1226,11 @@ const AdminProducts = () => {
     };
 
     const handleToggleProductStatus = async (product) => {
+        if (!canManageProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
         const isCurrentlyActive = product.status === 'active';
         const actionLabel = isCurrentlyActive
             ? (isEnglish ? 'deactivate' : 'إيقاف')
@@ -1079,6 +1253,11 @@ const AdminProducts = () => {
     };
 
     const openCategoryModal = (category = null) => {
+        if (!canManageProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
         if (category) {
             setEditingCategory(category);
             setCategoryForm({
@@ -1146,6 +1325,11 @@ const AdminProducts = () => {
     };
 
     const requestDeleteCategory = (category) => {
+        if (!canManageProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
         setDeleteCategoryTarget(category || null);
         setIsDeleteCategoryDialogOpen(true);
     };
@@ -1158,6 +1342,10 @@ const AdminProducts = () => {
 
     const confirmDeleteCategory = async () => {
         if (!deleteCategoryTarget?.id) return;
+        if (!canManageProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
         setIsDeletingCategory(true);
         try {
             await deleteCategory(deleteCategoryTarget.id);
@@ -1180,6 +1368,11 @@ const AdminProducts = () => {
     };
 
     const requestDeleteProduct = (product) => {
+        if (!canDeleteProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
+
         setDeleteProductTarget(product || null);
         setIsDeleteProductDialogOpen(true);
     };
@@ -1192,6 +1385,10 @@ const AdminProducts = () => {
 
     const confirmDeleteProduct = async () => {
         if (!deleteProductTarget?.id) return;
+        if (!canDeleteProducts) {
+            addToast(isEnglish ? 'You do not have permission to manage products.' : 'ليس لديك صلاحية إدارة المنتجات.', 'error');
+            return;
+        }
         setIsDeletingProduct(true);
         try {
             await deleteProduct(deleteProductTarget.id);
@@ -1204,6 +1401,20 @@ const AdminProducts = () => {
             setIsDeletingProduct(false);
         }
     };
+
+    const isProductMetadataReadOnly = Boolean(isSupervisor && !canManageProducts);
+    const canSubmitProductForm = editingProduct ? canManageProducts : canCreateProducts;
+    const currentLinkageProviderName = String(editingProduct?.currentProviderName || '').trim();
+    const currentLinkageProductName = String(editingProduct?.currentProviderProductName || '').trim();
+    const currentLinkageMode = editingProduct?.linkageMode || null;
+    const currentProviderProductActive = editingProduct?.currentProviderProductActive;
+    const currentProviderMinQty = editingProduct?.currentProviderMinQty;
+    const currentProviderMaxQty = editingProduct?.currentProviderMaxQty;
+    const hasCurrentProviderLink = Boolean(
+        editingProduct?.isLinked
+        || currentLinkageProviderName
+        || currentLinkageProductName
+    );
 
     return (
         <div className="min-w-0 space-y-6">
@@ -1223,9 +1434,11 @@ const AdminProducts = () => {
                             {isEnglish ? 'Control category display order (lower number shows first).' : 'حدد ترتيب ظهور الأقسام (الرقم الأقل يظهر أولاً).'}
                         </p>
                     </div>
+                    {canManageProducts ? (
                     <Button onClick={() => openCategoryModal()}>
                         <Plus className="mr-2 h-4 w-4" /> {isEnglish ? 'Add Category' : 'إضافة قسم'}
                     </Button>
+                    ) : null}
                 </div>
 
                 <Table>
@@ -1259,19 +1472,23 @@ const AdminProducts = () => {
                                     <Badge variant="outline">{Number(category?.sortOrder ?? category?.displayOrder ?? 0)}</Badge>
                                 </TableCell>
                                 <TableCell className="text-end">
-                                    <div className="flex justify-end gap-2">
-                                        <Button size="sm" variant="ghost" onClick={() => openCategoryModal(category)}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                                            onClick={() => requestDeleteCategory(category)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                    {canManageProducts ? (
+                                        <div className="flex justify-end gap-2">
+                                            <Button size="sm" variant="ghost" onClick={() => openCategoryModal(category)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                onClick={() => requestDeleteCategory(category)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-[var(--color-text-secondary)]">{isEnglish ? 'Read only' : 'عرض فقط'}</span>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -1287,11 +1504,13 @@ const AdminProducts = () => {
                 </Table>
             </div>
 
-            <div className="flex justify-end">
-                <Button onClick={() => openProductModal()}>
-                    <Plus className="mr-2 h-4 w-4" /> {t('addProduct')}
-                </Button>
-            </div>
+            {canCreateProducts ? (
+                <div className="flex justify-end">
+                    <Button onClick={() => openProductModal()}>
+                        <Plus className="mr-2 h-4 w-4" /> {t('addProduct')}
+                    </Button>
+                </div>
+            ) : null}
 
             <div className="admin-premium-panel overflow-hidden">
                 <div className="flex flex-col gap-3 border-b border-[color:rgb(var(--color-border-rgb)/0.82)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1329,10 +1548,14 @@ const AdminProducts = () => {
                     <TableHeader>
                         <TableRow>
                             <TableHead className="h-9 px-3">{t('products')}</TableHead>
-                            <TableHead className="h-9 px-2 text-center">المزود</TableHead>
+                            {showProviderColumn ? (
+                                <TableHead className="h-9 px-2 text-center">المزود</TableHead>
+                            ) : null}
                             <TableHead className="h-9 px-2 text-center">{t('category') || 'القسم'}</TableHead>
                             <TableHead className="h-9 px-2 text-center">{isEnglish ? 'Order' : 'الترتيب'}</TableHead>
-                            <TableHead className="h-9 px-2 text-center">{t('basePrice')}</TableHead>
+                            {showPriceColumn ? (
+                                <TableHead className="h-9 px-2 text-center">{t('basePrice')}</TableHead>
+                            ) : null}
                             <TableHead className="h-9 px-2 text-center">{t('common.status', { defaultValue: 'الحالة' })}</TableHead>
                             <TableHead className="h-9 px-3 text-end">{t('actions') || 'الإجراءات'}</TableHead>
                         </TableRow>
@@ -1345,7 +1568,8 @@ const AdminProducts = () => {
                             const cleanProviderName = providerName === '-' || providerName === product.name
                                 ? (isEnglish ? 'Local' : 'داخلي')
                                 : providerName;
-                            const priceLabel = formatExactDecimal(product.basePriceCoins, language) || product.basePriceCoins || '-';
+                            const visiblePrice = product.basePriceCoins;
+                            const priceLabel = formatExactDecimal(visiblePrice, language) || visiblePrice || '-';
                             const statusLabel = product.status === 'active'
                                 ? (isEnglish ? 'Active' : 'مفعل')
                                 : (isEnglish ? 'Inactive' : 'متوقف');
@@ -1375,11 +1599,13 @@ const AdminProducts = () => {
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="px-2 py-2 text-center">
-                                            <Badge variant={cleanProviderName === (isEnglish ? 'Local' : 'داخلي') ? 'secondary' : 'outline'} className="max-w-[112px] justify-center truncate px-2 py-0.5 text-[10px]">
-                                                {cleanProviderName}
-                                            </Badge>
-                                        </TableCell>
+                                        {showProviderColumn ? (
+                                            <TableCell className="px-2 py-2 text-center">
+                                                <Badge variant={cleanProviderName === (isEnglish ? 'Local' : 'داخلي') ? 'secondary' : 'outline'} className="max-w-[112px] justify-center truncate px-2 py-0.5 text-[10px]">
+                                                    {cleanProviderName}
+                                                </Badge>
+                                            </TableCell>
+                                        ) : null}
                                         <TableCell className="px-2 py-2 text-center">
                                             <Badge variant="outline" className="max-w-[118px] justify-center truncate px-2 py-0.5 text-[10px]">{categoryName}</Badge>
                                         </TableCell>
@@ -1388,51 +1614,69 @@ const AdminProducts = () => {
                                                 {formatNumber(Number(product?.displayOrder || 0), language === 'en' ? 'en-US' : 'ar-EG')}
                                             </span>
                                         </TableCell>
-                                        <TableCell className="px-2 py-2 text-center">
-                                            <span className="inline-flex items-center justify-center rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-2.5 py-0.5 text-xs font-bold text-[var(--color-text)]">
-                                                {priceLabel}
-                                            </span>
-                                        </TableCell>
+                                        {showPriceColumn ? (
+                                            <TableCell className="px-2 py-2 text-center">
+                                                <span className="inline-flex items-center justify-center rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-primary-rgb)/0.08)] px-2.5 py-0.5 text-xs font-bold text-[var(--color-text)]">
+                                                    {priceLabel}
+                                                </span>
+                                            </TableCell>
+                                        ) : null}
                                         <TableCell className="px-2 py-2 text-center">
                                             <Badge variant={product.status === 'active' ? 'success' : 'secondary'} className="px-2 py-0.5 text-[10px]">{statusLabel}</Badge>
                                         </TableCell>
                                         <TableCell className="px-3 py-2 text-end">
-                                            <div className="flex justify-end gap-1">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className={`h-8 rounded-full px-2.5 text-[11px] ${product.status === 'active'
-                                                        ? 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'
-                                                        : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'}`}
-                                                    onClick={() => handleToggleProductStatus(product)}
-                                                    disabled={togglingProductId === product.id}
-                                                    title={product.status === 'active'
-                                                        ? (isEnglish ? 'Deactivate product' : 'إيقاف المنتج')
-                                                        : (isEnglish ? 'Activate product' : 'تفعيل المنتج')}
-                                                >
-                                                    {togglingProductId === product.id ? (
-                                                        <RefreshCw className="h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <span className="text-xs font-semibold">
-                                                            {product.status === 'active'
-                                                                ? (isEnglish ? 'Deactivate' : 'إيقاف')
-                                                                : (isEnglish ? 'Activate' : 'تفعيل')}
-                                                        </span>
-                                                    )}
-                                                </Button>
-                                                <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full px-0" onClick={() => openProductModal(product)} title={isEnglish ? 'Edit product' : 'تعديل المنتج'}>
-                                                    <Edit className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 rounded-full px-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                                    onClick={() => requestDeleteProduct(product)}
-                                                    title={isEnglish ? 'Delete product' : 'حذف المنتج'}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
+                                            {canOpenProductModal ? (
+                                                <div className="flex justify-end gap-1">
+                                                    {canManageProducts ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className={`h-8 rounded-full px-2.5 text-[11px] ${product.status === 'active'
+                                                                ? 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'
+                                                                : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'}`}
+                                                            onClick={() => handleToggleProductStatus(product)}
+                                                            disabled={togglingProductId === product.id}
+                                                            title={product.status === 'active'
+                                                                ? (isEnglish ? 'Deactivate product' : 'إيقاف المنتج')
+                                                                : (isEnglish ? 'Activate product' : 'تفعيل المنتج')}
+                                                        >
+                                                            {togglingProductId === product.id ? (
+                                                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <span className="text-xs font-semibold">
+                                                                    {product.status === 'active'
+                                                                        ? (isEnglish ? 'Deactivate' : 'إيقاف')
+                                                                        : (isEnglish ? 'Activate' : 'تفعيل')}
+                                                                </span>
+                                                            )}
+                                                        </Button>
+                                                    ) : null}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 w-8 rounded-full px-0"
+                                                        onClick={() => openProductModal(product)}
+                                                        title={canManageProducts
+                                                            ? (isEnglish ? 'Edit product' : 'تعديل المنتج')
+                                                            : (isEnglish ? 'Link provider and sync price' : 'ربط المورد ومزامنة السعر')}
+                                                    >
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {canDeleteProducts ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-8 w-8 rounded-full px-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                            onClick={() => requestDeleteProduct(product)}
+                                                            title={isEnglish ? 'Delete product' : 'حذف المنتج'}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    ) : null}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-[var(--color-text-secondary)]">{isEnglish ? 'Read only' : 'عرض فقط'}</span>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                             );
@@ -1440,7 +1684,7 @@ const AdminProducts = () => {
 
                         {!visibleAdminProducts.length && (
                             <TableRow>
-                                <TableCell colSpan={7} className="py-8 text-center text-sm text-gray-500">
+                                <TableCell colSpan={productTableColumnCount} className="py-8 text-center text-sm text-gray-500">
                                     {isEnglish ? 'No products in this category.' : 'لا توجد منتجات في هذا القسم.'}
                                 </TableCell>
                             </TableRow>
@@ -1549,8 +1793,18 @@ const AdminProducts = () => {
                             المعلومات الأساسية
                         </h3>
                         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
-                            <Input label="Name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
-                            <Input label="Description" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
+                            <Input
+                                label="Name"
+                                value={productForm.name}
+                                onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                                disabled={isProductMetadataReadOnly}
+                            />
+                            <Input
+                                label="Description"
+                                value={productForm.description}
+                                onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                                disabled={isProductMetadataReadOnly}
+                            />
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">القسم</label>
@@ -1558,6 +1812,7 @@ const AdminProducts = () => {
                                     className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
                                     value={productForm.category}
                                     onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                                    disabled={isProductMetadataReadOnly}
                                 >
                                     {(categories || []).map((c) => (
                                         <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">{c.name}</option>
@@ -1571,13 +1826,14 @@ const AdminProducts = () => {
                                 value={productForm.displayOrder}
                                 onChange={(e) => setProductForm({ ...productForm, displayOrder: e.target.value })}
                                 placeholder={isEnglish ? 'Example: 10' : 'مثال: 10'}
+                                disabled={isProductMetadataReadOnly}
                             />
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">صورة المنتج (رفع)</label>
                                 <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center transition-colors hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800/50">
-                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" />
-                                    <label htmlFor="product-image-upload" className="flex cursor-pointer flex-col items-center gap-2">
+                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setProductForm)} className="hidden" id="product-image-upload" disabled={isProductMetadataReadOnly} />
+                                    <label htmlFor="product-image-upload" className={`flex flex-col items-center gap-2 ${isProductMetadataReadOnly ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
                                         {productForm.image ? <img src={resolveImageUrl(productForm.image)} alt="معاينة" decoding="async" referrerPolicy="no-referrer" className="h-32 rounded object-contain" /> : <><ImageIcon className="h-8 w-8 text-gray-400" /><span className="text-sm text-gray-500">اضغط لرفع الصورة</span></>}
                                     </label>
                                 </div>
@@ -1585,13 +1841,14 @@ const AdminProducts = () => {
                         </div>
                     </div>
 
-                    {/* ========== 2. الكمية والتسعير ========== */}
+                    {canViewInternalPricing ? (
                     <div>
                         <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">2</span>
                             الكمية والتسعير
                         </h3>
                         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
+                            {canViewInternalPricing ? (
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">نوع الربط</label>
                                 <div className="grid grid-cols-2 gap-2">
@@ -1624,8 +1881,9 @@ const AdminProducts = () => {
                                     })}
                                 </div>
                             </div>
+                            ) : null}
 
-                            {productForm.connectionType === 'auto' ? (
+                            {canViewInternalPricing && productForm.connectionType === 'auto' ? (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">اختر المورد</label>
@@ -1788,7 +2046,7 @@ const AdminProducts = () => {
                             </div>
                             ) : null}
 
-                            {productForm.connectionType === 'auto' ? (
+                            {canViewInternalPricing && productForm.connectionType === 'auto' ? (
                             <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                                 <input
                                     type="checkbox"
@@ -1799,7 +2057,7 @@ const AdminProducts = () => {
                             </label>
                             ) : null}
 
-                            {productForm.connectionType === 'auto' ? (
+                            {canViewInternalPricing && productForm.connectionType === 'auto' ? (
                             <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
                                 <div className="flex flex-wrap items-center gap-4">
                                     <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -1921,7 +2179,7 @@ const AdminProducts = () => {
                             </div>
                             ) : null}
 
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className={`grid grid-cols-1 gap-4 ${canViewInternalPricing ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                                 <Input
                                     label="الحد الأدنى للطلب (Qty)"
                                     type="number"
@@ -1940,6 +2198,7 @@ const AdminProducts = () => {
                                     disabled={Boolean(canSyncWithProvider)}
                                     required
                                 />
+                                {canViewInternalPricing ? (
                                 <div className="w-full">
                                     <Input
                                         label={isEnglish ? 'Final Price' : 'السعر النهائي'}
@@ -1964,9 +2223,10 @@ const AdminProducts = () => {
                                                 : (isEnglish ? 'Enter the final price here when the product is not linked to a supplier.' : 'أدخل السعر النهائي هنا عندما لا يكون المنتج مربوطًا بمورد.')}
                                     </p>
                                 </div>
+                                ) : null}
                             </div>
 
-                            {selectedProviderProduct ? (
+                            {canViewInternalPricing && selectedProviderProduct ? (
                                 <div className="flex flex-wrap gap-2">
                                     {getProviderProductPriceValue(selectedProviderProduct) ? (
                                         <Badge variant="info">
@@ -1987,7 +2247,267 @@ const AdminProducts = () => {
                             ) : null}
                         </div>
                     </div>
+                    ) : null}
 
+                    {canUseBlindProviderSync && editingProduct ? (
+                    <div>
+                        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+                                {canViewInternalPricing ? '3' : '2'}
+                            </span>
+                            {isEnglish ? 'Provider Link and Blind Price Sync' : 'ربط المورد ومزامنة السعر'}
+                        </h3>
+                        <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
+                            <div className="rounded-[var(--radius-md)] border border-[color:rgb(var(--color-primary-rgb)/0.16)] bg-[color:rgb(var(--color-primary-rgb)/0.06)] px-3 py-2 text-xs leading-6 text-[var(--color-text-secondary)]">
+                                {isEnglish
+                                    ? 'This action links the product to a provider product and can sync the internal price without displaying any price values.'
+                                    : 'هذا الإجراء يربط المنتج بمنتج مورد ويمكنه مزامنة السعر داخلياً بدون عرض أي قيم سعرية.'}
+                            </div>
+
+                            <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.9)] p-3">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <h4 className="text-sm font-semibold text-[var(--color-text)]">
+                                        {isEnglish ? 'Current linkage' : 'الربط الحالي'}
+                                    </h4>
+                                    <Badge variant={hasCurrentProviderLink ? 'success' : 'secondary'}>
+                                        {hasCurrentProviderLink
+                                            ? (isEnglish ? 'Linked' : 'مرتبط')
+                                            : (isEnglish ? 'Not linked' : 'غير مرتبط')}
+                                    </Badge>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.7)] bg-[color:rgb(var(--color-elevated-rgb)/0.64)] px-3 py-2">
+                                        <p className="text-[11px] font-semibold text-[var(--color-muted)]">
+                                            {isEnglish ? 'Provider' : 'المورد'}
+                                        </p>
+                                        <p className="mt-1 truncate text-sm font-semibold text-[var(--color-text)]">
+                                            {currentLinkageProviderName || (isEnglish ? 'No provider linked' : 'لا يوجد مورد مرتبط')}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.7)] bg-[color:rgb(var(--color-elevated-rgb)/0.64)] px-3 py-2">
+                                        <p className="text-[11px] font-semibold text-[var(--color-muted)]">
+                                            {isEnglish ? 'Provider product' : 'منتج المورد'}
+                                        </p>
+                                        <p className="mt-1 truncate text-sm font-semibold text-[var(--color-text)]">
+                                            {currentLinkageProductName || (isEnglish ? 'No provider product linked' : 'لا يوجد منتج مورد مرتبط')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <Badge variant="outline">
+                                        {isEnglish ? 'Mode:' : 'النوع:'} {getLinkageModeLabel(currentLinkageMode, isEnglish)}
+                                    </Badge>
+                                    {currentProviderProductActive !== null && currentProviderProductActive !== undefined ? (
+                                        <Badge variant={currentProviderProductActive ? 'success' : 'secondary'}>
+                                            {currentProviderProductActive
+                                                ? (isEnglish ? 'Provider product active' : 'منتج المورد نشط')
+                                                : (isEnglish ? 'Provider product inactive' : 'منتج المورد غير نشط')}
+                                        </Badge>
+                                    ) : null}
+                                    {currentProviderMinQty ? (
+                                        <Badge variant="secondary">
+                                            {isEnglish ? 'Min' : 'من'} {currentProviderMinQty}
+                                        </Badge>
+                                    ) : null}
+                                    {currentProviderMaxQty ? (
+                                        <Badge variant="secondary">
+                                            {isEnglish ? 'Max' : 'إلى'} {currentProviderMaxQty}
+                                        </Badge>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {isEnglish ? 'Provider' : 'المورد'}
+                                    </label>
+                                    <select
+                                        className={`${selectClassName} h-11 dark:[color-scheme:dark]`}
+                                        value={productForm.supplierId || productForm.providerId}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            setProductForm((prev) => ({
+                                                ...prev,
+                                                supplierId: value,
+                                                providerId: value,
+                                                externalProductId: '',
+                                                providerProductId: '',
+                                                externalProductName: '',
+                                            }));
+                                        }}
+                                    >
+                                        <option value="" className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+                                            {isEnglish ? 'Choose provider' : 'اختر المورد'}
+                                        </option>
+                                        {activeProviders.map((provider) => (
+                                            <option key={provider.id} value={provider.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
+                                                {provider.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {isEnglish ? 'Provider product' : 'منتج المورد'}
+                                    </label>
+                                    <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-card-rgb)/0.92)] p-3 shadow-[var(--shadow-subtle)]">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-elevated-rgb)/0.74)] p-3">
+                                                <p className="truncate text-sm font-semibold text-[var(--color-text)]">
+                                                    {selectedProviderProduct?.name || (isEnglish ? 'No provider product selected yet' : 'لم يتم اختيار منتج مورد بعد')}
+                                                </p>
+                                                {selectedProviderProduct ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {selectedProviderProduct.categoryLabel ? (
+                                                            <Badge variant="outline">{selectedProviderProduct.categoryLabel}</Badge>
+                                                        ) : null}
+                                                        {getProviderProductMinQtyValue(selectedProviderProduct) ? (
+                                                            <Badge variant="secondary">
+                                                                {isEnglish ? 'Min' : 'من'} {getProviderProductMinQtyValue(selectedProviderProduct)}
+                                                            </Badge>
+                                                        ) : null}
+                                                        {getProviderProductMaxQtyValue(selectedProviderProduct) ? (
+                                                            <Badge variant="secondary">
+                                                                {isEnglish ? 'Max' : 'إلى'} {getProviderProductMaxQtyValue(selectedProviderProduct)}
+                                                            </Badge>
+                                                        ) : null}
+                                                        <Badge variant={selectedProviderProduct.isActive !== false ? 'success' : 'secondary'}>
+                                                            {selectedProviderProduct.isActive !== false
+                                                                ? (isEnglish ? 'Active' : 'نشط')
+                                                                : (isEnglish ? 'Inactive' : 'غير نشط')}
+                                                        </Badge>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+
+                                            {selectedSupplierId ? (
+                                                <>
+                                                    <div className="relative">
+                                                        <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+                                                        <input
+                                                            type="text"
+                                                            value={providerProductQuery}
+                                                            onChange={(e) => setProviderProductQuery(e.target.value)}
+                                                            placeholder={isEnglish ? 'Search provider products by name' : 'ابحث في منتجات المورد بالاسم'}
+                                                            className={`${inputBaseClassName} h-11 pr-10`}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between gap-3 px-1 text-xs text-[var(--color-muted)]">
+                                                        <span>
+                                                            {isEnglish ? `${filteredProviderProducts.length} products found` : `${filteredProviderProducts.length} منتج متاح`}
+                                                        </span>
+                                                        {selectedProviderProduct ? (
+                                                            <span className="truncate text-[var(--color-primary)]">
+                                                                {isEnglish ? `Selected: ${selectedProviderProduct.name}` : `المحدد: ${selectedProviderProduct.name}`}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+
+                                                    <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                                                        {filteredProviderProducts.length ? filteredProviderProducts.map((providerProduct) => {
+                                                            const isSelected = hasMatchingProviderProduct(
+                                                                providerProduct,
+                                                                productForm.providerProductId,
+                                                                productForm.externalProductId
+                                                            );
+                                                            const providerProductName = providerProduct.name || (isEnglish ? 'Provider product' : 'منتج مورد');
+
+                                                            return (
+                                                                <button
+                                                                    key={providerProduct.id}
+                                                                    type="button"
+                                                                    onClick={() => handleProviderProductSelect(providerProduct.id)}
+                                                                    className={`flex w-full items-start gap-3 rounded-[var(--radius-md)] border px-3 py-3 text-start transition-all ${
+                                                                        isSelected
+                                                                            ? 'border-[color:rgb(var(--color-primary-rgb)/0.4)] bg-[color:rgb(var(--color-primary-rgb)/0.12)] shadow-[0_14px_28px_-24px_rgb(var(--color-primary-rgb)/0.55)]'
+                                                                            : 'border-[color:rgb(var(--color-border-rgb)/0.88)] bg-[color:rgb(var(--color-card-rgb)/0.88)] hover:border-[color:rgb(var(--color-primary-rgb)/0.28)] hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                                                                        isSelected
+                                                                            ? 'border-[color:rgb(var(--color-primary-rgb)/0.34)] bg-[color:rgb(var(--color-primary-rgb)/0.14)] text-[var(--color-primary)]'
+                                                                            : 'border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)] text-[var(--color-text-secondary)]'
+                                                                    }`}>
+                                                                        <Package className="h-4 w-4" />
+                                                                    </span>
+
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="truncate text-sm font-semibold text-[var(--color-text)]">{providerProductName}</p>
+                                                                        <div className="mt-1 flex flex-wrap gap-2">
+                                                                            {providerProduct.categoryLabel ? (
+                                                                                <Badge variant="outline" className="px-2 py-0.5">
+                                                                                    {providerProduct.categoryLabel}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                            {getProviderProductMinQtyValue(providerProduct) ? (
+                                                                                <Badge variant="secondary" className="px-2 py-0.5">
+                                                                                    {isEnglish ? 'Min' : 'من'} {getProviderProductMinQtyValue(providerProduct)}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                            {getProviderProductMaxQtyValue(providerProduct) ? (
+                                                                                <Badge variant="secondary" className="px-2 py-0.5">
+                                                                                    {isEnglish ? 'Max' : 'إلى'} {getProviderProductMaxQtyValue(providerProduct)}
+                                                                                </Badge>
+                                                                            ) : null}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {isSelected ? (
+                                                                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:rgb(var(--color-primary-rgb)/0.16)] text-[var(--color-primary)]">
+                                                                            <Check className="h-4 w-4" />
+                                                                        </span>
+                                                                    ) : null}
+                                                                </button>
+                                                            );
+                                                        }) : (
+                                                            <div className="rounded-[var(--radius-md)] border border-dashed border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-elevated-rgb)/0.68)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+                                                                {isEnglish ? 'No matching provider products were found.' : 'لا توجد منتجات مورد مطابقة لهذا البحث.'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="rounded-[var(--radius-md)] border border-dashed border-[color:rgb(var(--color-border-rgb)/0.92)] bg-[color:rgb(var(--color-elevated-rgb)/0.68)] px-4 py-5 text-center text-sm text-[var(--color-text-secondary)]">
+                                                    {isEnglish ? 'Select a provider first to load its products here.' : 'اختر المورد أولاً حتى تظهر منتجاته هنا.'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleBlindProviderLink}
+                                    disabled={isLinkingProvider || !selectedSupplierId || !selectedProviderProductId}
+                                >
+                                    {isLinkingProvider ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : null}
+                                    {isEnglish ? 'Save Provider Link' : 'حفظ ربط المورد'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleBlindProviderPriceSync}
+                                    disabled={isBlindSyncingProviderPrice}
+                                >
+                                    {isBlindSyncingProviderPrice ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : null}
+                                    {isEnglish ? 'Sync Price' : 'مزامنة السعر'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    ) : null}
+
+                    {canViewInternalPricing ? (
                     <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-300">
                         <input
                             type="checkbox"
@@ -2006,20 +2526,25 @@ const AdminProducts = () => {
                             </span>
                         </span>
                     </label>
+                    ) : null}
 
-                    <AdminDynamicFieldsEditor
-                        fields={Array.isArray(productForm.dynamicFields) ? productForm.dynamicFields : []}
-                        isEnglish={isEnglish}
-                        onAdd={addDynamicField}
-                        onUpdate={updateDynamicField}
-                        onRemove={removeDynamicField}
-                    />
+                    {canViewInternalPricing ? (
+                        <AdminDynamicFieldsEditor
+                            fields={Array.isArray(productForm.dynamicFields) ? productForm.dynamicFields : []}
+                            isEnglish={isEnglish}
+                            onAdd={addDynamicField}
+                            onUpdate={updateDynamicField}
+                            onRemove={removeDynamicField}
+                        />
+                    ) : null}
 
                     <div className="flex justify-end gap-2 pt-4">
                         <Button type="button" variant="ghost" onClick={() => setIsProductModalOpen(false)} disabled={isSavingProduct}>إلغاء</Button>
+                        {canSubmitProductForm ? (
                         <Button type="submit" disabled={isSavingProduct}>
                             {isSavingProduct ? 'جارٍ حفظ المنتج...' : 'حفظ المنتج'}
                         </Button>
+                        ) : null}
                     </div>
                 </form>
             </Modal>

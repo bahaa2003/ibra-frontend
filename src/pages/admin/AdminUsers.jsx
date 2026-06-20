@@ -39,6 +39,7 @@ import {
   isRejectedAccountStatus,
   normalizeAccountStatus,
 } from '../../utils/accountStatus';
+import { normalizeRole, ROLES, userHasPermission } from '../../utils/authRoles';
 
 const FILTER_OPTIONS = ['all', 'pending', 'approved', 'rejected', 'deleted'];
 
@@ -75,6 +76,8 @@ const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const getEntityId = (entry) => String(entry?.id || entry?._id || entry?.userId || '').trim();
 
 const buildWalletPreview = (entry, wallet = null) => {
   if (!entry && !wallet) return null;
@@ -166,6 +169,8 @@ const AdminUsers = () => {
   const [approveCreditLimit, setApproveCreditLimit] = useState('0');
   const [rejectTarget, setRejectTarget] = useState(null);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [revokeSupervisorTarget, setRevokeSupervisorTarget] = useState(null);
+  const [isRevokeSupervisorModalOpen, setIsRevokeSupervisorModalOpen] = useState(false);
   const [settingsTopupAmount, setSettingsTopupAmount] = useState('');
   const [settingsGroup, setSettingsGroup] = useState('');
   const [settingsCurrency, setSettingsCurrency] = useState('USD');
@@ -506,7 +511,21 @@ const AdminUsers = () => {
     }
   };
 
-  const handleRevokeSupervisor = async (entry = selectedUser) => {
+  const askRevokeSupervisor = (entry = selectedUser) => {
+    if (!entry?.id || !isSupervisorAccount(entry)) return;
+
+    setRevokeSupervisorTarget(entry);
+    setIsRevokeSupervisorModalOpen(true);
+  };
+
+  const closeRevokeSupervisorModal = () => {
+    if (isSubmitting) return;
+
+    setIsRevokeSupervisorModalOpen(false);
+    setRevokeSupervisorTarget(null);
+  };
+
+  const handleRevokeSupervisor = async (entry = revokeSupervisorTarget) => {
     if (!entry?.id || isSubmitting) return;
 
     setIsSubmitting(true);
@@ -525,6 +544,8 @@ const AdminUsers = () => {
       }
 
       addToast('تم إلغاء صلاحيات الإشراف بنجاح، وعاد كعميل عادي.', 'success');
+      setIsRevokeSupervisorModalOpen(false);
+      setRevokeSupervisorTarget(null);
       await loadUsers({ force: true });
     } catch (error) {
       addToast(error?.message || 'تعذر إلغاء صلاحيات الإشراف.', 'error');
@@ -535,6 +556,10 @@ const AdminUsers = () => {
 
   const handleSettingsTopup = async () => {
     if (!selectedUser || !settingsTopupAmount) return;
+    if (!canAdjustSelectedUserBalance) {
+      addToast(walletActionDeniedMessage, 'error');
+      return;
+    }
 
     try {
       await updateUserCoins(selectedUser.id, Number(settingsTopupAmount), actor);
@@ -662,6 +687,25 @@ const AdminUsers = () => {
     [selectedUser, walletByUserId]
   );
   const canResendVerification = Boolean(selectedUser?.email) && (!selectedUser?.verified || isPendingAccountStatus(selectedUser?.status));
+  const actorRole = normalizeRole(actor?.role);
+  const selectedUserRole = normalizeRole(selectedUser?.role);
+  const actorId = getEntityId(actor);
+  const selectedUserId = getEntityId(selectedUser);
+  const isActorAdmin = actorRole === ROLES.ADMIN;
+  const isActorSupervisor = actorRole === ROLES.SUPERVISOR;
+  const canAdjustSelectedUserBalance = Boolean(selectedUser?.id) && (
+    isActorAdmin ||
+    (
+      isActorSupervisor &&
+      userHasPermission(actor, 'wallet.adjust') &&
+      selectedUserRole === ROLES.CUSTOMER &&
+      Boolean(actorId && selectedUserId) &&
+      actorId !== selectedUserId
+    )
+  );
+  const walletActionDeniedMessage = isArabic
+    ? '\u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621 \u063a\u064a\u0631 \u0645\u0633\u0645\u0648\u062d \u0644\u062d\u0633\u0627\u0628\u0643.'
+    : 'This wallet action is not allowed for your account.';
 
   return (
     <div className="min-w-0 space-y-3">
@@ -797,12 +841,6 @@ const AdminUsers = () => {
                   </Button>
                 </>
               )}
-              {filter !== 'deleted' && isSupervisorAccount(entry) ? (
-                <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => handleRevokeSupervisor(entry)} disabled={isSubmitting}>
-                  <UserMinus className="h-3.5 w-3.5" />
-                  إلغاء الإشراف
-                </Button>
-              ) : null}
               <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                 <Eye className="h-3.5 w-3.5" />
                 عرض التفاصيل
@@ -882,12 +920,6 @@ const AdminUsers = () => {
                         </Button>
                       </>
                     )}
-                    {filter !== 'deleted' && isSupervisorAccount(entry) ? (
-                      <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => handleRevokeSupervisor(entry)} disabled={isSubmitting}>
-                        <UserMinus className="h-3.5 w-3.5" />
-                        إلغاء الإشراف
-                      </Button>
-                    ) : null}
                     <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                       عرض التفاصيل
                     </Button>
@@ -1188,19 +1220,23 @@ const AdminUsers = () => {
                 <p className="text-xs font-semibold text-[var(--color-text)]">الرصيد وكلمة المرور</p>
               </div>
 
-              <Input
-                label="إضافة رصيد"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={settingsTopupAmount}
-                onChange={(event) => setSettingsTopupAmount(event.target.value)}
-                placeholder="100.00"
-                className="h-10 px-3 text-xs"
-              />
-              <Button onClick={handleSettingsTopup} className={`w-full ${compactButtonClassName}`}>
-                إضافة الرصيد
-              </Button>
+              {canAdjustSelectedUserBalance ? (
+                <>
+                  <Input
+                    label="إضافة رصيد"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={settingsTopupAmount}
+                    onChange={(event) => setSettingsTopupAmount(event.target.value)}
+                    placeholder="100.00"
+                    className="h-10 px-3 text-xs"
+                  />
+                  <Button onClick={handleSettingsTopup} className={`w-full ${compactButtonClassName}`}>
+                    إضافة الرصيد
+                  </Button>
+                </>
+              ) : null}
 
               <Input
                 label="تعيين كلمة مرور جديدة"
@@ -1258,12 +1294,47 @@ const AdminUsers = () => {
               </Button>
             )}
             {filter !== 'deleted' && isSupervisorAccount(selectedUser) ? (
-              <Button variant="outline" className={compactButtonClassName} onClick={() => handleRevokeSupervisor(selectedUser)} disabled={isSubmitting}>
+              <Button variant="outline" className={compactButtonClassName} onClick={() => askRevokeSupervisor(selectedUser)} disabled={isSubmitting}>
                 <UserMinus className="h-3.5 w-3.5" />
                 إلغاء الإشراف
               </Button>
             ) : null}
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isRevokeSupervisorModalOpen}
+        onClose={closeRevokeSupervisorModal}
+        title="تأكيد إلغاء الإشراف"
+        size="md"
+        footer={(
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button variant="ghost" className={compactButtonClassName} onClick={closeRevokeSupervisorModal} disabled={isSubmitting}>
+              إلغاء
+            </Button>
+            <Button variant="danger" className={compactButtonClassName} onClick={() => handleRevokeSupervisor(revokeSupervisorTarget)} disabled={isSubmitting}>
+              <UserMinus className="h-3.5 w-3.5" />
+              تأكيد إلغاء الإشراف
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-3">
+          <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-error-rgb)/0.25)] bg-[color:rgb(var(--color-error-rgb)/0.08)] p-3">
+            <p className="text-sm font-semibold text-[var(--color-text)]">
+              هل أنت متأكد من إلغاء الإشراف عن هذا المستخدم؟
+            </p>
+            <p className="mt-2 text-sm leading-7 text-[var(--color-text-secondary)]">
+              سيتم تحويله إلى مستخدم عادي، وسيتم إزالة كل صلاحيات المشرف، ولن يستطيع الدخول إلى لوحة الإدارة بعد ذلك. هذا الإجراء لا يحذف الحساب.
+            </p>
+          </div>
+          {revokeSupervisorTarget ? (
+            <div className="rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-surface-rgb)/0.62)] p-3 text-xs leading-6 text-[var(--color-text-secondary)]">
+              <span className="font-semibold text-[var(--color-text)]">{revokeSupervisorTarget.name || revokeSupervisorTarget.email}</span>
+              <span> سيبقى حسابه موجودا كحساب مستخدم عادي بعد تأكيد العملية.</span>
+            </div>
+          ) : null}
         </div>
       </Modal>
 

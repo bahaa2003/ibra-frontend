@@ -35,6 +35,7 @@ import brandWordmarkImage from '../../assets/ibra.png';
 import { buildWhatsAppLink, getAdminWhatsAppNumber } from '../../utils/whatsapp';
 import {
   ROLES,
+  getLogoTargetForRole,
   hasRequiredRole,
   normalizeRole,
   userHasAnyPermission,
@@ -43,10 +44,11 @@ import {
 const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
   const [copiedUserId, setCopiedUserId] = React.useState(false);
-  const { user, logout } = useAuthStore();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const { dir } = useLanguage();
   const { t } = useTranslation();
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
 
   const closeSidebarOnMobile = () => {
     if (isMobile) {
@@ -68,6 +70,11 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const handleOpenMyAccount = () => {
     closeSidebarOnMobile();
     navigate('/account');
+  };
+
+  const handleLogoClick = () => {
+    closeSidebarOnMobile();
+    navigate(logoTargetPath);
   };
 
   const displayUserId = String(user?.id || user?._id || user?.userId || '').trim();
@@ -135,12 +142,12 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
       roles: ['admin', 'customer', 'manager'],
       visible: () => user?.isApiEnabled === true,
     },
-    { icon: Wallet, label: t('sidebar.wallet'), path: '/wallet', roles: ['customer'] },
+    { icon: Wallet, label: t('sidebar.wallet'), path: '/wallet', roles: ['customer', 'manager'] },
     {
       icon: ShoppingCart,
       label: t('header.orders', { defaultValue: dir === 'rtl' ? 'طلباتي' : 'My Orders' }),
       path: '/orders',
-      roles: ['customer']
+      roles: ['customer', 'manager']
     },
     { icon: Users, label: t('sidebar.users'), path: '/admin/users', roles: ['admin', 'manager'], permissions: ['users.view'] },
     { icon: UserCog, label: t('sidebar.supervisors'), path: '/admin/supervisors', roles: ['admin'] },
@@ -211,7 +218,12 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
         <div className="border-b border-[color:rgb(var(--color-border-rgb)/0.72)] bg-[color:rgb(var(--color-primary-rgb)/0.045)] px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             {(isOpen || isMobile) ? (
-              <div className="flex min-w-0 flex-row-reverse items-center gap-3 text-left [direction:ltr]">
+              <button
+                type="button"
+                onClick={handleLogoClick}
+                className="flex min-w-0 flex-row-reverse items-center gap-3 rounded-[var(--radius-md)] text-left [direction:ltr] transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]"
+                aria-label="IBRA Store"
+              >
                 <img src={brandIconImage} alt="IBRA Store" loading="eager" decoding="async" className="h-14 w-14 shrink-0 object-contain" />
                 <div className="min-w-0">
                   <img src={brandWordmarkImage} alt="IBRA" loading="eager" decoding="async" className="h-5 w-auto object-contain sm:h-6" />
@@ -219,9 +231,16 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
                     {dir === 'rtl' ? 'هوية فاخرة' : 'Luxury Identity'}
                   </p>
                 </div>
-              </div>
+              </button>
             ) : (
-              <img src={brandIconImage} alt="IBRA Store" loading="eager" decoding="async" className="mx-auto h-12 w-12 object-contain" />
+              <button
+                type="button"
+                onClick={handleLogoClick}
+                className="rounded-[var(--radius-md)] transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.06)]"
+                aria-label="IBRA Store"
+              >
+                <img src={brandIconImage} alt="IBRA Store" loading="eager" decoding="async" className="mx-auto h-12 w-12 object-contain" />
+              </button>
             )}
 
             {!isMobile && (

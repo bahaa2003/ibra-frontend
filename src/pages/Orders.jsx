@@ -35,11 +35,12 @@ const SummaryCard = ({ icon: Icon, label, value, note }) => (
 
 const Orders = () => {
   const { user } = useAuthStore();
-  const { orders, loadOrders, getOrderById } = useOrderStore();
+  const { orders, loadPersonalOrders, getPersonalOrderById } = useOrderStore();
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const userId = user?.id || user?._id || user?.userId;
 
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,7 +61,7 @@ const Orders = () => {
       setIsLoading(true);
 
       await Promise.allSettled([
-        Promise.resolve(loadOrders(user?.id)),
+        Promise.resolve(loadPersonalOrders(userId)),
         Promise.resolve(loadProducts()),
         Promise.resolve(loadCurrencies()),
       ]);
@@ -75,7 +76,7 @@ const Orders = () => {
     return () => {
       isMounted = false;
     };
-  }, [loadCurrencies, loadOrders, loadProducts, user?.id]);
+  }, [loadCurrencies, loadPersonalOrders, loadProducts, userId]);
 
   const enrichedOrders = useMemo(
     () => enrichOrders(orders, {
@@ -126,8 +127,8 @@ const Orders = () => {
     if (!orderIdFromQuery) return;
 
     setSelectedOrderId(orderIdFromQuery);
-    void getOrderById(orderIdFromQuery, user?.id).catch(() => {});
-  }, [getOrderById, searchParams, user?.id]);
+    void getPersonalOrderById(orderIdFromQuery, userId).catch(() => {});
+  }, [getPersonalOrderById, searchParams, userId]);
 
   const formatCount = (value) => formatNumber(value, locale);
 
@@ -217,7 +218,7 @@ const Orders = () => {
                 const nextParams = new URLSearchParams(searchParams);
                 nextParams.set('orderId', order.id);
                 setSearchParams(nextParams, { replace: true });
-                void getOrderById(order.id, user?.id).catch(() => {});
+                void getPersonalOrderById(order.id, userId).catch(() => {});
               }}
             />
           ))}

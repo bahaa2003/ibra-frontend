@@ -40,6 +40,7 @@ import { useToast } from '../components/ui/Toast';
 import { formatCurrencyNumber, formatDateTime, formatNumber, getNumericLocale } from '../utils/intl';
 import { enrichOrders } from '../utils/orders';
 import { getUserRegistrationDate, isApprovedAccountStatus, isPendingAccountStatus } from '../utils/accountStatus';
+import { normalizeRole, ROLES } from '../utils/authRoles';
 
 const PENDING_STATUSES = ['pending', 'requested', 'under_review', 'processing'];
 const COMPLETED_STATUSES = ['completed', 'approved', 'success'];
@@ -205,6 +206,7 @@ const AdminDashboard = () => {
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
+  const canViewInternalPricing = normalizeRole(user?.role) === ROLES.ADMIN;
   const todayInputValue = useMemo(() => toDateInputValue(new Date()), []);
 
   useEffect(() => {
@@ -613,6 +615,7 @@ const AdminDashboard = () => {
         value: formatMoney(statsFinancials.totalProfitUsd ?? statsFinancials.netProfit ?? 0, 'USD'),
         note: isArabic ? 'الأرباح من الطلبات المكتملة داخل الفترة المحددة' : 'Profit from completed orders in the selected range',
         icon: DollarSign,
+        internalPricing: true,
       },
       {
         title: isArabic ? 'إجمالي الإيرادات (USD)' : 'Total Revenue (USD)',
@@ -668,8 +671,9 @@ const AdminDashboard = () => {
         note: walletMetricNote,
         icon: Wallet,
       },
-    ],
+    ].filter((item) => canViewInternalPricing || !item.internalPricing),
     [
+      canViewInternalPricing,
       formatCount,
       formatMoney,
       isArabic,

@@ -115,6 +115,66 @@ const useOrderStore = create(
         return ordersRequest;
       },
 
+      loadPersonalOrders: async (userId, { force = false } = {}) => {
+        const scope = userId ? `personal:${userId}` : 'personal:me';
+        const { orders, ordersLastLoadedAt, ordersLastLoadedScope } = get();
+        const hasOrders = Array.isArray(orders) && orders.length > 0;
+        const shouldBypassHydratedCache = isRealProvider && !fetchedOrderScopesThisSession.has(scope);
+        const hasFreshOrders = (
+          !shouldBypassHydratedCache
+          && hasOrders
+          && ordersLastLoadedScope === scope
+          && (Date.now() - Number(ordersLastLoadedAt || 0) < ORDERS_CACHE_TTL)
+        );
+
+        if (!force && hasFreshOrders) {
+          return orders;
+        }
+
+        if (ordersRequest && ordersRequestScope === scope) {
+          return ordersRequest;
+        }
+
+        ordersRequestScope = scope;
+        const request = typeof apiClient.orders.listMine === 'function'
+          ? apiClient.orders.listMine()
+          : apiClient.orders.list(userId);
+
+        ordersRequest = Promise.resolve(request)
+          .then((items) => {
+            const nextOrders = Array.isArray(items) ? items : (items?.orders || items?.items || mockOrders);
+            set({
+              orders: nextOrders,
+              ordersLastLoadedAt: Date.now(),
+              ordersLastLoadedScope: scope,
+            });
+
+            if (isRealProvider) {
+              fetchedOrderScopesThisSession.add(scope);
+            }
+            return nextOrders;
+          })
+          .catch((_error) => {
+            if (!hasOrders || ordersLastLoadedScope !== scope) {
+              const fallbackOrders = userId
+                ? mockOrders.filter((entry) => entry.userId === userId)
+                : mockOrders;
+
+              set({
+                orders: fallbackOrders,
+                ordersLastLoadedScope: scope,
+              });
+            }
+            return get().orders;
+          })
+          .finally(() => {
+            ordersRequest = null;
+            ordersRequestScope = '';
+          });
+
+        return ordersRequest;
+      },
+
       getOrderById: async (orderId, userId = null) => {
         const normalizedOrderId = String(orderId || '').trim();
         if (!normalizedOrderId) return null;
@@ -133,6 +193,32 @@ const useOrderStore = create(
             orders: nextOrders,
             ordersLastLoadedAt: Date.now(),
             ordersLastLoadedScope: state.ordersLastLoadedScope || (userId ? `user:${userId}` : 'all'),
+          };
+        });
+
+        return fetchedOrder;
+      },
+
+      getPersonalOrderById: async (orderId, userId = null) => {
+        const normalizedOrderId = String(orderId || '').trim();
+        if (!normalizedOrderId) return null;
+
+        const fetchedOrder = typeof apiClient.orders.getMineById === 'function'
+          ? await apiClient.orders.getMineById(normalizedOrderId)
+          : await apiClient.orders.getById(normalizedOrderId, userId);
+        if (!fetchedOrder) return null;
+
+        set((state) => {
+          const existingOrders = Array.isArray(state.orders) ? state.orders : [];
+          const existingIndex = existingOrders.findIndex((entry) => entry.id === fetchedOrder.id);
+          const nextOrders = existingIndex >= 0
+            ? existingOrders.map((entry) => (entry.id === fetchedOrder.id ? { ...entry, ...fetchedOrder } : entry))
+            : [fetchedOrder, ...existingOrders];
+
+          return {
+            orders: nextOrders,
+            ordersLastLoadedAt: Date.now(),
+            ordersLastLoadedScope: state.ordersLastLoadedScope || (userId ? `personal:${userId}` : 'personal:me'),
           };
         });
 

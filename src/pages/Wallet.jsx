@@ -245,7 +245,7 @@ const Wallet = () => {
   const navigate = useNavigate();
   const { user, refreshProfile, isAuthenticated } = useAuthStore();
   const { currencies, loadCurrencies } = useSystemStore();
-  const userId = user?.id;
+  const userId = user?.id || user?._id || user?.userId;
   const userCurrency = String(user?.currency || 'USD').toUpperCase();
   const balance = normalizeMoneyAmount(user?.coins || 0);
 
@@ -345,19 +345,28 @@ const Wallet = () => {
     const fetchTransactions = async () => {
       setTxLoading(true);
       try {
+        const personalOrdersRequest = typeof apiClient.orders?.listMine === 'function'
+          ? apiClient.orders.listMine()
+          : apiClient.orders?.list?.(userId);
+        const personalTopupsRequest = typeof apiClient.topups?.listMine === 'function'
+          ? apiClient.topups.listMine()
+          : apiClient.topups?.list?.();
+
         const [transactionsResult, ordersResult, topupsResult] = await Promise.allSettled([
           apiClient.wallet?.getTransactions?.(),
-          apiClient.orders?.list?.(userId),
-          apiClient.topups?.list?.(),
+          personalOrdersRequest,
+          personalTopupsRequest,
         ]);
         const res = transactionsResult.status === 'fulfilled' ? transactionsResult.value : [];
         const items = Array.isArray(res) ? res : (res?.transactions || res?.data || []);
+        const ordersPayload = ordersResult.status === 'fulfilled' ? ordersResult.value : [];
+        const topupsPayload = topupsResult.status === 'fulfilled' ? topupsResult.value : [];
         const relatedOrders = ordersResult.status === 'fulfilled'
-          ? (Array.isArray(ordersResult.value) ? ordersResult.value : [])
+          ? (Array.isArray(ordersPayload) ? ordersPayload : (ordersPayload?.orders || ordersPayload?.items || []))
           : [];
         const relatedTopups = topupsResult.status === 'fulfilled'
-          ? (Array.isArray(topupsResult.value) ? topupsResult.value : []).filter(
-              (entry) => String(entry?.userId || '') === String(userId || '')
+          ? (Array.isArray(topupsPayload) ? topupsPayload : (topupsPayload?.items || topupsPayload?.topups || [])).filter(
+              (entry) => !entry?.userId || String(entry.userId) === String(userId || '')
             )
           : [];
         const orderLookup = buildOrderLookupMap(relatedOrders);

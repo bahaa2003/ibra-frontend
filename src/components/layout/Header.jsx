@@ -9,7 +9,7 @@ import NotificationBell from '../notifications/NotificationBell';
 import brandIconImage from '../../assets/logo-optimized.webp';
 import brandWordmarkImage from '../../assets/ibra.png';
 import { formatWalletAmount } from '../../utils/storefront';
-import { getDefaultRouteForRole, isAdminRole } from '../../utils/authRoles';
+import { getLogoTargetForRole, isAdminRole } from '../../utils/authRoles';
 
 const Header = ({ toggleSidebar }) => {
   const navigate = useNavigate();
@@ -25,6 +25,7 @@ const Header = ({ toggleSidebar }) => {
   const isAdminHomePage = isAdminRole(user?.role) && location.pathname === '/dashboard';
   const shouldShowHeaderWallet = isCustomer || isAdminHomePage;
   const walletTargetPath = isCustomer ? '/wallet' : '/admin/wallet';
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
 
   return (
     <header
@@ -35,7 +36,7 @@ const Header = ({ toggleSidebar }) => {
         <div className="flex min-w-0 items-center">
           <button
             type="button"
-            onClick={() => navigate(getDefaultRouteForRole(user?.role))}
+            onClick={() => navigate(logoTargetPath)}
             className="flex min-w-0 max-w-[calc(100vw-15.5rem)] items-center gap-2 [direction:ltr] transition-all hover:-translate-y-0.5 sm:max-w-none sm:gap-2.5"
           >
             <img

@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useToast } from '../../components/ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
 import { formatDateTime, formatNumber } from '../../utils/intl';
+import { normalizeRole, ROLES } from '../../utils/authRoles';
 
 const defaultForm = {
   supplierName: '',
@@ -160,6 +161,7 @@ const normalizeSupplierProducts = (rawInput = []) => {
 const AdminSuppliers = () => {
   const { addToast } = useToast();
   const { user } = useAuthStore();
+  const canViewInternalPricing = normalizeRole(user?.role) === ROLES.ADMIN;
   const [suppliers, setSuppliers] = useState([]);
   const [runtimeSupplierState, setRuntimeSupplierState] = useState({});
   const [search, setSearch] = useState('');
@@ -715,7 +717,9 @@ const AdminSuppliers = () => {
                         <p className="line-clamp-2 text-sm font-semibold text-gray-950 dark:text-white">{product.externalProductName}</p>
                         <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{product.externalProductId}</p>
                       </div>
-                      <Badge variant="success">{formatNumber(product.supplierPrice || 0, 'ar-EG')} Coins</Badge>
+                      {canViewInternalPricing ? (
+                        <Badge variant="success">{formatNumber(product.supplierPrice || 0, 'ar-EG')} Coins</Badge>
+                      ) : null}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       <Badge variant="premium">{product.supplierName}</Badge>
@@ -773,7 +777,9 @@ const AdminSuppliers = () => {
                         <p className="line-clamp-2 text-sm font-semibold text-gray-950 dark:text-white">{product.externalProductName}</p>
                         <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{product.externalProductId}</p>
                       </div>
-                      <Badge variant="success">{formatNumber(product.supplierPrice || 0, 'ar-EG')} Coins</Badge>
+                      {canViewInternalPricing ? (
+                        <Badge variant="success">{formatNumber(product.supplierPrice || 0, 'ar-EG')} Coins</Badge>
+                      ) : null}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {product.category ? <Badge variant="secondary">{product.category}</Badge> : null}

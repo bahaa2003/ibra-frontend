@@ -13,6 +13,7 @@ const OrdersTable = ({
   currencies,
   onViewOrder,
   showManualStatusControl = false,
+  showInternalPricing = false,
   onUpdateOrderStatus = () => {},
   loadingOrderId = '',
 }) => {
@@ -28,7 +29,9 @@ const OrdersTable = ({
           <TableHead>{isArabic ? 'الحالة' : 'Status'}</TableHead>
           <TableHead>{isArabic ? 'المورد' : 'Supplier'}</TableHead>
           <TableHead className="text-center">{isArabic ? 'الإجمالي' : 'Total'}</TableHead>
-          <TableHead className="text-center">{isArabic ? 'الربح (USD)' : 'Profit (USD)'}</TableHead>
+          {showInternalPricing ? (
+            <TableHead className="text-center">{isArabic ? 'الربح (USD)' : 'Profit (USD)'}</TableHead>
+          ) : null}
           {showManualStatusControl ? (
             <TableHead>{isArabic ? 'تغيير الحالة' : 'Change status'}</TableHead>
           ) : null}
@@ -121,11 +124,13 @@ const OrdersTable = ({
               </span>
             </TableCell>
 
-            <TableCell className="text-center">
-              <span className="text-sm font-semibold text-emerald-500">
-                {order.profitUsd != null ? `$${Number(order.profitUsd).toFixed(6)}` : '-'}
-              </span>
-            </TableCell>
+            {showInternalPricing ? (
+              <TableCell className="text-center">
+                <span className="text-sm font-semibold text-emerald-500">
+                  {order.profitUsd != null ? `$${Number(order.profitUsd).toFixed(6)}` : '-'}
+                </span>
+              </TableCell>
+            ) : null}
 
             {showManualStatusControl ? (
               <TableCell>

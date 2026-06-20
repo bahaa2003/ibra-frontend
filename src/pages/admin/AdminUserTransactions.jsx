@@ -30,6 +30,7 @@ import { formatDateTime, formatNumber, getNumericLocale } from '../../utils/intl
 import { formatCurrencyAmount } from '../../utils/pricing';
 import { getOrderStatusMeta } from '../../utils/orders';
 import { getDashboardPathForRole, getPreviousVisitedPath } from '../../utils/navigation';
+import { normalizeRole, ROLES, userHasPermission } from '../../utils/authRoles';
 import {
   resolveOrderExecutionCurrency,
   resolveTopupExecutionCurrency,
@@ -43,6 +44,8 @@ const asNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const getEntityId = (entry) => String(entry?.id || entry?._id || entry?.userId || '').trim();
 
 const getCurrencyRate = (currencies, currencyCode) => {
   const normalizedCode = String(currencyCode || 'USD').toUpperCase();
@@ -396,6 +399,25 @@ const AdminUserTransactions = () => {
 
   const userCurrencyCode = String(selectedUser?.currency || 'USD').toUpperCase();
   const currentBalance = asNumber(selectedWallet?.walletBalance ?? selectedWallet?.balance ?? selectedUser?.coins);
+  const actorRole = normalizeRole(actor?.role);
+  const targetRole = normalizeRole(selectedUser?.role);
+  const actorId = getEntityId(actor);
+  const targetId = getEntityId(selectedUser) || String(userId || '').trim();
+  const isActorAdmin = actorRole === ROLES.ADMIN;
+  const isActorSupervisor = actorRole === ROLES.SUPERVISOR;
+  const isSelfTarget = Boolean(actorId && targetId && actorId === targetId);
+  const supervisorCanAddBalance = isActorSupervisor
+    && userHasPermission(actor, 'wallet.adjust')
+    && targetRole === ROLES.CUSTOMER
+    && Boolean(actorId && targetId)
+    && !isSelfTarget;
+  const canAddBalance = isActorAdmin || supervisorCanAddBalance;
+  const canDeductBalance = isActorAdmin;
+  const canSetExactBalance = isActorAdmin;
+  const showBalanceControls = canAddBalance || canDeductBalance || canSetExactBalance;
+  const walletActionDeniedMessage = isArabic
+    ? '\u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621 \u063a\u064a\u0631 \u0645\u0633\u0645\u0648\u062d \u0644\u062d\u0633\u0627\u0628\u0643.'
+    : 'This wallet action is not allowed for your account.';
 
   const formatMoney = (amount, currencyCode = displayCurrencyCode) => {
     const safeAmount = asNumber(amount);
@@ -532,6 +554,11 @@ const AdminUserTransactions = () => {
   };
 
   const handleAddBalance = async () => {
+    if (!canAddBalance) {
+      addToast(walletActionDeniedMessage, 'error');
+      return;
+    }
+
     const amount = Math.abs(asNumber(adjustAmount));
     if (amount <= 0) {
       addToast('أدخل مبلغًا صحيحًا.', 'error');
@@ -553,6 +580,11 @@ const AdminUserTransactions = () => {
   };
 
   const handleDeductBalance = async () => {
+    if (!canDeductBalance) {
+      addToast(walletActionDeniedMessage, 'error');
+      return;
+    }
+
     const amount = Math.abs(asNumber(adjustAmount));
     if (amount <= 0) {
       addToast('أدخل مبلغًا صحيحًا.', 'error');
@@ -575,6 +607,11 @@ const AdminUserTransactions = () => {
   };
 
   const handleSetBalance = async () => {
+    if (!canSetExactBalance) {
+      addToast(walletActionDeniedMessage, 'error');
+      return;
+    }
+
     const target = asNumber(targetBalance);
     if (target === currentBalance) {
       addToast('الرصيد الحالي مطابق للقيمة المطلوبة.', 'info');
@@ -700,11 +737,17 @@ const AdminUserTransactions = () => {
         />
       </div>
 
+      {showBalanceControls ? (
       <Card className="admin-premium-panel p-2 sm:p-4">
         <h2 className="mb-1.5 text-[13px] font-semibold text-[var(--color-text)] sm:mb-3 sm:text-base">{isArabic ? 'تعديل الرصيد' : 'Balance Controls'}</h2>
         <div className="grid gap-2 lg:grid-cols-2">
+          {canAddBalance || canDeductBalance ? (
           <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-2 sm:p-3">
-            <p className="text-[11px] text-[var(--color-text-secondary)]">{isArabic ? 'زيادة / خصم' : 'Add / Deduct'}</p>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">
+              {canDeductBalance
+                ? (isArabic ? 'زيادة / خصم' : 'Add / Deduct')
+                : (isArabic ? 'إضافة رصيد' : 'Add balance')}
+            </p>
             <Input
               type="number"
               min="0"
@@ -716,17 +759,23 @@ const AdminUserTransactions = () => {
               className="mt-1.5 h-9 px-2 py-1.5 text-xs sm:mt-2 sm:h-11 sm:px-4 sm:py-3 sm:text-sm"
             />
             <div className="mt-1.5 flex gap-1.5 sm:mt-2 sm:gap-2">
+              {canAddBalance ? (
               <Button size="sm" onClick={handleAddBalance} disabled={isBalanceUpdating} className="h-8 flex-1 gap-1 px-2 text-[11px] sm:h-10 sm:gap-2 sm:px-4 sm:text-sm">
                 <PlusCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isArabic ? 'زيادة' : 'Add'}
               </Button>
+              ) : null}
+              {canDeductBalance ? (
               <Button size="sm" variant="danger" onClick={handleDeductBalance} disabled={isBalanceUpdating} className="h-8 flex-1 gap-1 px-2 text-[11px] sm:h-10 sm:gap-2 sm:px-4 sm:text-sm">
                 <Clock3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isArabic ? 'خصم' : 'Deduct'}
               </Button>
+              ) : null}
             </div>
           </div>
+          ) : null}
 
+          {canSetExactBalance ? (
           <div className="rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.8)] p-2 sm:p-3">
             <p className="text-[11px] text-[var(--color-text-secondary)]">{isArabic ? 'تعيين رصيد محدد' : 'Set exact balance'}</p>
             <Input
@@ -741,8 +790,10 @@ const AdminUserTransactions = () => {
               {isArabic ? 'تعيين الرصيد' : 'Set balance'}
             </Button>
           </div>
+          ) : null}
         </div>
       </Card>
+      ) : null}
 
       <Card className="admin-premium-panel p-2 sm:p-4">
         <div className="mb-1.5 flex flex-col gap-2 sm:mb-3 lg:flex-row lg:items-center lg:justify-between">

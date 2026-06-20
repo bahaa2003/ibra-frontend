@@ -7,11 +7,16 @@ import { useLanguage } from '../context/LanguageContext';
 import ThemeToggle from './ui/ThemeToggle';
 import logoImage from '../assets/logo-optimized.webp';
 import brandWordmarkImage from '../assets/ibra.png';
+import useAuthStore from '../store/useAuthStore';
+import { getLogoTargetForRole } from '../utils/authRoles';
 
 const Header = ({ user, onMenuClick, showUserInfo = true, onLoginClick }) => {
+  const { user: authUser, isAuthenticated } = useAuthStore();
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
+  const logoUser = user || authUser;
+  const logoTargetPath = getLogoTargetForRole(logoUser?.role, isAuthenticated || Boolean(user));
 
   return (
     <>
@@ -22,7 +27,7 @@ const Header = ({ user, onMenuClick, showUserInfo = true, onLoginClick }) => {
       className="fixed inset-x-0 top-3 z-50 px-3 py-2 sm:px-4"
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 rounded-[2rem] border border-[color:rgb(var(--color-border-rgb)/0.8)] bg-[linear-gradient(135deg,rgb(var(--color-surface-rgb)/0.94),rgb(var(--color-card-rgb)/0.86))] px-3 py-1.5 shadow-[var(--shadow-subtle)] ring-1 ring-[color:rgb(var(--color-primary-rgb)/0.1)] backdrop-blur-2xl [direction:ltr] sm:px-4">
-        <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2.5 text-[#3a2411] [direction:ltr] dark:text-white">
+        <Link to={logoTargetPath} className="flex min-w-0 shrink-0 items-center gap-2.5 text-[#3a2411] [direction:ltr] dark:text-white">
           <img src={logoImage} alt="IBRA Store" className="h-11 w-11 shrink-0 object-contain sm:h-12 sm:w-12" />
           <img
             src={brandWordmarkImage}

@@ -114,3 +114,17 @@ export const getDefaultRouteForRole = (role) => {
 
   return '/dashboard';
 };
+
+export const getLogoTargetForRole = (role, isAuthenticated = false) => {
+  if (!isAuthenticated) {
+    return '/';
+  }
+
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === ROLES.ADMIN || normalizedRole === ROLES.SUPERVISOR) {
+    return '/admin/dashboard';
+  }
+
+  return '/dashboard';
+};

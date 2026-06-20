@@ -85,7 +85,7 @@ const PERMISSION_GROUPS = [
     permissions: [
       { key: 'wallet.view', label: 'عرض المحافظ', active: true },
       { key: 'topups.review', label: 'مراجعة طلبات الشحن', active: true },
-      { key: 'wallet.adjust', label: 'تعديل رصيد العميل', active: false },
+      { key: 'wallet.adjust', label: 'تعديل رصيد العميل', active: true },
     ],
   },
   {
@@ -96,6 +96,12 @@ const PERMISSION_GROUPS = [
     permissions: [
       { key: 'products.view', label: 'عرض المنتجات', active: true },
       { key: 'products.manage', label: 'إضافة وتعديل المنتجات', active: true },
+      {
+        key: 'products.provider.sync',
+        label: 'ربط المورد ومزامنة السعر',
+        description: 'يسمح بربط المنتج بمنتج مورد وتشغيل مزامنة السعر بدون عرض الأسعار.',
+        active: true,
+      },
       { key: 'groups.manage', label: 'إدارة مجموعات الأسعار', active: true },
       { key: 'suppliers.manage', label: 'إدارة الموردين', active: false },
     ],
@@ -581,6 +587,11 @@ const AdminSupervisors = () => {
                               >
                                 <span className="min-w-0">
                                   <span className="block text-sm font-bold text-[var(--color-text)]">{permission.label}</span>
+                                  {permission.description ? (
+                                    <span className="mt-1 block text-xs leading-5 text-[var(--color-text-secondary)]">
+                                      {permission.description}
+                                    </span>
+                                  ) : null}
                                   <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-muted)]">
                                     {permission.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                                     {permission.active ? 'متاحة للتفعيل' : 'قريبًا'}

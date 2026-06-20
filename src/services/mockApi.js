@@ -62,6 +62,45 @@ const ensureCanManageUser = (actor, targetUser, action = 'manage') => {
   throw new Error('Insufficient permissions');
 };
 
+const normalizeMockRole = (role) => String(role || '').trim().toLowerCase();
+
+const actorHasPermission = (actor, permission) => {
+  const permissions = Array.isArray(actor?.permissions)
+    ? actor.permissions
+    : (Array.isArray(actor?.supervisorPermissions) ? actor.supervisorPermissions : []);
+  return permissions.includes(permission);
+};
+
+const ensureCanAdjustWallet = (actor, targetUser, amount, { setExact = false } = {}) => {
+  if (!actor) throw new Error('Actor context is required');
+
+  const actorRole = normalizeMockRole(actor.role);
+  const targetRole = normalizeMockRole(targetUser?.role);
+  if (actorRole === 'admin') return true;
+
+  if (actorRole === 'manager' || actorRole === 'supervisor') {
+    if (!actorHasPermission(actor, 'wallet.adjust')) {
+      throw new Error('Missing wallet.adjust permission');
+    }
+
+    if (setExact || Number(amount) < 0) {
+      throw new Error('Supervisors can only add balance to customer wallets');
+    }
+
+    if (String(actor.id || actor._id || '') === String(targetUser?.id || targetUser?._id || '')) {
+      throw new Error('Supervisors cannot adjust their own wallet balance');
+    }
+
+    if (targetRole !== 'customer') {
+      throw new Error('Supervisors can only add balance to customer wallets');
+    }
+
+    return true;
+  }
+
+  throw new Error('Insufficient permissions');
+};
+
 const ensureAdmin = (actor) => {
   if (!actor || actor.role !== 'admin') {
     throw new Error('Only admin can manage system currencies');
@@ -1065,12 +1104,40 @@ const mockApi = {
       return allOrders; // Admin sees all
     },
 
+    listMine: async () => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const authDb = getDB('auth-storage', { state: { user: null } });
+      const authUser = authDb?.state?.user || {};
+      const authUserId = authUser.id || authUser._id || authUser.userId;
+      const db = getDB('order-storage', { state: { orders: mockOrders } });
+      const allOrders = db.state.orders || mockOrders;
+      return authUserId ? allOrders.filter((o) => String(o.userId) === String(authUserId)) : [];
+    },
+
     getById: async (orderId, userId = null) => {
       await new Promise(resolve => setTimeout(resolve, DELAY));
       const db = getDB('order-storage', { state: { orders: mockOrders } });
       const allOrders = db.state.orders || mockOrders;
       const target = allOrders.find((entry) => (
         entry.id === orderId && (!userId || entry.userId === userId)
+      ));
+
+      if (!target) {
+        throw new Error('Order not found');
+      }
+
+      return target;
+    },
+
+    getMineById: async (orderId) => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const authDb = getDB('auth-storage', { state: { user: null } });
+      const authUser = authDb?.state?.user || {};
+      const authUserId = authUser.id || authUser._id || authUser.userId;
+      const db = getDB('order-storage', { state: { orders: mockOrders } });
+      const allOrders = db.state.orders || mockOrders;
+      const target = allOrders.find((entry) => (
+        String(entry.id) === String(orderId) && String(entry.userId) === String(authUserId)
       ));
 
       if (!target) {
@@ -1436,7 +1503,7 @@ const mockApi = {
           // Customer can only deduct their own balance (purchase flow), never add credits.
           const isSelfDeduction = actor && actor.role === 'customer' && actor.id === userId && Number(amount) < 0;
           if (!isSelfDeduction) {
-            ensureCanManageUser(actor, user, 'top up');
+            ensureCanAdjustWallet(actor, user, amount);
           }
 
           if (user) {
@@ -1601,7 +1668,7 @@ const mockApi = {
           const user = db.state.users.find(u => u.id === userId);
           if (!user) return null;
 
-          ensureCanManageUser(actor, user, 'set balance for');
+          ensureCanAdjustWallet(actor, user, balance, { setExact: true });
 
           user.coins = normalizeMoneyAmount(toFiniteNumber(balance, 0));
           saveDB('admin-storage', db);
@@ -1894,6 +1961,20 @@ const mockApi = {
       await new Promise(resolve => setTimeout(resolve, DELAY));
       const data = getDB('topup-storage', { state: { topups: mockTopups } });
       return data.state.topups || mockTopups;
+    },
+
+    listMine: async () => {
+      await new Promise(resolve => setTimeout(resolve, DELAY));
+      const authDb = getDB('auth-storage', { state: { user: null } });
+      const authUser = authDb?.state?.user || {};
+      const authUserId = authUser.id || authUser._id || authUser.userId;
+      const data = getDB('topup-storage', { state: { topups: mockTopups } });
+      const topups = data.state.topups || mockTopups;
+      return {
+        items: authUserId ? topups.filter((entry) => String(entry.userId) === String(authUserId)) : [],
+        pagination: null,
+        summary: null,
+      };
     },
 
     getById: async (topupId, userId = null) => {

@@ -23,6 +23,7 @@ import useTopupStore from '../../store/useTopupStore';
 import useSystemStore from '../../store/useSystemStore';
 import { formatDateTime, formatGroupedNumberString, formatNumber, getNumericLocale } from '../../utils/intl';
 import { formatCurrencyAmount } from '../../utils/pricing';
+import { normalizeRole, ROLES } from '../../utils/authRoles';
 import {
   resolveOrderExecutionCurrency,
   resolveTopupExecutionCurrency,
@@ -375,6 +376,7 @@ const AdminWallet = () => {
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
+  const isActorAdmin = normalizeRole(actor?.role) === ROLES.ADMIN;
 
   const todayInputValue = useMemo(() => toDateInputValue(new Date()), []);
   const defaultRangeStart = useMemo(
@@ -545,6 +547,16 @@ const AdminWallet = () => {
   ]);
 
   const handleSelfTopup = useCallback(async () => {
+    if (!isActorAdmin) {
+      addToast(
+        isArabic
+          ? '\u0647\u0630\u0627 \u0627\u0644\u0625\u062c\u0631\u0627\u0621 \u0645\u062e\u0635\u0635 \u0644\u0644\u0623\u062f\u0645\u0646 \u0641\u0642\u0637.'
+          : 'This action is restricted to admins.',
+        'error'
+      );
+      return;
+    }
+
     const adminId = String(adminProfile?.id || actor?.id || '').trim();
     const amount = asNumber(selfTopupAmount);
 
@@ -588,6 +600,7 @@ const AdminWallet = () => {
     adminProfile?.id,
     formatMoney,
     isArabic,
+    isActorAdmin,
     loadUsers,
     refreshProfile,
     selfTopupAmount,
@@ -690,10 +703,11 @@ const AdminWallet = () => {
         icon: TrendingUp,
         label: isArabic ? 'الأرباح' : 'Profits',
         value: formatMoney(totalProfitUsd, 'USD'),
+        internalPricing: true,
         note: isArabic ? 'من الطلبات المكتملة داخل المدة' : 'From completed orders in range',
       },
-    ],
-    [adminProfile?.coins, adminProfile?.currency, adminProfile?.name, customerWallets.length, formatCount, formatMoney, isArabic, totalCustomerBalanceUsd, totalProfitUsd]
+    ].filter((card) => isActorAdmin || !card.internalPricing),
+    [adminProfile?.coins, adminProfile?.currency, adminProfile?.name, customerWallets.length, formatCount, formatMoney, isActorAdmin, isArabic, totalCustomerBalanceUsd, totalProfitUsd]
   );
 
   return (
@@ -745,6 +759,7 @@ const AdminWallet = () => {
           ))}
         </div>
 
+        {isActorAdmin ? (
         <Card className="admin-premium-stat relative mt-3.5 p-3 sm:p-4">
           <div className="flex flex-col gap-3.5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
@@ -780,6 +795,7 @@ const AdminWallet = () => {
             </div>
           </div>
         </Card>
+        ) : null}
 
         <Card className="admin-premium-stat relative mt-3.5 p-3 sm:p-4">
           <div className="flex flex-col gap-3.5 lg:flex-row lg:items-end lg:justify-between">

@@ -7,11 +7,15 @@ import { cn } from './ui/Button';
 import { useLanguage } from '../context/LanguageContext';
 import brandIconImage from '../assets/logo-optimized.webp';
 import brandWordmarkImage from '../assets/ibra.png';
+import useAuthStore from '../store/useAuthStore';
+import { getLogoTargetForRole } from '../utils/authRoles';
 
 const PublicSidebar = ({ isOpen, setIsOpen, isMobile }) => {
+  const { user, isAuthenticated } = useAuthStore();
   const { dir } = useLanguage();
   const { t } = useTranslation();
   const isRTL = dir === 'rtl';
+  const logoTargetPath = getLogoTargetForRole(user?.role, isAuthenticated);
 
   const navItems = [
     {
@@ -54,7 +58,12 @@ const PublicSidebar = ({ isOpen, setIsOpen, isMobile }) => {
         )}
       >
         <div className="px-4 pb-2 pt-5">
-          <div className="mb-5 flex items-center gap-3 px-1 py-1 text-left [direction:ltr]">
+          <NavLink
+            to={logoTargetPath}
+            onClick={() => isMobile && setIsOpen(false)}
+            className="mb-5 flex items-center gap-3 rounded-[1.25rem] px-1 py-1 text-left [direction:ltr] transition-colors hover:bg-[#d5ad57]/10 dark:hover:bg-[#f0c66f]/8"
+            aria-label="IBRA Store"
+          >
             <img src={brandIconImage} alt="IBRA Store" className="h-16 w-16 shrink-0 object-contain" />
             <div className="min-w-0">
               <img src={brandWordmarkImage} alt="ibra" className="h-7 w-auto max-w-[7rem] object-contain" />
@@ -62,7 +71,7 @@ const PublicSidebar = ({ isOpen, setIsOpen, isMobile }) => {
                 {isRTL ? 'منصة رقمية' : 'Digital platform'}
               </p>
             </div>
-          </div>
+          </NavLink>
 
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7a5a29]/48 dark:text-[#f8dfab]/42">
             {isRTL ? 'القائمة' : 'Navigation'}

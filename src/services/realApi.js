@@ -649,6 +649,7 @@ const normaliseProduct = (p) => {
   const id = p._id || p.id;
   const isActive = p.isActive !== false;
   const productStatus = String(p.productStatus || '').trim();
+  const hasOwn = (key) => Object.prototype.hasOwnProperty.call(p, key);
 
   // Resolve populated provider reference
   const providerId = typeof p.provider === 'object' ? (p.provider?._id || p.provider?.id) : p.provider;
@@ -675,6 +676,22 @@ const normaliseProduct = (p) => {
   const externalPricingMode = p.externalPricingMode || (usesProviderPricing ? 'use_supplier_price' : 'use_local_price');
   const manualPriceAdjustment = p.manualPriceAdjustment ?? p.manualDelta ?? '';
   const resolvedProviderId = providerId || p.providerId || p.supplierId || '';
+  const hasInternalBasePrice = p.basePrice !== undefined || p.basePriceCoins !== undefined;
+  const hasProviderLink = hasOwn('provider') || hasOwn('providerId') || hasOwn('supplierId');
+  const hasProviderProductLink = hasOwn('providerProduct') || hasOwn('providerProductId') || hasOwn('externalProductId');
+  const hasProviderMapping = hasOwn('providerMapping') || hasOwn('orderFieldsMapping');
+  const hasMarkupFields = hasOwn('markupType') || hasOwn('markupValue') || hasOwn('supplierMarginType') || hasOwn('supplierMarginValue');
+  const hasPricingModeFields = hasOwn('pricingMode') || hasOwn('externalPricingMode');
+  const hasSyncFields = hasOwn('syncPriceWithProvider') || hasPricingModeFields;
+  const hasManualAdjustmentFields = hasOwn('enableManualPrice') || hasOwn('manualPriceAdjustment') || hasOwn('manualDelta');
+  const safeSellingPrice = (
+    p.displayPrice
+    ?? p.sellingPrice
+    ?? p.finalPrice
+    ?? p.markedUpPriceUSD
+    ?? p.price
+    ?? null
+  );
 
   return {
     ...p,
@@ -685,10 +702,13 @@ const normaliseProduct = (p) => {
     productStatus: productStatus || (isActive ? 'available' : 'unavailable'),
     isVisibleInStore: p.isVisibleInStore !== undefined ? Boolean(p.isVisibleInStore) : isActive,
     // Pricing
-    basePriceCoins: p.basePrice ?? p.basePriceCoins ?? 0,
-    basePrice: p.basePrice ?? 0,
-    displayPrice: p.displayPrice ?? null,
-    markedUpPriceUSD: p.markedUpPriceUSD ?? p.finalPrice ?? null,
+    ...(hasInternalBasePrice ? {
+      basePriceCoins: p.basePrice ?? p.basePriceCoins,
+      basePrice: p.basePrice ?? p.basePriceCoins,
+    } : {}),
+    sellingPrice: p.sellingPrice ?? p.finalPrice ?? safeSellingPrice,
+    displayPrice: p.displayPrice ?? safeSellingPrice,
+    markedUpPriceUSD: p.markedUpPriceUSD ?? p.finalPrice ?? p.sellingPrice ?? safeSellingPrice,
     displayCurrency: p.displayCurrency ?? null,
     // Quantity
     minimumOrderQty: p.minQty ?? p.minimumOrderQty ?? 1,
@@ -696,24 +716,36 @@ const normaliseProduct = (p) => {
     minQty: p.minQty ?? 1,
     maxQty: p.maxQty ?? 999,
     // Supplier/Provider mapping
-    supplierId: resolvedProviderId,
-    providerId: resolvedProviderId,
-    providerProductId,
-    externalProductId,
-    externalProductName: pp?.rawName || p.externalProductName || '',
+    ...(hasProviderLink ? {
+      supplierId: resolvedProviderId,
+      providerId: resolvedProviderId,
+    } : {}),
+    ...(hasProviderProductLink ? {
+      providerProductId,
+      externalProductId,
+      externalProductName: pp?.rawName || p.externalProductName || '',
+    } : {}),
     autoFulfillmentEnabled: p.autoFulfillmentEnabled !== undefined ? Boolean(p.autoFulfillmentEnabled) : (p.executionType === 'automatic'),
     // Markup → supplierMargin
-    supplierMarginType: p.markupType || p.supplierMarginType || 'percentage',
-    supplierMarginValue: p.markupValue ?? p.supplierMarginValue ?? 0,
-    externalPricingMode,
-    syncPriceWithProvider: p.syncPriceWithProvider !== undefined ? Boolean(p.syncPriceWithProvider) : usesProviderPricing,
-    enableManualPrice: p.enableManualPrice !== undefined ? Boolean(p.enableManualPrice) : Number(manualPriceAdjustment || 0) !== 0,
-    manualPriceAdjustment,
+    ...(hasMarkupFields ? {
+      supplierMarginType: p.markupType || p.supplierMarginType || 'percentage',
+      supplierMarginValue: p.markupValue ?? p.supplierMarginValue ?? 0,
+    } : {}),
+    ...(hasPricingModeFields ? { externalPricingMode } : {}),
+    ...(hasSyncFields ? {
+      syncPriceWithProvider: p.syncPriceWithProvider !== undefined ? Boolean(p.syncPriceWithProvider) : usesProviderPricing,
+    } : {}),
+    ...(hasManualAdjustmentFields ? {
+      enableManualPrice: p.enableManualPrice !== undefined ? Boolean(p.enableManualPrice) : Number(manualPriceAdjustment || 0) !== 0,
+      manualPriceAdjustment,
+    } : {}),
     isAvailableForApi: p.isAvailableForApi !== false,
-    syncedProviderBasePrice: p.syncedProviderBasePrice ?? p.rawPrice ?? null,
-    fallbackSupplierId: p.fallbackSupplierId || '',
-    supplierFieldMappings,
-    supplierNotes: p.supplierNotes || '',
+    ...(hasOwn('syncedProviderBasePrice') || hasOwn('rawPrice') ? {
+      syncedProviderBasePrice: p.syncedProviderBasePrice ?? p.rawPrice ?? null,
+    } : {}),
+    ...(hasOwn('fallbackSupplierId') ? { fallbackSupplierId: p.fallbackSupplierId || '' } : {}),
+    ...(hasProviderMapping ? { supplierFieldMappings } : {}),
+    ...(hasOwn('supplierNotes') ? { supplierNotes: p.supplierNotes || '' } : {}),
     // Category stays as-is (string in both BE and FE)
     category: p.category || '',
     orderFields: Array.isArray(p.orderFields) ? p.orderFields : [],
@@ -773,6 +805,21 @@ const normaliseOrder = (o) => {
   const user = typeof o.userId === 'object' ? o.userId : null;
   const productIdStr = product?._id || product?.id || o.productId;
   const userIdStr = user?._id || user?.id || o.userId;
+  const hasInternalBaseSnapshot = o.basePriceSnapshot !== undefined || o.unitPriceBase !== undefined;
+  const financialSnapshot = o.financialSnapshot || {
+    originalCurrency: o.currency || 'USD',
+    ...(hasInternalBaseSnapshot ? { originalAmount: o.basePriceSnapshot ?? o.unitPriceBase ?? 0 } : {}),
+    ...(o.rateSnapshot !== undefined ? { exchangeRateAtExecution: o.rateSnapshot } : {}),
+    convertedAmountAtExecution: o.chargedAmount ?? o.totalPrice ?? 0,
+    finalAmountAtExecution: o.chargedAmount ?? o.totalPrice ?? 0,
+    pricingSnapshot: {
+      ...(hasInternalBaseSnapshot ? { basePrice: o.basePriceSnapshot ?? o.unitPriceBase ?? 0 } : {}),
+      ...(o.markupPercentageSnapshot !== undefined ? { groupDiscount: o.markupPercentageSnapshot } : {}),
+      unitPrice: o.finalPriceCharged || 0,
+      finalPrice: o.chargedAmount ?? o.totalPrice ?? 0,
+      currency: o.currency || 'USD',
+    },
+  };
 
   return {
     ...o,
@@ -794,7 +841,7 @@ const normaliseOrder = (o) => {
     status: (o.status || 'pending').toLowerCase(),
     // Pricing aliases for FE
     priceCoins: o.chargedAmount ?? o.totalPrice ?? o.priceCoins ?? 0,
-    unitPriceBase: o.basePriceSnapshot ?? o.unitPriceBase ?? 0,
+    unitPriceBase: hasInternalBaseSnapshot ? (o.basePriceSnapshot ?? o.unitPriceBase) : undefined,
     unitPrice: o.finalPriceCharged ?? o.unitPrice ?? 0,
     quantity: o.quantity || 1,
     playerId: o.playerId
@@ -814,20 +861,7 @@ const normaliseOrder = (o) => {
       || o.customerInput?.values
       || {},
     // Financial snapshot for FE store's deduction logic
-    financialSnapshot: o.financialSnapshot || {
-      originalCurrency: o.currency || 'USD',
-      originalAmount: o.basePriceSnapshot || 0,
-      exchangeRateAtExecution: o.rateSnapshot || 1,
-      convertedAmountAtExecution: o.chargedAmount ?? o.totalPrice ?? 0,
-      finalAmountAtExecution: o.chargedAmount ?? o.totalPrice ?? 0,
-      pricingSnapshot: {
-        basePrice: o.basePriceSnapshot || 0,
-        groupDiscount: o.markupPercentageSnapshot || 0,
-        unitPrice: o.finalPriceCharged || 0,
-        finalPrice: o.chargedAmount ?? o.totalPrice ?? 0,
-        currency: o.currency || 'USD',
-      },
-    },
+    financialSnapshot,
     // Timestamps
     date: o.createdAt || o.date,
   };
@@ -1571,6 +1605,20 @@ const realApi = {
     },
 
     /**
+     * GET /admin/product-provider-options — sanitized provider picker for blind supervisor linking.
+     */
+    listProviderOptions: async () => {
+      const res = await http.get('/admin/product-provider-options');
+      const data = unwrap(res);
+      const providers = Array.isArray(data) ? data : (data?.providers || []);
+      return providers.map((p) => ({
+        id: p._id || p.id,
+        name: p.name || p.supplierName || '',
+        isActive: p.isActive !== false,
+      })).filter((provider) => provider.id && provider.name);
+    },
+
+    /**
      * GET /admin/provider-products/:providerId — raw provider products.
      */
     listProviderProducts: async (providerId) => {
@@ -1591,6 +1639,45 @@ const realApi = {
         maxQty: getProviderCatalogMaxQtyValue(pp),
         maximumOrderQty: getProviderCatalogMaxQtyValue(pp),
       }));
+    },
+
+    /**
+     * GET /admin/product-provider-options/:providerId/products — sanitized provider products.
+     */
+    listSafeProviderProductOptions: async (providerId, params = {}) => {
+      const res = await http.get(`/admin/product-provider-options/${providerId}/products`, { params });
+      const data = unwrap(res);
+      const items = Array.isArray(data) ? data : (data?.providerProducts || data?.products || []);
+      return items.map((pp) => ({
+        id: pp._id || pp.id,
+        name: pp.name || pp.displayName || pp.translatedName || pp.rawName || '',
+        providerName: pp.providerName || pp.provider?.name || '',
+        categoryLabel: pp.categoryLabel || pp.groupLabel || '',
+        minQty: pp.minQty ?? pp.minimumOrderQty ?? null,
+        minimumOrderQty: pp.minQty ?? pp.minimumOrderQty ?? null,
+        maxQty: pp.maxQty ?? pp.maximumOrderQty ?? null,
+        maximumOrderQty: pp.maxQty ?? pp.maximumOrderQty ?? null,
+        isActive: pp.isActive !== false,
+      })).filter((item) => item.id && item.name);
+    },
+
+    /**
+     * PATCH /admin/products/:id/provider-link — blind provider link/move.
+     */
+    linkProvider: async (id, payload) => {
+      const res = await http.patch(`/admin/products/${id}/provider-link`, {
+        providerId: payload?.providerId || payload?.supplierId,
+        providerProductId: payload?.providerProductId || payload?.externalProductId,
+      });
+      return unwrap(res);
+    },
+
+    /**
+     * POST /admin/products/:id/provider-sync — blind provider price sync.
+     */
+    syncProviderPrice: async (id) => {
+      const res = await http.post(`/admin/products/${id}/provider-sync`);
+      return unwrap(res);
     },
 
     /**
@@ -2374,6 +2461,18 @@ const realApi = {
     },
 
     /**
+     * GET /me/orders — personal orders for the authenticated account.
+     * Used by customer/supervisor personal pages so role alone never switches
+     * the request to the admin orders endpoint.
+     */
+    listMine: async () => {
+      const res = await http.get('/me/orders');
+      const data = unwrap(res);
+      const orders = Array.isArray(data) ? data : (data?.orders || []);
+      return orders.map(normaliseOrder);
+    },
+
+    /**
      * GET /admin/orders?page=X&limit=Y (admin only — with pagination metadata).
      *
      * Returns { orders: NormalisedOrder[], pagination: { page, limit, total, pages } }.
@@ -2419,6 +2518,29 @@ const realApi = {
         ? [`/orders/${normalizedOrderId}`, `/admin/orders/${normalizedOrderId}`]
         : [`/me/orders/${normalizedOrderId}`, `/orders/my/${normalizedOrderId}`];
 
+      let lastError = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await http.get(endpoint);
+          const data = unwrap(res);
+          return normaliseOrder(data?.order || data);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('Unable to load order details.');
+    },
+
+    /**
+     * GET /me/orders/:id — personal order details for the authenticated account.
+     */
+    getMineById: async (orderId) => {
+      const normalizedOrderId = String(orderId || '').trim();
+      if (!normalizedOrderId) return null;
+
+      const endpoints = [`/me/orders/${normalizedOrderId}`, `/orders/my/${normalizedOrderId}`];
       let lastError = null;
 
       for (const endpoint of endpoints) {
@@ -2587,6 +2709,27 @@ const realApi = {
       const items = Array.isArray(body.data) ? body.data : (body.deposits || []);
       const pagination = body.pagination || null;
       const summary = body.summary || null;
+      return { items: items.map(normaliseDeposit), pagination, summary };
+    },
+
+    /**
+     * GET /me/deposits — personal topups for the authenticated account.
+     * Used by personal wallet views to avoid supervisor/admin role-based routing.
+     */
+    listMine: async (params = {}) => {
+      const query = new URLSearchParams();
+      if (params.page) query.set('page', String(params.page));
+      if (params.limit) query.set('limit', String(params.limit));
+      if (params.status && params.status !== 'all') query.set('status', params.status);
+      if (params.search) query.set('search', params.search);
+      const qs = query.toString();
+      const endpoint = qs ? `/me/deposits?${qs}` : '/me/deposits';
+      const res = await http.get(endpoint);
+      const body = res.data || {};
+      const data = body.data;
+      const items = Array.isArray(data) ? data : (data?.deposits || data?.items || body.deposits || []);
+      const pagination = body.pagination || data?.pagination || null;
+      const summary = body.summary || data?.summary || null;
       return { items: items.map(normaliseDeposit), pagination, summary };
     },
 
