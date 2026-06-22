@@ -68,9 +68,10 @@ const getProductsPageCopy = (language = 'ar') => (
 
 const Products = () => {
   const user = useAuthStore((state) => state.user);
-  const products = useMediaStore((state) => state.products);
-  const categories = useMediaStore((state) => state.categories);
-  const isLoading = useMediaStore((state) => state.isLoading);
+  const sharedProducts = useMediaStore((state) => state.products);
+  const sharedCategories = useMediaStore((state) => state.categories);
+  const sharedIsLoading = useMediaStore((state) => state.isLoading);
+  const storefrontSnapshot = useMediaStore((state) => state.productSnapshots?.storefront);
   const loadProducts = useMediaStore((state) => state.loadProducts);
   const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const loadCurrencies = useSystemStore((state) => state.loadCurrencies);
@@ -81,7 +82,14 @@ const Products = () => {
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
   const copy = useMemo(() => getProductsPageCopy(language), [language]);
-  const productLoadContext = normalizeRole(user?.role) === ROLES.SUPERVISOR ? 'storefront' : 'auto';
+  const normalizedRole = normalizeRole(user?.role);
+  const usesCustomerStorefront = [ROLES.CUSTOMER, ROLES.SUPERVISOR].includes(normalizedRole);
+  const productLoadContext = usesCustomerStorefront ? 'storefront' : 'auto';
+  const products = usesCustomerStorefront ? (storefrontSnapshot?.products || []) : sharedProducts;
+  const categories = usesCustomerStorefront ? (storefrontSnapshot?.categories || []) : sharedCategories;
+  const isLoading = usesCustomerStorefront
+    ? (!storefrontSnapshot || storefrontSnapshot.isLoading)
+    : sharedIsLoading;
 
   const activeCategoryParam = searchParams.get('category') || '';
   const activeRequestId = searchParams.get('request') || '';

@@ -4,6 +4,7 @@ import useMediaStore from '../../store/useMediaStore';
 import useGroupStore from '../../store/useGroupStore';
 import useAdminStore from '../../store/useAdminStore';
 import apiClient from '../../services/client';
+import { normalizeRole, ROLES } from '../../utils/authRoles';
 
 const AUTH_FORCE_LOGOUT_EVENT = 'auth:force-logout';
 
@@ -17,6 +18,7 @@ const SessionBootstrap = () => {
   const loadProducts = useMediaStore((state) => state.loadProducts);
   const loadGroups = useGroupStore((state) => state.loadGroups);
   const loadUsers = useAdminStore((state) => state.loadUsers);
+  const isSupervisor = normalizeRole(userRole) === ROLES.SUPERVISOR;
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -46,7 +48,9 @@ const SessionBootstrap = () => {
         if (cancelled) return;
 
         await Promise.allSettled([
-          loadProducts({ force: true }),
+          // Supervisor product data is route-specific: storefront pages use safe
+          // personal prices, while management pages load their own admin context.
+          isSupervisor ? Promise.resolve() : loadProducts({ force: true }),
           userRole !== 'customer' ? loadGroups({ force: true }) : Promise.resolve(),
           userRole === 'admin' ? loadUsers({ force: true }) : Promise.resolve(),
         ]);
@@ -60,7 +64,7 @@ const SessionBootstrap = () => {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, token, userId, userRole, refreshProfile, loadProducts, loadGroups, loadUsers]);
+  }, [isAuthenticated, token, userId, userRole, isSupervisor, refreshProfile, loadProducts, loadGroups, loadUsers]);
 
   return null;
 };

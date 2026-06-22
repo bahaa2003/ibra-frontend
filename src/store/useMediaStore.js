@@ -297,6 +297,7 @@ const useMediaStore = create(
       error: null,
       lastLoadedAt: 0,
       lastLoadedContext: 'initial',
+      productSnapshots: {},
 
       resetProducts: () => {
         set({
@@ -304,6 +305,7 @@ const useMediaStore = create(
           categories: mockCategories,
           lastLoadedAt: 0,
           lastLoadedContext: 'initial',
+          productSnapshots: {},
         });
       },
 
@@ -311,19 +313,27 @@ const useMediaStore = create(
         const { force = false } = options || {};
         const loadContext = normalizeProductLoadContext(options);
         const state = get();
-        const hasProducts = Array.isArray(state.products);
-        const hasCategories = Array.isArray(state.categories) && state.categories.length > 0;
+        const contextSnapshot = state.productSnapshots?.[loadContext];
+        const hasProducts = Array.isArray(contextSnapshot?.products);
+        const hasCategories = Array.isArray(contextSnapshot?.categories) && contextSnapshot.categories.length > 0;
         const shouldBypassHydratedCache = isRealProvider && !hasFetchedFromBackendThisSession;
         const isFresh = !shouldBypassHydratedCache
-          && state.lastLoadedContext === loadContext
           && hasProducts
           && hasCategories
-          && (Date.now() - Number(state.lastLoadedAt || 0) < PRODUCTS_CACHE_TTL);
+          && (Date.now() - Number(contextSnapshot?.lastLoadedAt || 0) < PRODUCTS_CACHE_TTL);
 
         if (!force && isFresh) {
+          set({
+            products: contextSnapshot.products,
+            categories: contextSnapshot.categories,
+            isLoading: false,
+            error: null,
+            lastLoadedAt: contextSnapshot.lastLoadedAt,
+            lastLoadedContext: loadContext,
+          });
           return Promise.resolve({
-            products: state.products,
-            categories: state.categories,
+            products: contextSnapshot.products,
+            categories: contextSnapshot.categories,
           });
         }
 
@@ -331,9 +341,23 @@ const useMediaStore = create(
           return productsRequests.get(loadContext);
         }
 
-        set({ isLoading: true, error: null });
+        set((currentState) => ({
+          isLoading: true,
+          error: null,
+          productSnapshots: {
+            ...currentState.productSnapshots,
+            [loadContext]: {
+              ...(currentState.productSnapshots?.[loadContext] || {}),
+              isLoading: true,
+              error: null,
+            },
+          },
+        }));
 
-        const productsRequest = Promise.all([apiClient.products.list({ context: loadContext }), apiClient.categories.list()])
+        const productsRequest = Promise.all([
+          apiClient.products.list({ context: loadContext }),
+          apiClient.categories.list({ context: loadContext }),
+        ])
           .then(async ([products, categories]) => {
             const resolvedCategories = Array.isArray(categories) && categories.length ? categories : [];
 
@@ -358,7 +382,9 @@ const useMediaStore = create(
               });
 
               if (unresolved.length) {
-                const results = await Promise.allSettled(unresolved.map((category) => apiClient.categories.get(category.id)));
+                const results = await Promise.allSettled(
+                  unresolved.map((category) => apiClient.categories.get(category.id, { context: loadContext }))
+                );
                 const resolvedById = new Map();
                 results.forEach((result, index) => {
                   if (result.status === 'fulfilled' && result.value) {
@@ -381,18 +407,36 @@ const useMediaStore = create(
               }
             }
 
-            set({
-              products: normalizeProducts(products, safeCategories),
+            const normalizedProducts = normalizeProducts(products, safeCategories);
+            const loadedAt = Date.now();
+
+            set((currentState) => ({
+              products: normalizedProducts,
               categories: safeCategories,
               isLoading: false,
               error: null,
-              lastLoadedAt: Date.now(),
+              lastLoadedAt: loadedAt,
               lastLoadedContext: loadContext,
-            });
+              productSnapshots: {
+                ...currentState.productSnapshots,
+                [loadContext]: {
+                  products: normalizedProducts,
+                  categories: safeCategories,
+                  isLoading: false,
+                  error: null,
+                  lastLoadedAt: loadedAt,
+                },
+              },
+            }));
 
             if (isRealProvider) {
               hasFetchedFromBackendThisSession = true;
             }
+
+            return {
+              products: normalizedProducts,
+              categories: safeCategories,
+            };
           })
           .catch((error) => {
             const { products, categories } = get();
@@ -403,10 +447,18 @@ const useMediaStore = create(
               set({ categories: mockCategories });
             }
 
-            set({
+            set((currentState) => ({
               isLoading: false,
               error: error?.message || null,
-            });
+              productSnapshots: {
+                ...currentState.productSnapshots,
+                [loadContext]: {
+                  ...(currentState.productSnapshots?.[loadContext] || {}),
+                  isLoading: false,
+                  error: error?.message || null,
+                },
+              },
+            }));
           })
           .finally(() => {
             productsRequests.delete(loadContext);
@@ -608,6 +660,7 @@ const useMediaStore = create(
           products: currentState.products,
           categories: currentState.categories,
           lastLoadedAt: 0,
+          productSnapshots: currentState.productSnapshots,
         };
       },
       migrate: (persistedState) => {

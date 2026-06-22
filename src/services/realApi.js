@@ -1468,13 +1468,7 @@ const realApi = {
       const forceStorefrontContext = context === 'storefront';
       const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? ['/admin/products']
-        : (forceStorefrontContext && getStoredRole() === ROLES.SUPERVISOR)
-          ? [
-          // Supervisors using storefront pages must receive personal, group-priced products.
-          '/me/products',
-          '/products',
-        ]
-          : [
+        : [
           // Documented endpoint for customers.
           '/products',
           // Fallback for deployments that expose customer-scoped products.
@@ -1491,6 +1485,13 @@ const realApi = {
           const normalised = (Array.isArray(products) ? products : []).map(normaliseProduct);
 
           if (!fallback) fallback = normalised;
+
+          // Storefront categories are loaded and normalized separately. Once the
+          // customer catalogue succeeds, keep its complete page/order instead of
+          // replacing it with a role-specific fallback based on category shape.
+          if (forceStorefrontContext && endpoint === '/products') {
+            return normalised;
+          }
 
           // Prefer the endpoint that returns readable category values (name/object vs ObjectId).
           if (productsHaveReadableCategories(normalised)) {
@@ -1731,8 +1732,11 @@ const realApi = {
     /**
      * GET /admin/categories → sendSuccess(res, { categories }, ...)
      */
-    list: async () => {
-      const requestPlan = isAdmin()
+    list: async (options = {}) => {
+      const context = typeof options === 'string' ? options : options?.context;
+      const forceAdminContext = context === 'admin';
+      const forceStorefrontContext = context === 'storefront';
+      const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? ['/admin/categories']
         : [
           // Not documented in API_DOCS, but try if the backend exposes it.
@@ -1761,10 +1765,13 @@ const realApi = {
     /**
      * GET /admin/categories/:id → sendSuccess(res, { category }, ...)
      */
-    get: async (id) => {
+    get: async (id, options = {}) => {
       if (!id) return null;
 
-      const requestPlan = isAdmin()
+      const context = typeof options === 'string' ? options : options?.context;
+      const forceAdminContext = context === 'admin';
+      const forceStorefrontContext = context === 'storefront';
+      const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? [`/admin/categories/${id}`]
         : [
           `/categories/${id}`,
