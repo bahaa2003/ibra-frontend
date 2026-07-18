@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowUpLeft, LoaderCircle, ReceiptText, Wallet } from 'lucide-react';
+import { AlertCircle, ArrowUpLeft, ReceiptText, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -66,9 +66,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
 
   const statusMessage = hasRefreshError
     ? 'تعذر تحديث الرصيد الآن'
-    : isRefreshing
-      ? 'جارٍ تحديث الرصيد'
-      : '';
+    : '';
 
   const handleNavigate = (path) => {
     navigate(path);
@@ -81,7 +79,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
     <section
       dir={dir === 'rtl' ? 'rtl' : 'ltr'}
       className={cn(
-        'sidebar-wallet-shimmer relative isolate overflow-hidden rounded-[16px] border border-[#d3b171]/42 bg-[linear-gradient(145deg,rgba(93,72,33,0.13),rgba(246,215,148,0.1)_38%,rgba(255,251,236,0.82)_100%)] p-2 shadow-[0_12px_22px_-20px_rgba(125,92,33,0.58)]',
+        'sidebar-wallet-shimmer relative isolate overflow-hidden rounded-[18px] border border-[#d3b171]/45 bg-[linear-gradient(145deg,rgba(93,72,33,0.16),rgba(246,215,148,0.12)_38%,rgba(255,251,236,0.88)_100%)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_16px_30px_-24px_rgba(125,92,33,0.72)] dark:border-[#f0c66f]/24 dark:bg-[linear-gradient(145deg,rgba(240,198,111,0.14),rgba(30,24,15,0.92)_58%,rgba(12,12,11,0.96))]',
         'before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(255,243,200,0.56),transparent_45%)] before:opacity-80',
         className
       )}
@@ -89,7 +87,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
       <div className="relative z-10 space-y-1.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-bold tracking-[0.08em] text-[#8d6a2d]">
+            <p className="text-[9px] font-bold tracking-[0.1em] text-[#8d6a2d] dark:text-[#e2c477]">
               رصيد المحفظة
             </p>
             <div className="mt-0.5 min-h-[1.45rem]">
@@ -99,7 +97,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
                   <div className="h-4 w-24 animate-pulse rounded-full bg-[#cba665]/35" />
                 </div>
               ) : (
-                <p className={`truncate text-[0.98rem] font-black tracking-[-0.02em] sm:text-[1.05rem] ${isNegativeBalance ? 'text-[#b42323]' : 'text-[#6f4f18]'}`}>
+                <p className={`truncate text-[1rem] font-black tracking-[-0.025em] sm:text-[1.08rem] ${isNegativeBalance ? 'text-[#b42323]' : 'text-[#6f4f18] dark:text-[#fff1c5]'}`}>
                   {walletDisplayValue}
                 </p>
               )}
@@ -111,10 +109,9 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
           </span>
         </div>
 
-        {(hasRefreshError || isRefreshing) && (
+        {hasRefreshError && (
         <div className="flex min-h-[0.9rem] items-center gap-1 text-[9px] font-medium text-[#8f6e36]">
           {hasRefreshError ? <AlertCircle className="h-3 w-3 shrink-0" /> : null}
-          {isRefreshing ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : null}
           <span className="truncate">{statusMessage}</span>
         </div>
         )}
@@ -123,7 +120,7 @@ const WalletSidebarCard = ({ className, isVisible = true, onNavigate }) => {
           <button
             type="button"
             onClick={() => handleNavigate('/wallet')}
-            className="inline-flex h-7 items-center justify-center gap-1 rounded-[11px] border border-[#d8bd8b]/62 bg-white/62 px-2 text-[10px] font-semibold text-[#7b5a1f] transition-all hover:-translate-y-0.5 hover:border-[#caa159] hover:bg-white/82"
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-[10px] border border-[#d8bd8b]/62 bg-white/68 px-2 text-[10px] font-semibold text-[#7b5a1f] transition-all hover:-translate-y-0.5 hover:border-[#caa159] hover:bg-white/88 dark:border-white/10 dark:bg-white/6 dark:text-[#ead28e] dark:hover:bg-white/10"
           >
             <ReceiptText className="h-3 w-3" />
             <span>تفاصيل</span>

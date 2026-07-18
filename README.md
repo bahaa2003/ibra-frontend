@@ -129,7 +129,6 @@ Route page components. Important groups:
 | `src/pages/ApiDocs.jsx` | API token/developer documentation for users with API access enabled. |
 | `src/pages/CreatedByPage.jsx`, `src/pages/About.jsx` | Informational pages. |
 | `src/pages/admin/` | Admin and supervisor operational pages. |
-| `src/pages/wallet/` | Duplicate/legacy wallet page files. The active router imports the root-level wallet pages. |
 
 ### `src/pages/admin`
 
@@ -162,7 +161,7 @@ Route page components. Important groups:
 | `src/components/account/` | OTP input and 2FA card. |
 | `src/components/admin/` | Admin broadcast modal. |
 | `src/components/admin-dashboard/` | Admin dashboard widgets. |
-| `src/components/home/`, `src/components/payment/`, `src/components/settings/`, `src/components/notifications/` | Feature-specific reusable UI. |
+| `src/components/home/`, `src/components/settings/`, `src/components/notifications/` | Feature-specific reusable UI. |
 
 ### `src/services`
 
@@ -208,7 +207,7 @@ Important utilities include:
 | `navigation.js` | Route navigation helpers. |
 | `imageUrl.js` | Image URL normalization using API base URL. |
 | `validation.js` | Product validation helpers. |
-| `money.js`, `pricing.js`, `intlFormat.js`, `currencyCountryMap.js` | Currency, price, and formatting helpers. |
+| `money.js`, `pricing.js`, `intlFormat.js` | Currency, price, and formatting helpers. |
 | `orders.js`, `orderStatus.js`, `productStatus.js`, `productPurchase.js` | Order/product status and purchase helpers. |
 | `paymentSettings.js` | Payment settings helpers. |
 | `transactionCurrency.js` | Transaction currency helpers. |
@@ -847,10 +846,6 @@ The real client exposes grouped methods. Endpoint details below are based on the
 | `notifications.createBroadcast` | `POST /notifications` | Broadcast notification. |
 | `audit.list` | `GET /admin/audit` | Admin audit list. |
 | `audit.actorLogs` | `GET /admin/audit/actor/:actorId` | Logs by actor. |
-
-### Legacy API Helper
-
-`src/services/api.js` defines a separate Axios helper and a `fetchProducts` fallback, but no active imports were found from current pages/stores. Treat it as legacy unless a future route imports it.
 
 ### Direct Browser-Side External Services
 
@@ -2154,10 +2149,8 @@ These items are based on static inspection and should be verified before major c
 2. `VITE_DATA_PROVIDER` defaults to mock mode when unset, which can surprise developers expecting real backend data.
 3. `.env.local` can override `.env.development` and currently points at a production backend URL.
 4. `GEMINI_API_KEY`, `APP_URL`, `@google/genai`, `better-sqlite3`, `dotenv`, and `express` appear in frontend config/dependencies but no active `src` usage was found.
-5. `src/services/api.js` appears to be legacy/unused by the current store-based API layer.
-6. `src/pages/wallet/` contains duplicate/legacy wallet page files; active routes import root-level wallet pages.
-7. There is no dedicated 404 page; unknown routes redirect to `/`.
-8. Supervisor `getDefaultRouteForRole()` currently sends supervisors to `/dashboard`, not an admin/supervisor dashboard.
+5. There is no dedicated 404 page; unknown routes redirect to `/`.
+6. Supervisor `getDefaultRouteForRole()` currently sends supervisors to `/dashboard`, not an admin/supervisor dashboard.
 9. Supervisor permission fallback can display default permissions if backend returns none.
 10. Some permission keys are defined in the supervisor UI but are not route guards or action-level guards.
 11. `products.manage` sidebar behavior does not exactly match the `/admin/products` route requirement of `products.view`.

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
+  Ban,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -9,6 +10,8 @@ import {
   MailCheck,
   RotateCcw,
   Search,
+  Settings,
+  Trash2,
   UserCheck,
   UserMinus,
   UserX,
@@ -44,7 +47,7 @@ import { normalizeRole, ROLES, userHasPermission } from '../../utils/authRoles';
 const FILTER_OPTIONS = ['all', 'pending', 'approved', 'rejected', 'deleted'];
 
 const summaryCardClassName =
-  'rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.8)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-2.5 shadow-[var(--shadow-subtle)]';
+  'min-w-0 flex-1 basis-0 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.8)] bg-[color:rgb(var(--color-card-rgb)/0.84)] p-1.5 shadow-[var(--shadow-subtle)] sm:p-2.5';
 
 const compactButtonClassName = 'h-8 rounded-[var(--radius-sm)] px-2.5 text-[11px]';
 const compactFieldClassName =
@@ -159,6 +162,7 @@ const AdminUsers = () => {
   const { i18n } = useTranslation();
 
   const [filter, setFilter] = useState(initialFilter);
+  const [balanceFilter, setBalanceFilter] = useState('highest');
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -180,6 +184,7 @@ const AdminUsers = () => {
   const [manualPassword, setManualPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+  const [openActionsUserId, setOpenActionsUserId] = useState(null);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
@@ -195,6 +200,18 @@ const AdminUsers = () => {
     if (!FILTER_OPTIONS.includes(statusFromQuery)) return;
     setFilter(statusFromQuery);
   }, [statusFromQuery]);
+
+  useEffect(() => {
+    if (!openActionsUserId) return undefined;
+
+    const handleOutsidePress = (event) => {
+      if (event.target instanceof Element && event.target.closest('[data-user-actions-menu]')) return;
+      setOpenActionsUserId(null);
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePress);
+    return () => document.removeEventListener('pointerdown', handleOutsidePress);
+  }, [openActionsUserId]);
 
   useEffect(() => {
     if (!selectedUser?.id) return;
@@ -238,9 +255,19 @@ const AdminUsers = () => {
     [deletedCustomerUsers]
   );
 
+  const walletByUserId = useMemo(
+    () => new Map((wallets || []).map((entry) => [String(entry?.userId || entry?.id || '').trim(), entry])),
+    [wallets]
+  );
+
   const filteredUsers = useMemo(() => {
     const normalizedSearch = String(search || '').trim().toLowerCase();
     const sourceUsers = filter === 'deleted' ? deletedCustomerUsers : customerUsers;
+
+    const getEntryBalance = (entry) => getWalletBalanceValue(
+      entry,
+      walletByUserId.get(getEntityId(entry)) || null
+    );
 
     return [...sourceUsers]
       .filter((entry) => {
@@ -258,18 +285,17 @@ const AdminUsers = () => {
           entry?.id,
         ].join(' ').toLowerCase();
         const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch);
-        return matchesFilter && matchesSearch;
+        const matchesBalance = balanceFilter !== 'debtor' || getEntryBalance(entry) < 0;
+        return matchesFilter && matchesSearch && matchesBalance;
       })
       .sort((left, right) => {
-        return Number(right?.walletBalance ?? right?.coins ?? right?.balance ?? 0)
-          - Number(left?.walletBalance ?? left?.coins ?? left?.balance ?? 0);
+        const leftBalance = getEntryBalance(left);
+        const rightBalance = getEntryBalance(right);
+        return balanceFilter === 'highest'
+          ? rightBalance - leftBalance
+          : leftBalance - rightBalance;
       });
-  }, [customerUsers, deletedCustomerUsers, filter, search]);
-
-  const walletByUserId = useMemo(
-    () => new Map((wallets || []).map((entry) => [String(entry?.userId || entry?.id || '').trim(), entry])),
-    [wallets]
-  );
+  }, [balanceFilter, customerUsers, deletedCustomerUsers, filter, search, walletByUserId]);
 
   const openDetails = async (entry) => {
     setSelectedUser(entry);
@@ -641,20 +667,47 @@ const AdminUsers = () => {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
-    const shouldDelete = window.confirm(`Delete ${selectedUser.name}?`);
+  const handleDeleteUser = async (entry = selectedUser) => {
+    if (!entry?.id) return;
+    const shouldDelete = window.confirm(`هل تريد حذف حساب ${entry.name} نهائيًا؟`);
     if (!shouldDelete) return;
 
     try {
-      await deleteUser(selectedUser.id, actor);
+      setIsSubmitting(true);
+      await deleteUser(entry.id, actor);
       addToast('تم حذف المستخدم.', 'success');
+      setOpenActionsUserId(null);
       setIsDetailsOpen(false);
       setSelectedUser(null);
       await loadUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر حذف المستخدم.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleBlockUser = async (entry) => {
+    if (!entry?.id) return;
+    if (!window.confirm(`هل تريد حظر حساب ${entry.name}؟`)) return;
+
+    try {
+      setIsSubmitting(true);
+      await updateUserStatus(entry.id, 'rejected', actor);
+      addToast('تم حظر الحساب بنجاح.', 'success');
+      setOpenActionsUserId(null);
+      await loadUsers({ force: true });
+    } catch (error) {
+      addToast(error?.message || 'تعذر حظر الحساب.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openUserTransactions = (entry) => {
+    if (!entry?.id) return;
+    setOpenActionsUserId(null);
+    navigate(`/admin/users/${entry.id}/transactions`);
   };
 
   const handleRestoreUser = async (entry = selectedUser) => {
@@ -730,64 +783,75 @@ const AdminUsers = () => {
             className={compactFieldClassName}
           />
 
-          <select
-            className={`border border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] ${compactFieldClassName}`}
-            value={filter}
-            onChange={(event) => handleFilterChange(event.target.value)}
-          >
-            <option value="all">كل الحالات</option>
-            <option value="pending">بانتظار التفعيل</option>
-            <option value="approved">مفعّل</option>
-            <option value="rejected">مرفوض</option>
-            <option value="deleted">محذوفة</option>
-          </select>
+          <div className="grid gap-1.5">
+            <select
+              className={`border border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] ${compactFieldClassName}`}
+              value={filter}
+              onChange={(event) => handleFilterChange(event.target.value)}
+            >
+              <option value="all">كل الحالات</option>
+              <option value="pending">بانتظار التفعيل</option>
+              <option value="approved">مفعّل</option>
+              <option value="rejected">مرفوض</option>
+              <option value="deleted">محذوفة</option>
+            </select>
+            <select
+              className={`border border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] text-[var(--color-text)] outline-none transition focus:border-[color:rgb(var(--color-primary-rgb)/0.45)] ${compactFieldClassName}`}
+              value={balanceFilter}
+              onChange={(event) => setBalanceFilter(event.target.value)}
+            >
+              <option value="highest">الأعلى رصيدًا</option>
+              <option value="lowest">الأقل رصيدًا</option>
+              <option value="debtor">المدين</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-1.5 md:grid-cols-4">
+      <div className="flex flex-nowrap gap-1.5">
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات بانتظار التفعيل</p>
-              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(pendingCount, locale)}</p>
+          <div className="flex items-center justify-center text-center sm:justify-between sm:gap-2 sm:text-start">
+            <div className="min-w-0">
+              <p className="text-[8px] leading-3 text-[var(--color-text-secondary)] sm:text-[10px]">حسابات بانتظار التفعيل</p>
+              <p className="mt-0.5 text-base font-bold text-[var(--color-text)] sm:mt-1 sm:text-lg">{formatNumber(pendingCount, locale)}</p>
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-warning-rgb)/0.12)] text-[var(--color-warning)]">
+            <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-warning-rgb)/0.12)] text-[var(--color-warning)] sm:flex">
               <UserCheck className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
 
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات مفعّلة</p>
-              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(approvedCount, locale)}</p>
+          <div className="flex items-center justify-center text-center sm:justify-between sm:gap-2 sm:text-start">
+            <div className="min-w-0">
+              <p className="text-[8px] leading-3 text-[var(--color-text-secondary)] sm:text-[10px]">حسابات مفعّلة</p>
+              <p className="mt-0.5 text-base font-bold text-[var(--color-text)] sm:mt-1 sm:text-lg">{formatNumber(approvedCount, locale)}</p>
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-success-rgb)/0.12)] text-[var(--color-success)]">
+            <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-success-rgb)/0.12)] text-[var(--color-success)] sm:flex">
               <CheckCircle2 className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
 
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات مرفوضة</p>
-              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(rejectedCount, locale)}</p>
+          <div className="flex items-center justify-center text-center sm:justify-between sm:gap-2 sm:text-start">
+            <div className="min-w-0">
+              <p className="text-[8px] leading-3 text-[var(--color-text-secondary)] sm:text-[10px]">حسابات مرفوضة</p>
+              <p className="mt-0.5 text-base font-bold text-[var(--color-text)] sm:mt-1 sm:text-lg">{formatNumber(rejectedCount, locale)}</p>
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-error-rgb)/0.12)] text-[var(--color-error)]">
+            <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-error-rgb)/0.12)] text-[var(--color-error)] sm:flex">
               <UserX className="h-3.5 w-3.5" />
             </div>
           </div>
         </div>
 
         <div className={summaryCardClassName}>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] text-[var(--color-text-secondary)]">حسابات محذوفة</p>
-              <p className="mt-1 text-lg font-bold text-[var(--color-text)]">{formatNumber(deletedCount, locale)}</p>
+          <div className="flex items-center justify-center text-center sm:justify-between sm:gap-2 sm:text-start">
+            <div className="min-w-0">
+              <p className="text-[8px] leading-3 text-[var(--color-text-secondary)] sm:text-[10px]">حسابات محذوفة</p>
+              <p className="mt-0.5 text-base font-bold text-[var(--color-text)] sm:mt-1 sm:text-lg">{formatNumber(deletedCount, locale)}</p>
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-text-rgb)/0.08)] text-[var(--color-text-secondary)]">
+            <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[color:rgb(var(--color-text-rgb)/0.08)] text-[var(--color-text-secondary)] sm:flex">
               <RotateCcw className="h-3.5 w-3.5" />
             </div>
           </div>
@@ -801,7 +865,11 @@ const AdminUsers = () => {
           const balanceValue = getWalletBalanceValue(entry, walletPreview);
 
           return (
-          <Card key={entry.id} variant="elevated" className="p-3">
+          <Card
+            key={entry.id}
+            variant="elevated"
+            className={`relative p-3 ${openActionsUserId === entry.id ? 'z-20 overflow-visible ring-1 ring-[color:rgb(var(--color-primary-rgb)/0.2)]' : ''}`}
+          >
             <div className="flex items-start gap-2.5">
               <img
                 src={entry.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(entry.name || 'User')}&background=random`}
@@ -811,7 +879,7 @@ const AdminUsers = () => {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">{entry.name}</p>
+                    <p className="truncate text-sm font-extrabold text-slate-950 dark:text-white">{entry.name}</p>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">{entry.email}</p>
                     <span className={`mt-1.5 ${getBalanceBadgeTone(balanceValue)}`}>
                       <Wallet className="h-3 w-3" />
@@ -843,8 +911,41 @@ const AdminUsers = () => {
               )}
               <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                 <Eye className="h-3.5 w-3.5" />
-                عرض التفاصيل
+                تفاصيل
               </Button>
+              <div className="relative ms-auto" data-user-actions-menu>
+                <Button
+                  size="sm"
+                  className="h-8 w-8 rounded-full border-amber-500/55 bg-amber-100 p-0 text-amber-800 shadow-[0_8px_22px_-12px_rgba(217,119,6,0.95)] hover:border-amber-500 hover:bg-amber-200 hover:text-amber-950 dark:border-amber-300/45 dark:bg-amber-400/15 dark:text-amber-200 dark:hover:bg-amber-400/25 dark:hover:text-amber-100"
+                  variant="outline"
+                  onClick={() => setOpenActionsUserId((current) => current === entry.id ? null : entry.id)}
+                  aria-expanded={openActionsUserId === entry.id}
+                  aria-label="إعدادات الحساب"
+                  title="إعدادات الحساب"
+                >
+                  <Settings className={`h-4 w-4 transition-transform ${openActionsUserId === entry.id ? 'rotate-90' : ''}`} />
+                </Button>
+
+                {openActionsUserId === entry.id ? (
+                  <div className="absolute bottom-full end-0 z-50 mb-2 w-48 overflow-hidden rounded-2xl border border-[color:rgb(var(--color-primary-rgb)/0.3)] bg-[color:rgb(var(--color-card-rgb)/0.98)] p-1.5 shadow-[0_22px_55px_-20px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                    <div className="mb-1 border-b border-[color:rgb(var(--color-border-rgb)/0.7)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--color-primary-hover)]">إعدادات الحساب</div>
+                    <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-[var(--color-text)] transition hover:bg-[color:rgb(var(--color-primary-rgb)/0.11)]" onClick={() => { setOpenActionsUserId(null); openDetails(entry); }}>
+                      <Eye className="h-3.5 w-3.5" /> عرض التفاصيل
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-[var(--color-text)] transition hover:bg-[color:rgb(var(--color-primary-rgb)/0.11)]" onClick={() => openUserTransactions(entry)}>
+                      <Wallet className="h-3.5 w-3.5" /> المحفظة والسجل
+                    </button>
+                    {filter !== 'deleted' ? (
+                      <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10" onClick={() => handleBlockUser(entry)} disabled={isSubmitting}>
+                        <Ban className="h-3.5 w-3.5" /> حظر الحساب
+                      </button>
+                    ) : null}
+                    <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10" onClick={() => handleDeleteUser(entry)} disabled={isSubmitting}>
+                      <Trash2 className="h-3.5 w-3.5" /> الحذف النهائي
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </Card>
         )})}
@@ -857,8 +958,8 @@ const AdminUsers = () => {
         )}
       </div>
 
-      <div className="admin-premium-panel hidden overflow-hidden md:block">
-        <Table className="text-xs">
+      <div className="admin-premium-panel hidden overflow-visible md:block">
+        <Table className="text-xs" containerClassName="overflow-visible">
           <TableHeader>
             <TableRow>
               <TableHead className={compactTableHeadClassName}>المستخدم</TableHead>
@@ -923,6 +1024,39 @@ const AdminUsers = () => {
                     <Button size="sm" className={compactButtonClassName} variant="outline" onClick={() => openDetails(entry)}>
                       عرض التفاصيل
                     </Button>
+                    <div className="relative" data-user-actions-menu>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 rounded-full border-amber-500/55 bg-amber-100 p-0 text-amber-800 shadow-[0_8px_22px_-12px_rgba(217,119,6,0.95)] hover:border-amber-500 hover:bg-amber-200 hover:text-amber-950 dark:border-amber-300/45 dark:bg-amber-400/15 dark:text-amber-200 dark:hover:bg-amber-400/25 dark:hover:text-amber-100"
+                        onClick={() => setOpenActionsUserId((current) => current === entry.id ? null : entry.id)}
+                        aria-expanded={openActionsUserId === entry.id}
+                        aria-label="إعدادات الحساب"
+                        title="إعدادات الحساب"
+                      >
+                        <Settings className={`h-4 w-4 transition-transform ${openActionsUserId === entry.id ? 'rotate-90' : ''}`} />
+                      </Button>
+
+                      {openActionsUserId === entry.id ? (
+                        <div className="absolute end-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-[color:rgb(var(--color-primary-rgb)/0.3)] bg-[color:rgb(var(--color-card-rgb)/0.98)] p-1.5 text-start shadow-[0_22px_55px_-20px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                          <div className="mb-1 border-b border-[color:rgb(var(--color-border-rgb)/0.7)] px-2.5 py-1.5 text-[10px] font-bold text-[var(--color-primary-hover)]">إعدادات الحساب</div>
+                          <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-[var(--color-text)] transition hover:bg-[color:rgb(var(--color-primary-rgb)/0.11)]" onClick={() => { setOpenActionsUserId(null); openDetails(entry); }}>
+                            <Eye className="h-3.5 w-3.5" /> عرض التفاصيل
+                          </button>
+                          <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-[var(--color-text)] transition hover:bg-[color:rgb(var(--color-primary-rgb)/0.11)]" onClick={() => openUserTransactions(entry)}>
+                            <Wallet className="h-3.5 w-3.5" /> المحفظة والسجل
+                          </button>
+                          {filter !== 'deleted' ? (
+                            <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10" onClick={() => handleBlockUser(entry)} disabled={isSubmitting}>
+                              <Ban className="h-3.5 w-3.5" /> حظر الحساب
+                            </button>
+                          ) : null}
+                          <button type="button" className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-start text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10" onClick={() => handleDeleteUser(entry)} disabled={isSubmitting}>
+                            <Trash2 className="h-3.5 w-3.5" /> الحذف النهائي
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </TableCell>
               </TableRow>
@@ -1289,7 +1423,7 @@ const AdminUsers = () => {
                 استرجاع الحساب
               </Button>
             ) : (
-              <Button variant="danger" className={compactButtonClassName} onClick={handleDeleteUser}>
+              <Button variant="danger" className={compactButtonClassName} onClick={() => handleDeleteUser()}>
                 حذف المستخدم
               </Button>
             )}

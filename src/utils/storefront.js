@@ -1,5 +1,3 @@
-import buyCardsImage from '../assets/buyCards.webp';
-import chatAppsImage from '../assets/chatApps.webp';
 import gamesChargingImage from '../assets/gamesCharging.webp';
 import brandIconImage from '../assets/logo-optimized.webp';
 import { calculateProductPrice } from './pricing';
@@ -16,7 +14,7 @@ const CATEGORY_DISPLAY_CONFIG = {
     subtitleEn: 'Luxury storefront overview',
   },
   apps: {
-    image: chatAppsImage,
+    image: brandIconImage,
     titleAr: 'تطبيقات مميزة',
     titleEn: 'Premium Apps',
     subtitleAr: 'اشتراكات وخدمات رقمية',
@@ -30,7 +28,7 @@ const CATEGORY_DISPLAY_CONFIG = {
     subtitleEn: 'Fast secure delivery',
   },
   cards: {
-    image: buyCardsImage,
+    image: brandIconImage,
     titleAr: 'بطاقات رقمية',
     titleEn: 'Digital Cards',
     subtitleAr: 'بطاقات هدايا ومدفوعات',

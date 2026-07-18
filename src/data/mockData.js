@@ -1,6 +1,4 @@
-﻿import chatAppsImage from '../assets/chatApps.webp';
 import gamesChargingImage from '../assets/gamesCharging.webp';
-import buyCardsImage from '../assets/buyCards.webp';
 
 export const mockUsers = [
   {
@@ -90,9 +88,9 @@ export const mockUsers = [
 ];
 
 export const mockCategories = [
-  { id: 'apps', name: 'Chat Apps', nameAr: '\u0628\u0631\u0627\u0645\u062c \u062f\u0631\u062f\u0634\u0629', image: chatAppsImage },
+  { id: 'apps', name: 'Chat Apps', nameAr: '\u0628\u0631\u0627\u0645\u062c \u062f\u0631\u062f\u0634\u0629' },
   { id: 'games', name: 'Games', nameAr: '\u0623\u0644\u0639\u0627\u0628', image: gamesChargingImage },
-  { id: 'cards', name: 'Digital Cards', nameAr: '\u0628\u0637\u0627\u0642\u0627\u062a \u0631\u0642\u0645\u064a\u0629', image: buyCardsImage }
+  { id: 'cards', name: 'Digital Cards', nameAr: '\u0628\u0637\u0627\u0642\u0627\u062a \u0631\u0642\u0645\u064a\u0629' }
 ];
 
 export const mockGroups = [

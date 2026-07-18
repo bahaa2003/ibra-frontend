@@ -10,8 +10,10 @@ const StoreFooter = ({
   copyright,
   metaLine,
   signature,
+  hideBrand = false,
 }) => (
   <footer className="overflow-hidden rounded-[1.35rem] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-card-rgb)/0.93)] px-3.5 py-3.5 shadow-[var(--shadow-subtle)] sm:px-4 sm:py-4">
+    {!hideBrand ? (
     <div className={`grid gap-3 ${chips.length ? 'lg:grid-cols-[1fr_auto] lg:items-center' : ''}`}>
       <div className="flex items-start gap-2.5">
         <div className="relative h-9 w-9 shrink-0 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgb(var(--color-primary-rgb)/0.56),rgb(var(--color-card-rgb)/0.98)_48%,rgb(var(--color-primary-rgb)/0.18))] p-[2px] shadow-[0_12px_24px_-18px_rgb(var(--color-primary-rgb)/0.68)] sm:h-10 sm:w-10">
@@ -48,10 +50,11 @@ const StoreFooter = ({
         </div>
       ) : null}
     </div>
+    ) : null}
 
     {(copyright || metaLine || signature) ? (
       <>
-        <div className="soft-divider my-3" />
+        {!hideBrand ? <div className="soft-divider my-3" /> : null}
 
         <div className="space-y-2">
           <div className={`flex flex-col gap-2 text-[0.67rem] text-[var(--color-muted)] ${metaLine ? 'sm:flex-row sm:items-center sm:justify-between' : 'items-center text-center'}`}>

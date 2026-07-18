@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, Info, Search, Check, Package } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, Info, Search, Check, Package } from 'lucide-react';
 import { resolveImageUrl } from '../../utils/imageUrl';
 import { uploadImage } from '../../services/realApi';
 import useMediaStore from '../../store/useMediaStore';
@@ -407,6 +407,7 @@ const AdminProducts = () => {
     const productTableColumnCount = 5 + (showProviderColumn ? 1 : 0) + (showPriceColumn ? 1 : 0);
 
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    const [productFormStep, setProductFormStep] = useState(1);
     const [editingProduct, setEditingProduct] = useState(null);
     const [isSavingProduct, setIsSavingProduct] = useState(false);
     const [togglingProductId, setTogglingProductId] = useState(null);
@@ -419,6 +420,9 @@ const AdminProducts = () => {
     const [editingCategory, setEditingCategory] = useState(null);
     const [isSavingCategory, setIsSavingCategory] = useState(false);
     const [selectedProductsCategory, setSelectedProductsCategory] = useState('all');
+    const [productSearchQuery, setProductSearchQuery] = useState('');
+    const [productsPage, setProductsPage] = useState(1);
+    const [productsPerPage, setProductsPerPage] = useState(20);
 
     const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
     const [deleteCategoryTarget, setDeleteCategoryTarget] = useState(null);
@@ -522,23 +526,55 @@ const AdminProducts = () => {
         return String(left?.name || '').localeCompare(String(right?.name || ''), isEnglish ? 'en' : 'ar');
     }), [categories, isEnglish]);
 
+    const topLevelAdminCategories = useMemo(
+        () => sortedAdminCategories.filter((category) => !String(category?.parentCategory || '').trim()),
+        [sortedAdminCategories]
+    );
+
+    const subAdminCategories = useMemo(
+        () => sortedAdminCategories.filter((category) => String(category?.parentCategory || '').trim()),
+        [sortedAdminCategories]
+    );
+
     const selectedProductsCategoryLabel = useMemo(() => {
         if (selectedProductsCategory === 'all') return isEnglish ? 'All categories' : 'كل الأقسام';
         const matchedCategory = sortedAdminCategories.find((category) => String(category.id) === String(selectedProductsCategory));
         return matchedCategory?.name || matchedCategory?.nameAr || selectedProductsCategory;
     }, [isEnglish, selectedProductsCategory, sortedAdminCategories]);
 
-    const visibleAdminProducts = useMemo(
-        () => selectedProductsCategory === 'all'
+    const visibleAdminProducts = useMemo(() => {
+        const categoryProducts = selectedProductsCategory === 'all'
             ? sortedAdminProducts
-            : sortedAdminProducts.filter((product) => String(product?.category || '') === String(selectedProductsCategory)),
-        [selectedProductsCategory, sortedAdminProducts]
-    );
+            : sortedAdminProducts.filter((product) => String(product?.category || '') === String(selectedProductsCategory));
+        const query = productSearchQuery.trim().toLocaleLowerCase(isEnglish ? 'en' : 'ar');
+        if (!query) return categoryProducts;
+
+        return categoryProducts.filter((product) => {
+            const categoryName = categories.find((category) => String(category.id) === String(product?.category))?.name || '';
+            return [product?.name, product?.nameAr, product?.id, product?.providerName, categoryName]
+                .map((value) => String(value || '').toLocaleLowerCase(isEnglish ? 'en' : 'ar'))
+                .some((value) => value.includes(query));
+        });
+    }, [categories, isEnglish, productSearchQuery, selectedProductsCategory, sortedAdminProducts]);
 
     const activeProductsInSelectedCategory = useMemo(
         () => visibleAdminProducts.filter((product) => String(product?.status || '').toLowerCase() === 'active').length,
         [visibleAdminProducts]
     );
+
+    const productsPageCount = Math.max(1, Math.ceil(visibleAdminProducts.length / productsPerPage));
+    const paginatedAdminProducts = useMemo(() => {
+        const startIndex = (productsPage - 1) * productsPerPage;
+        return visibleAdminProducts.slice(startIndex, startIndex + productsPerPage);
+    }, [productsPage, productsPerPage, visibleAdminProducts]);
+
+    useEffect(() => {
+        setProductsPage(1);
+    }, [productSearchQuery, productsPerPage, selectedProductsCategory]);
+
+    useEffect(() => {
+        setProductsPage((currentPage) => Math.min(currentPage, productsPageCount));
+    }, [productsPageCount]);
 
     useEffect(() => {
         loadProducts();
@@ -854,6 +890,8 @@ const AdminProducts = () => {
             addToast(isEnglish ? 'Only admins can create products.' : 'إنشاء المنتجات متاح للأدمن فقط.', 'error');
             return;
         }
+
+        setProductFormStep(1);
 
         if (product) {
             const linkedProviderId = String(product.providerId || product.supplierId || '').trim();
@@ -1416,6 +1454,93 @@ const AdminProducts = () => {
         || currentLinkageProductName
     );
 
+    const renderCategoryList = (categoryItems, emptyLabel, showParent = false) => (
+        <>
+            <div className="space-y-2 p-3 md:hidden">
+                {categoryItems.map((category) => {
+                    const parent = showParent
+                        ? sortedAdminCategories.find((item) => String(item.id) === String(category.parentCategory))
+                        : null;
+                    return (
+                        <div key={category.id} className="rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.82)] p-3 shadow-[var(--shadow-subtle)]">
+                            <div className="flex items-center gap-3">
+                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.74)] bg-[color:rgb(var(--color-elevated-rgb)/0.8)]">
+                                    {category.image ? (
+                                        <img src={resolveImageUrl(category.image)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[var(--color-muted)]"><Package className="h-5 w-5" /></div>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-bold text-[var(--color-text)]">{category.name || category.nameAr || '-'}</p>
+                                    {parent ? <p className="mt-0.5 truncate text-[11px] text-[var(--color-muted)]">{isEnglish ? 'Parent' : 'القسم الرئيسي'}: {parent.name || parent.nameAr}</p> : null}
+                                    <div className="mt-1.5 flex items-center gap-2 text-[11px] text-[var(--color-text-secondary)]">
+                                        <span>{isEnglish ? 'Order' : 'الترتيب'}</span>
+                                        <Badge variant="outline">{Number(category?.sortOrder ?? category?.displayOrder ?? 0)}</Badge>
+                                    </div>
+                                </div>
+                            </div>
+                            {canManageProducts ? (
+                                <div className="mt-3 flex gap-2 border-t border-[color:rgb(var(--color-border-rgb)/0.7)] pt-3">
+                                    <Button size="sm" variant="outline" className="flex-1" onClick={() => openCategoryModal(category)}>
+                                        <Edit className="h-4 w-4" /> {isEnglish ? 'Edit' : 'تعديل'}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => requestDeleteCategory(category)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+                {!categoryItems.length ? <div className="py-8 text-center text-sm text-[var(--color-muted)]">{emptyLabel}</div> : null}
+            </div>
+
+            <div className="hidden md:block">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>{isEnglish ? 'Name' : 'الاسم'}</TableHead>
+                            {showParent ? <TableHead className="text-center">{isEnglish ? 'Parent category' : 'القسم الرئيسي'}</TableHead> : null}
+                            <TableHead className="text-center">{isEnglish ? 'Order' : 'الترتيب'}</TableHead>
+                            <TableHead className="text-end">{isEnglish ? 'Actions' : 'الإجراءات'}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {categoryItems.map((category) => {
+                            const parent = showParent
+                                ? sortedAdminCategories.find((item) => String(item.id) === String(category.parentCategory))
+                                : null;
+                            return (
+                                <TableRow key={category.id}>
+                                    <TableCell>
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+                                                {category.image ? <img src={resolveImageUrl(category.image)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-gray-400"><Package className="h-5 w-5" /></div>}
+                                            </div>
+                                            <div className="truncate font-medium text-gray-900 dark:text-white">{category.name || category.nameAr || '-'}</div>
+                                        </div>
+                                    </TableCell>
+                                    {showParent ? <TableCell className="text-center"><Badge variant="secondary">{parent?.name || parent?.nameAr || '-'}</Badge></TableCell> : null}
+                                    <TableCell className="text-center"><Badge variant="outline">{Number(category?.sortOrder ?? category?.displayOrder ?? 0)}</Badge></TableCell>
+                                    <TableCell className="text-end">
+                                        {canManageProducts ? (
+                                            <div className="flex justify-end gap-2">
+                                                <Button size="sm" variant="ghost" onClick={() => openCategoryModal(category)}><Edit className="h-4 w-4" /></Button>
+                                                <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => requestDeleteCategory(category)}><Trash2 className="h-4 w-4" /></Button>
+                                            </div>
+                                        ) : <span className="text-xs text-[var(--color-text-secondary)]">{isEnglish ? 'Read only' : 'عرض فقط'}</span>}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                        {!categoryItems.length ? <TableRow><TableCell colSpan={showParent ? 4 : 3} className="py-8 text-center text-sm text-gray-500">{emptyLabel}</TableCell></TableRow> : null}
+                    </TableBody>
+                </Table>
+            </div>
+        </>
+    );
+
     return (
         <div className="min-w-0 space-y-6">
             <section className="admin-premium-hero">
@@ -1429,79 +1554,30 @@ const AdminProducts = () => {
             <div className="admin-premium-panel overflow-hidden">
                 <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{isEnglish ? 'Catalog (Categories)' : 'الكاتلوج (الأقسام)'}</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{isEnglish ? 'Categories' : 'الأقسام'}</h2>
                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {isEnglish ? 'Control category display order (lower number shows first).' : 'حدد ترتيب ظهور الأقسام (الرقم الأقل يظهر أولاً).'}
+                            {isEnglish ? 'Main store categories. Lower display order appears first.' : 'الأقسام الرئيسية للمتجر، والرقم الأقل يظهر أولاً.'}
                         </p>
                     </div>
                     {canManageProducts ? (
                     <Button onClick={() => openCategoryModal()}>
-                        <Plus className="mr-2 h-4 w-4" /> {isEnglish ? 'Add Category' : 'إضافة قسم'}
+                        <Plus className="h-4 w-4" /> {isEnglish ? 'Add Category' : 'إضافة قسم رئيسي'}
                     </Button>
                     ) : null}
                 </div>
 
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>{isEnglish ? 'Name' : 'الاسم'}</TableHead>
-                            <TableHead className="text-center">{isEnglish ? 'Order' : 'الترتيب'}</TableHead>
-                            <TableHead className="text-end">{t('actions') || (isEnglish ? 'Actions' : 'الإجراءات')}</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sortedAdminCategories.map((category) => (
-                            <TableRow key={category.id}>
-                                <TableCell>
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
-                                            {category.image ? (
-                                                <img src={resolveImageUrl(category.image)} alt={category.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
-                                            ) : (
-                                                <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                                    <Package className="h-5 w-5" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="truncate font-medium text-gray-900 dark:text-white">{category.name || '-'}</div>
-                                        </div>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                    <Badge variant="outline">{Number(category?.sortOrder ?? category?.displayOrder ?? 0)}</Badge>
-                                </TableCell>
-                                <TableCell className="text-end">
-                                    {canManageProducts ? (
-                                        <div className="flex justify-end gap-2">
-                                            <Button size="sm" variant="ghost" onClick={() => openCategoryModal(category)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                                                onClick={() => requestDeleteCategory(category)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <span className="text-xs text-[var(--color-text-secondary)]">{isEnglish ? 'Read only' : 'عرض فقط'}</span>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                {renderCategoryList(topLevelAdminCategories, isEnglish ? 'No categories yet.' : 'لا توجد أقسام حتى الآن.')}
+            </div>
 
-                        {!sortedAdminCategories.length && (
-                            <TableRow>
-                                <TableCell colSpan={3} className="py-8 text-center text-sm text-gray-500">
-                                    {isEnglish ? 'No categories yet.' : 'لا توجد أقسام حتى الآن.'}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+            <div className="admin-premium-panel overflow-hidden">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{isEnglish ? 'Subcategories' : 'الأقسام الفرعية'}</h2>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{isEnglish ? 'Subcategories linked to their main category.' : 'الأقسام الفرعية مرتبطة بالقسم الرئيسي الخاص بها.'}</p>
+                    </div>
+                    {canManageProducts ? <Button variant="outline" onClick={() => openCategoryModal()}><Plus className="h-4 w-4" /> {isEnglish ? 'Add Subcategory' : 'إضافة قسم فرعي'}</Button> : null}
+                </div>
+                {renderCategoryList(subAdminCategories, isEnglish ? 'No subcategories yet.' : 'لا توجد أقسام فرعية حتى الآن.', true)}
             </div>
 
             {canCreateProducts ? (
@@ -1525,25 +1601,87 @@ const AdminProducts = () => {
                         </p>
                     </div>
 
-                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[260px]">
-                        <label className="text-[11px] font-semibold text-[var(--color-muted)]">
-                            {isEnglish ? 'Category' : 'اختيار القسم'}
-                        </label>
-                        <select
-                            className={`${selectClassName} h-9 rounded-xl px-3 py-1.5 text-xs dark:[color-scheme:dark]`}
-                            value={selectedProductsCategory}
-                            onChange={(event) => setSelectedProductsCategory(event.target.value)}
-                        >
-                            <option value="all">{isEnglish ? 'All categories' : 'كل الأقسام'}</option>
-                            {sortedAdminCategories.map((category) => (
-                                <option key={category.id} value={category.id} className="bg-white text-gray-900 dark:bg-gray-950 dark:text-white">
-                                    {category.name || category.nameAr || category.id}
-                                </option>
-                            ))}
-                        </select>
+                    <div className="grid w-full gap-2 sm:w-auto sm:min-w-[520px] sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-semibold text-[var(--color-muted)]">
+                                {isEnglish ? 'Category' : 'اختيار القسم'}
+                            </label>
+                            <select
+                                className={`${selectClassName} h-10 rounded-xl px-3 py-1.5 text-xs dark:[color-scheme:dark]`}
+                                value={selectedProductsCategory}
+                                onChange={(event) => setSelectedProductsCategory(event.target.value)}
+                            >
+                                <option value="all">{isEnglish ? 'All categories' : 'كل الأقسام'}</option>
+                                {topLevelAdminCategories.map((category) => (
+                                    <optgroup key={category.id} label={category.name || category.nameAr || category.id}>
+                                        <option value={category.id}>{isEnglish ? 'Main category' : 'القسم الرئيسي'}</option>
+                                        {subAdminCategories.filter((sub) => String(sub.parentCategory) === String(category.id)).map((sub) => (
+                                            <option key={sub.id} value={sub.id}>{sub.name || sub.nameAr || sub.id}</option>
+                                        ))}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-semibold text-[var(--color-muted)]">{isEnglish ? 'Search products' : 'بحث في المنتجات'}</label>
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+                                <input
+                                    type="search"
+                                    value={productSearchQuery}
+                                    onChange={(event) => setProductSearchQuery(event.target.value)}
+                                    placeholder={isEnglish ? 'Name or product ID...' : 'اسم المنتج أو رقم ID...'}
+                                    className={`${inputBaseClassName} h-10 rounded-xl ps-9 text-xs`}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
+                <div className="space-y-3 p-3 md:hidden">
+                    {paginatedAdminProducts.map((product) => {
+                        const isInactiveProduct = String(product?.status || '').toLowerCase() !== 'active';
+                        const categoryName = categories.find((category) => category.id === product.category)?.name || product.category || '-';
+                        const providerName = getProviderDisplayName(product);
+                        const cleanProviderName = providerName === '-' || providerName === product.name ? (isEnglish ? 'Local' : 'داخلي') : providerName;
+                        const priceLabel = formatExactDecimal(product.basePriceCoins, language) || product.basePriceCoins || '-';
+                        return (
+                            <article key={product.id} className={`rounded-2xl border p-3 shadow-[var(--shadow-subtle)] ${isInactiveProduct ? 'border-red-400/20 bg-red-950/[0.03] opacity-80 dark:bg-red-950/20' : 'border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.86)]'}`}>
+                                <div className="flex items-start gap-3">
+                                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-elevated-rgb)/0.8)]">
+                                        {product.image ? <img src={resolveImageUrl(product.image)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className={`h-full w-full object-cover ${isInactiveProduct ? 'grayscale brightness-50' : ''}`} /> : <div className="flex h-full w-full items-center justify-center text-[var(--color-muted)]"><Package className="h-5 w-5" /></div>}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className={`truncate text-sm font-bold ${isInactiveProduct ? 'text-red-700 line-through dark:text-red-300' : 'text-[var(--color-text)]'}`}>{product.name}</h3>
+                                        {product.nameAr && product.nameAr !== product.name ? <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">{product.nameAr}</p> : null}
+                                        <p className="mt-1 truncate font-mono text-[9px] text-[var(--color-muted)]">ID: {product.id}</p>
+                                    </div>
+                                    <Badge variant={product.status === 'active' ? 'success' : 'secondary'} className="shrink-0 px-2 py-0.5 text-[10px]">
+                                        {product.status === 'active' ? (isEnglish ? 'Active' : 'مفعل') : (isEnglish ? 'Inactive' : 'متوقف')}
+                                    </Badge>
+                                </div>
+
+                                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-[color:rgb(var(--color-elevated-rgb)/0.58)] p-2.5 text-[11px]">
+                                    <div><span className="block text-[var(--color-muted)]">{isEnglish ? 'Category' : 'القسم'}</span><span className="mt-0.5 block truncate font-semibold text-[var(--color-text)]">{categoryName}</span></div>
+                                    {showProviderColumn ? <div><span className="block text-[var(--color-muted)]">{isEnglish ? 'Provider' : 'المزود'}</span><span className="mt-0.5 block truncate font-semibold text-[var(--color-text)]">{cleanProviderName}</span></div> : null}
+                                    <div><span className="block text-[var(--color-muted)]">{isEnglish ? 'Order' : 'الترتيب'}</span><span className="mt-0.5 block font-bold text-[var(--color-text)]">{formatNumber(Number(product?.displayOrder || 0), language === 'en' ? 'en-US' : 'ar-EG')}</span></div>
+                                    {showPriceColumn ? <div><span className="block text-[var(--color-muted)]">{isEnglish ? 'Base price' : 'السعر الأساسي'}</span><span className="mt-0.5 block font-bold text-[var(--color-primary)]">{priceLabel}</span></div> : null}
+                                </div>
+
+                                {canOpenProductModal ? (
+                                    <div className="mt-3 flex gap-2 border-t border-[color:rgb(var(--color-border-rgb)/0.7)] pt-3">
+                                        {canManageProducts ? <Button size="sm" variant="outline" className="flex-1" onClick={() => handleToggleProductStatus(product)} disabled={togglingProductId === product.id}>{togglingProductId === product.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : (product.status === 'active' ? (isEnglish ? 'Deactivate' : 'إيقاف') : (isEnglish ? 'Activate' : 'تفعيل'))}</Button> : null}
+                                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openProductModal(product)}><Edit className="h-4 w-4" /> {isEnglish ? 'Edit' : 'تعديل'}</Button>
+                                        {canDeleteProducts ? <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => requestDeleteProduct(product)}><Trash2 className="h-4 w-4" /></Button> : null}
+                                    </div>
+                                ) : null}
+                            </article>
+                        );
+                    })}
+                    {!visibleAdminProducts.length ? <div className="py-10 text-center text-sm text-[var(--color-muted)]">{productSearchQuery ? (isEnglish ? 'No products match your search.' : 'لا توجد منتجات مطابقة للبحث.') : (isEnglish ? 'No products in this category.' : 'لا توجد منتجات في هذا القسم.')}</div> : null}
+                </div>
+
+                <div className="hidden md:block">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -1561,7 +1699,7 @@ const AdminProducts = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {visibleAdminProducts.map((product) => {
+                        {paginatedAdminProducts.map((product) => {
                             const isInactiveProduct = String(product?.status || '').toLowerCase() !== 'active';
                             const categoryName = categories.find((c) => c.id === product.category)?.name || product.category || '-';
                             const providerName = getProviderDisplayName(product);
@@ -1691,6 +1829,59 @@ const AdminProducts = () => {
                         )}
                     </TableBody>
                 </Table>
+                </div>
+
+                {visibleAdminProducts.length > 0 ? (
+                    <div className="flex flex-col gap-3 border-t border-[color:rgb(var(--color-border-rgb)/0.82)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+                            <span>{isEnglish ? 'Products per page' : 'منتجات في الصفحة'}</span>
+                            <select
+                                value={productsPerPage}
+                                onChange={(event) => setProductsPerPage(Number(event.target.value))}
+                                className={`${selectClassName} h-8 w-20 rounded-lg px-2 py-1 text-xs dark:[color-scheme:dark]`}
+                            >
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                            <span>
+                                {formatNumber((productsPage - 1) * productsPerPage + 1, language === 'en' ? 'en-US' : 'ar-EG')}
+                                {' - '}
+                                {formatNumber(Math.min(productsPage * productsPerPage, visibleAdminProducts.length), language === 'en' ? 'en-US' : 'ar-EG')}
+                                {' / '}
+                                {formatNumber(visibleAdminProducts.length, language === 'en' ? 'en-US' : 'ar-EG')}
+                            </span>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2"
+                                onClick={() => setProductsPage((page) => Math.max(1, page - 1))}
+                                disabled={productsPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+                                {isEnglish ? 'Previous' : 'السابق'}
+                            </Button>
+                            <span className="min-w-24 text-center text-xs font-semibold text-[var(--color-text)]">
+                                {isEnglish ? 'Page' : 'صفحة'} {formatNumber(productsPage, language === 'en' ? 'en-US' : 'ar-EG')} {isEnglish ? 'of' : 'من'} {formatNumber(productsPageCount, language === 'en' ? 'en-US' : 'ar-EG')}
+                            </span>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2"
+                                onClick={() => setProductsPage((page) => Math.min(productsPageCount, page + 1))}
+                                disabled={productsPage === productsPageCount}
+                            >
+                                {isEnglish ? 'Next' : 'التالي'}
+                                <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             <Modal
@@ -1786,6 +1977,36 @@ const AdminProducts = () => {
 
             <Modal isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} title={editingProduct ? t('editProduct') : t('addProduct')} size="xl">
                 <form onSubmit={handleProductSubmit} className="space-y-6">
+                    <div className="relative grid grid-cols-2 gap-3 rounded-2xl border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-elevated-rgb)/0.55)] p-2.5">
+                        <div className="pointer-events-none absolute left-1/4 right-1/4 top-7 h-px bg-[color:rgb(var(--color-border-rgb)/0.9)]" />
+                        {[
+                            { step: 1, label: isEnglish ? 'Basic information' : 'المعلومات الأساسية' },
+                            { step: 2, label: isEnglish ? 'Quantity & pricing' : 'الكمية والتسعير' },
+                        ].map((item) => {
+                            const isActive = productFormStep === item.step;
+                            const isCompleted = productFormStep > item.step;
+                            return (
+                                <button
+                                    key={item.step}
+                                    type="button"
+                                    onClick={() => setProductFormStep(item.step)}
+                                    className={`relative z-10 flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-2 py-2 transition-all ${isActive ? 'bg-[color:rgb(var(--color-primary-rgb)/0.11)] shadow-[var(--shadow-subtle)]' : ''}`}
+                                >
+                                    <span className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-extrabold transition-all ${
+                                        isActive || isCompleted
+                                            ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-button-text)] shadow-[0_10px_25px_-12px_rgb(var(--color-primary-rgb)/0.9)]'
+                                            : 'border-[color:rgb(var(--color-border-rgb)/0.95)] bg-[color:rgb(var(--color-card-rgb)/0.98)] text-[var(--color-text-secondary)]'
+                                    }`}>
+                                        {isCompleted ? <Check className="h-4 w-4" /> : item.step}
+                                    </span>
+                                    <span className={`truncate text-[11px] font-bold sm:text-xs ${isActive ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)]'}`}>{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {productFormStep === 1 ? (
+                    <>
                     {/* ========== 1. المعلومات الأساسية ========== */}
                     <div>
                         <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
@@ -1840,6 +2061,10 @@ const AdminProducts = () => {
                             </div>
                         </div>
                     </div>
+
+                    </>
+                    ) : (
+                    <>
 
                     {canViewInternalPricing ? (
                     <div>
@@ -2538,13 +2763,36 @@ const AdminProducts = () => {
                         />
                     ) : null}
 
-                    <div className="flex justify-end gap-2 pt-4">
+                    </>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[color:rgb(var(--color-border-rgb)/0.78)] pt-4">
                         <Button type="button" variant="ghost" onClick={() => setIsProductModalOpen(false)} disabled={isSavingProduct}>إلغاء</Button>
-                        {canSubmitProductForm ? (
-                        <Button type="submit" disabled={isSavingProduct}>
-                            {isSavingProduct ? 'جارٍ حفظ المنتج...' : 'حفظ المنتج'}
-                        </Button>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                            {productFormStep === 2 ? (
+                                <Button type="button" variant="outline" onClick={() => setProductFormStep(1)} disabled={isSavingProduct}>
+                                    <ChevronRight className="h-4 w-4" />
+                                    {isEnglish ? 'Previous' : 'السابق'}
+                                </Button>
+                            ) : null}
+                            {productFormStep === 1 ? (
+                                <>
+                                    {canSubmitProductForm ? (
+                                        <Button type="submit" variant="outline" disabled={isSavingProduct}>
+                                            {isSavingProduct ? 'جارٍ حفظ المنتج...' : 'حفظ المنتج'}
+                                        </Button>
+                                    ) : null}
+                                    <Button type="button" onClick={() => setProductFormStep(2)} disabled={isSavingProduct}>
+                                        {isEnglish ? 'Next' : 'التالي'}
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                </>
+                            ) : canSubmitProductForm ? (
+                                <Button type="submit" disabled={isSavingProduct}>
+                                    {isSavingProduct ? 'جارٍ حفظ المنتج...' : 'حفظ المنتج'}
+                                </Button>
+                            ) : null}
+                        </div>
                     </div>
                 </form>
             </Modal>

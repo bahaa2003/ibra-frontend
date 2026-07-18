@@ -11,12 +11,23 @@ import OrdersFiltersBar from '../components/orders/OrdersFiltersBar';
 import CustomerOrderCard from '../components/orders/CustomerOrderCard';
 import OrderDetailsDrawer from '../components/orders/OrderDetailsDrawer';
 import EmptyOrdersState from '../components/orders/EmptyOrdersState';
+import DashboardDateRangeFilter from '../components/admin-dashboard/DashboardDateRangeFilter';
 import useAuthStore from '../store/useAuthStore';
 import useOrderStore from '../store/useOrderStore';
 import useMediaStore from '../store/useMediaStore';
 import useSystemStore from '../store/useSystemStore';
 import { filterOrders, enrichOrders, summarizeOrders } from '../utils/orders';
 import { formatNumber } from '../utils/intl';
+import { formatCurrencyAmount } from '../utils/pricing';
+
+const toDateInputValue = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const SummaryCard = ({ icon: Icon, label, value, note }) => (
   <Card variant="flat" className="p-2.5 sm:p-3">
@@ -45,9 +56,9 @@ const Orders = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('today');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [dateFilter] = useState('custom');
+  const [customStartDate, setCustomStartDate] = useState(() => toDateInputValue(new Date()));
+  const [customEndDate, setCustomEndDate] = useState(() => toDateInputValue(new Date()));
   const [sortOrder, setSortOrder] = useState('newest');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
@@ -116,6 +127,17 @@ const Orders = () => {
   );
 
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
+  const visiblePurchaseTotals = useMemo(() => {
+    const totals = new Map();
+    filteredOrders.forEach((order) => {
+      const currencyCode = String(order?.currencyCode || user?.currency || 'USD').toUpperCase();
+      const amount = Number(order?.amountValue || 0);
+      totals.set(currencyCode, (totals.get(currencyCode) || 0) + (Number.isFinite(amount) ? amount : 0));
+    });
+
+    if (!totals.size) totals.set(String(user?.currency || 'USD').toUpperCase(), 0);
+    return Array.from(totals, ([currencyCode, amount]) => ({ currencyCode, amount }));
+  }, [filteredOrders, user?.currency]);
 
   const selectedOrder = useMemo(
     () => enrichedOrders.find((order) => order.id === selectedOrderId) || null,
@@ -131,6 +153,23 @@ const Orders = () => {
   }, [getPersonalOrderById, searchParams, userId]);
 
   const formatCount = (value) => formatNumber(value, locale);
+  const todayInputValue = toDateInputValue(new Date());
+  const formatRangeDate = (value) => {
+    if (!value) return '';
+    const [year, month, day] = String(value).split('-').map(Number);
+    const parsed = new Date(year, month - 1, day);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(parsed);
+  };
+  const applyDateRangeSelection = (nextStartDate, nextEndDate = nextStartDate) => {
+    let orderedStartDate = nextStartDate || '';
+    let orderedEndDate = nextEndDate || nextStartDate || '';
+    if (orderedStartDate && orderedEndDate && orderedStartDate > orderedEndDate) {
+      [orderedStartDate, orderedEndDate] = [orderedEndDate, orderedStartDate];
+    }
+    setCustomStartDate(orderedStartDate);
+    setCustomEndDate(orderedEndDate);
+  };
 
   return (
     <div className="min-w-0 space-y-4 pb-3">
@@ -174,18 +213,33 @@ const Orders = () => {
         </div>
       </section>
 
+      <Card variant="premium" className="overflow-visible p-3 sm:p-4">
+        <p className="mb-2 text-xs font-bold text-[var(--color-text)]">
+          {isArabic ? 'نطاق التاريخ' : 'Date range'}
+        </p>
+        <DashboardDateRangeFilter
+          isArabic={isArabic}
+          formatRangeDate={formatRangeDate}
+          todayInputValue={todayInputValue}
+          startDate={customStartDate}
+          endDate={customEndDate}
+          onRangeChange={applyDateRangeSelection}
+          buttonClassName="w-full sm:w-auto"
+        />
+      </Card>
+
       <OrdersFiltersBar
+        showStatusFilter={false}
+        showTypeFilter={false}
         isArabic={isArabic}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
         dateFilter={dateFilter}
-        onDateChange={setDateFilter}
         sortOrder={sortOrder}
         onSortChange={setSortOrder}
-        showTypeFilter={false}
-        showDateFilter
+        showDateFilter={false}
         resultCount={filteredOrders.length}
         searchPlaceholder={isArabic
           ? 'ابحث باسم المنتج أو رقم الطلب'
@@ -193,17 +247,28 @@ const Orders = () => {
         helperText={isArabic
           ? 'تظهر طلباتك حسب المدة التي تحددها فقط بدون حذف أي بيانات من النظام.'
           : 'Your orders are displayed by the selected period only, without deleting any data.'}
-        customRange={dateFilter === 'custom' ? {
-          startDate: customStartDate,
-          endDate: customEndDate,
-          onStartDateChange: setCustomStartDate,
-          onEndDateChange: setCustomEndDate,
-          helperText: isArabic
-            ? 'فلترة إضافية مخصصة من تاريخ إلى تاريخ.'
-            : 'Custom date filtering from one date to another.',
-        } : null}
         compact
       />
+
+      <Card variant="premium" className="-mt-1 p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:rgb(var(--color-primary-rgb)/0.28)] bg-[color:rgb(var(--color-primary-rgb)/0.11)] text-[var(--color-primary)] shadow-[0_10px_24px_-16px_rgb(var(--color-primary-rgb)/0.8)]">
+              <ShoppingCart className="h-4 w-4" />
+            </div>
+            <p className="text-xs font-bold text-[var(--color-text)]">
+              {isArabic ? 'قيمة مبلغ الشراء' : 'Purchase amount'}
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {visiblePurchaseTotals.map(({ currencyCode, amount }) => (
+              <span key={currencyCode} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-extrabold text-emerald-700 shadow-[0_8px_22px_-16px_rgba(16,185,129,0.8)] dark:text-emerald-300">
+                {formatCurrencyAmount(amount, currencyCode, currencies, locale)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       {filteredOrders.length ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

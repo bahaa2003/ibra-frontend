@@ -18,6 +18,7 @@ const ProductSearchBar = ({
   inputClassName,
   resetSignal = 0,
   forceIconRight = false,
+  iconClassName,
 }) => {
   const isControlled = typeof value === 'string';
   const [internalValue, setInternalValue] = useState('');
@@ -135,6 +136,7 @@ const ProductSearchBar = ({
         placeholder={placeholder}
         className={className}
         inputClassName={inputClassName}
+        iconClassName={iconClassName}
         forceIconRight={forceIconRight}
       />
 
@@ -156,14 +158,20 @@ const ProductSearchBar = ({
                   className="flex w-full items-center gap-2.5 px-2.5 py-2 text-start transition-colors hover:bg-[color:rgb(var(--color-primary-rgb)/0.08)]"
                 >
                   <div className="h-11 w-11 shrink-0 overflow-hidden rounded-[0.95rem] border border-[color:rgb(var(--color-border-rgb)/0.84)] bg-[color:rgb(var(--color-elevated-rgb)/0.88)]">
-                    <img
-                      src={product.image}
-                      alt={product.displayName}
-                      loading="lazy"
-                      decoding="async"
-                      sizes="44px"
-                      className="h-full w-full object-cover"
-                    />
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.displayName}
+                        loading="lazy"
+                        decoding="async"
+                        sizes="44px"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm font-black text-[var(--color-primary)]">
+                        {String(product.displayName || '?').trim().charAt(0).toUpperCase()}
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-semibold text-[var(--color-text)] sm:text-[13px]">

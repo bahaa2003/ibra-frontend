@@ -19,6 +19,25 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://ibra-backend.onre
  */
 const BACKEND_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
 
+const LOCAL_BACKEND_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+
+const remapLegacyLocalUrl = (value) => {
+  try {
+    const url = new URL(value);
+    const configuredOrigin = new URL(BACKEND_ORIGIN);
+    const pointsToLocalBackend = LOCAL_BACKEND_HOSTS.has(url.hostname) && ['5000', '5001'].includes(url.port);
+    const configuredBackendIsRemote = !LOCAL_BACKEND_HOSTS.has(configuredOrigin.hostname);
+
+    if (pointsToLocalBackend && configuredBackendIsRemote) {
+      return `${BACKEND_ORIGIN}${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return value;
+  }
+
+  return value;
+};
+
 /**
  * Resolve an image path for display in <img src>.
  *
@@ -31,8 +50,12 @@ export const resolveImageUrl = (path) => {
   if (!trimmed) return '';
 
   // Already absolute or data URI — return as-is
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+  if (trimmed.startsWith('data:')) {
     return trimmed;
+  }
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return remapLegacyLocalUrl(trimmed);
   }
 
   // Relative path — prepend backend origin

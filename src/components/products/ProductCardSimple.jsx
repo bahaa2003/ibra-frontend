@@ -30,18 +30,24 @@ const ProductCardSimple = React.memo(({
         />
 
         <div className="relative mx-auto aspect-square w-full overflow-hidden rounded-2xl bg-transparent">
-          <img
-            src={product.image}
-            alt={product.displayName}
-            loading="lazy"
-            decoding="async"
-            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 22vw, 18vw"
-            className={cn(
-              'product-image-gold-trace block h-full w-full bg-transparent object-contain object-center transition duration-200',
-              !product.storefrontStatus?.isPurchasable && 'grayscale-[0.18]',
-              isPaused && 'brightness-[0.38] grayscale-[0.75] saturate-[0.45]'
-            )}
-          />
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.displayName}
+              loading="lazy"
+              decoding="async"
+              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 22vw, 18vw"
+              className={cn(
+                'product-image-gold-trace block h-full w-full bg-transparent object-contain object-center transition duration-200',
+                !product.storefrontStatus?.isPurchasable && 'grayscale-[0.18]',
+                isPaused && 'brightness-[0.38] grayscale-[0.75] saturate-[0.45]'
+              )}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-2xl border border-[color:rgb(var(--color-primary-rgb)/0.14)] bg-[color:rgb(var(--color-primary-rgb)/0.06)] text-2xl font-black text-[var(--color-primary)]">
+              {String(product.displayName || '?').trim().charAt(0).toUpperCase()}
+            </div>
+          )}
           {isPaused ? (
             <>
               <span className="pointer-events-none absolute inset-0 bg-black/42" aria-hidden="true" />

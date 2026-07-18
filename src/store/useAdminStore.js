@@ -836,15 +836,16 @@ const useAdminStore = create(
       },
 
       updateUserAvatar: async (userId, avatar, actor = null, onSelfUpdate = null) => {
-        await apiClient.users.updateAvatar(userId, avatar, actor);
+        const updatedUser = await apiClient.users.updateAvatar(userId, avatar, actor);
         set((state) => ({
           users: state.users.map((entry) => (
-            entry.id === userId ? { ...entry, avatar } : entry
+            entry.id === userId ? { ...entry, ...(updatedUser || {}), avatar: updatedUser?.avatar || avatar } : entry
           )),
           usersLastLoadedAt: Date.now(),
         }));
 
-        if (typeof onSelfUpdate === 'function') onSelfUpdate();
+        if (typeof onSelfUpdate === 'function') onSelfUpdate(updatedUser);
+        return updatedUser;
       },
 
       updateUserProfile: async (userId, profileUpdates, actor = null, onSelfUpdate = null) => {

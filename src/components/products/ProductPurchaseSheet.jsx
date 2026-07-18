@@ -7,12 +7,12 @@ import {
   Copy,
   LoaderCircle,
   Package2,
+  ShoppingBag,
   X,
   Zap,
 } from 'lucide-react';
 import Button, { cn } from '../ui/Button';
 import Badge from '../ui/Badge';
-import Input from '../ui/Input';
 import { useToast } from '../ui/Toast';
 import useAuthStore from '../../store/useAuthStore';
 import useGroupStore from '../../store/useGroupStore';
@@ -75,6 +75,7 @@ const getCopy = (language = 'ar') => {
       failedMessage: 'Something went wrong while placing this order.',
       invalidAmountMessage: 'Unable to place this order because the amount is invalid.',
       invalidQuantity: 'Selected quantity is not valid for this product.',
+      userIdRequired: 'Enter the User ID in the field above to complete your purchase.',
       fieldRequired: (label) => `${label} is required.`,
       placeholder: (label) => `Enter ${label}`,
     };
@@ -114,6 +115,7 @@ const getCopy = (language = 'ar') => {
     failedMessage: 'حدث خطأ أثناء تنفيذ الطلب. حاول مرة أخرى.',
     invalidAmountMessage: 'لا يمكن تنفيذ الطلب لأن قيمة الشراء غير صالحة.',
     invalidQuantity: 'الكمية الحالية غير صالحة لهذا المنتج.',
+    userIdRequired: 'أدخل آيدي المستخدم في الخانة بالأعلى لإكمال عملية الشراء.',
     fieldRequired: (label) => `يرجى إدخال ${label}`,
     placeholder: (label) => `أدخل ${label}`,
   };
@@ -219,7 +221,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     setDynamicValues(nextDynamicFields);
     setDynamicErrors({});
     setQuantity(quantityMeta.minQty);
-    setQuantityInput('');
+    setQuantityInput(formatGroupedNumberString(quantityMeta.minQty));
     setQuantityError('');
     setIsSubmitting(false);
     setStatusCard({ tone: 'info', title: '', message: '' });
@@ -323,6 +325,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
 
   const availabilityVariant = productState.isPurchasable ? 'success' : (productState.badgeColor || 'warning');
   const StatusIcon = statusToneIcon[statusCard.tone] || AlertCircle;
+  const purchaseFieldClassName = 'purchase-neon-field h-10 w-full rounded-lg border border-[#d8b86b]/20 bg-[#080907]/70 px-3 text-[12px] font-medium text-[#fffaf0] outline-none transition placeholder:text-white/28 hover:border-[#d8b86b]/30 focus:border-[#e7cb82]/65 focus:bg-black/80 focus:ring-2 focus:ring-[#d8b86b]/10 disabled:cursor-not-allowed disabled:opacity-50';
 
   const handleClose = () => {
     if (isSubmitting) return;
@@ -444,7 +447,9 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
     orderFields.forEach((field) => {
       const label = resolveFieldLabel(field, language);
       if (!String(fieldValues[field.key] || '').trim()) {
-        nextErrors[field.key] = copy.fieldRequired(label);
+        nextErrors[field.key] = field.key === 'playerId'
+          ? copy.userIdRequired
+          : copy.fieldRequired(label);
       }
     });
 
@@ -617,7 +622,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
             aria-label={copy.closeLabel}
           />
 
-          <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-5">
+          <div className="absolute inset-0 flex items-center justify-center p-2.5">
             <motion.section
               role="dialog"
               aria-modal="true"
@@ -626,23 +631,24 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 22, scale: 0.99 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="relative flex max-h-[min(95vh,52rem)] w-full max-w-[26rem] flex-col overflow-hidden rounded-[1.6rem] border border-[#f0c66f]/38 bg-[radial-gradient(circle_at_top,rgba(255,240,189,0.18),transparent_52%),linear-gradient(180deg,#3a2411_0%,#24170d_56%,#120b06_100%)] text-white shadow-[0_0_0_1px_rgba(240,198,111,0.16),0_0_28px_-8px_rgba(240,198,111,0.72),0_28px_85px_-35px_rgba(0,0,0,0.9)] sm:rounded-[2rem]"
+              style={{ fontFamily: language === 'en' ? '"Plus Jakarta Sans", sans-serif' : '"IBM Plex Sans Arabic", sans-serif' }}
+              className="purchase-sheet purchase-neon-border relative flex max-h-[min(92vh,38rem)] w-full max-w-[21rem] flex-col overflow-hidden rounded-[1.25rem] border border-[#d8b86b]/25 bg-[radial-gradient(circle_at_50%_-12%,rgba(216,184,107,0.16),transparent_38%),linear-gradient(160deg,#181713_0%,#0d0e0d_52%,#070807_100%)] text-white shadow-[0_26px_80px_-28px_rgba(0,0,0,0.95),0_0_42px_-28px_rgba(216,184,107,0.72)]"
             >
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={isSubmitting}
-                className="absolute right-2.5 top-2.5 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/8 text-white/85 transition hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-50 sm:right-4 sm:top-4 sm:h-10 sm:w-10"
+                className="absolute right-2.5 top-2.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-slate-950/40 text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
                 aria-label={copy.closeLabel}
               >
                 <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
 
-              <header className="space-y-3 border-b border-white/10 px-3 pb-4 pt-1.5 sm:space-y-4 sm:px-5 sm:pb-5 sm:pt-2">
-                <div className="mt-2 flex flex-wrap items-start justify-start gap-2 [direction:ltr] sm:mt-3 sm:gap-2.5">
-                  <Badge variant={availabilityVariant} className="px-2.5 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-sm">{availabilityLabel}</Badge>
-                  <Badge variant="premium" className="gap-1.5 px-2.5 py-1 text-[11px] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-sm">
-                    <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <header className="purchase-sheet__header border-b border-white/8 px-3 pb-2.5 pt-2.5">
+                <div className="flex items-center gap-1.5 [direction:ltr]">
+                  <Badge variant={availabilityVariant} className="px-2 py-0.5 text-[9px]">{availabilityLabel}</Badge>
+                  <Badge variant="premium" className="gap-1 border-[#d8b86b]/20 bg-[#d8b86b]/10 px-2 py-0.5 text-[9px] text-[#ecd28f]">
+                    <Zap className="h-3 w-3" />
                     {copy.quickOrder}
                   </Badge>
                 </div>
@@ -653,12 +659,12 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                     alt="IBRA"
                     loading="eager"
                     decoding="async"
-                    className="-mt-4 mx-auto h-20 w-full max-w-[16rem] object-contain sm:-mt-5 sm:h-24"
+                    className="-mt-2 mx-auto h-11 w-full max-w-[9rem] object-contain opacity-90"
                   />
 
-                  <div className="mt-3 flex items-center gap-3 [direction:ltr] sm:mt-4">
+                  <div className="mt-1 flex items-center gap-2.5 [direction:ltr]">
                     {product?.image ? (
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#f0c66f]/22 bg-[#fff0bd]/8 sm:h-14 sm:w-14">
+                      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[#d8b86b]/20 bg-[#d8b86b]/8">
                         <img
                           src={product.image}
                           alt={productTitle}
@@ -668,22 +674,22 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                         />
                       </div>
                     ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0c66f]/22 bg-[#fff0bd]/8 sm:h-14 sm:w-14">
-                        <Package2 className="h-5 w-5 text-[#f7d98a]" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#d8b86b]/20 bg-[#d8b86b]/8">
+                        <Package2 className="h-4 w-4 text-[#e5c878]" />
                       </div>
                     )}
 
                     <div className="min-w-0 flex-1 text-right [direction:rtl]">
-                      <h2 className="line-clamp-2 text-right text-base font-bold leading-5 tracking-[-0.02em] text-white sm:text-2xl sm:leading-8">
+                      <h2 className="line-clamp-1 text-right text-sm font-bold leading-5 text-white">
                         {productTitle}
                       </h2>
                       {productSubtitle ? (
-                        <p className="mt-0.5 truncate text-right text-[11px] text-white/65 sm:mt-1 sm:text-sm">
+                        <p className="truncate text-right text-[9px] text-[#ead9a8]/55">
                           {productSubtitle}
                         </p>
                       ) : null}
                       {productDescription ? (
-                        <p className="mt-2 line-clamp-3 max-w-[30rem] text-right text-[11px] leading-5 text-white/78 sm:text-sm">
+                        <p className="mt-0.5 line-clamp-1 text-right text-[9px] text-white/45">
                           {productDescription}
                         </p>
                       ) : null}
@@ -692,7 +698,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                 </div>
               </header>
 
-              <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3.5 sm:space-y-4 sm:px-4 sm:py-4">
+              <div className="flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
                 {!canAfford && isApproved && productState.isPurchasable ? (
                   <div className="rounded-xl border border-[color:rgb(var(--color-error-rgb)/0.38)] bg-[color:rgb(var(--color-error-rgb)/0.14)] p-2.5 sm:rounded-2xl sm:p-3">
                     <p className="text-[11px] font-semibold text-white sm:text-xs">{copy.insufficientTitle}</p>
@@ -714,17 +720,22 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                   </div>
                 ) : null}
 
-                <section className="space-y-1.5 px-0.5 sm:space-y-2">
-                  <div className={cn('flex flex-wrap items-center gap-1 text-[9px] text-white/65 sm:text-[10px]', isRTL ? 'justify-end' : 'justify-start')}>
-                    <span>{copy.min} {formatGroupedNumberString(quantityMeta.minQty)}</span>
-                    <span>•</span>
-                    <span>{copy.max} {formatGroupedNumberString(quantityMeta.maxQty)}</span>
+                <section className="purchase-sheet__quantity rounded-[0.9rem] border border-[#d8b86b]/18 bg-[#d8b86b]/[0.045]">
+                  <div className={cn('flex items-center justify-between gap-2 border-b border-white/6 px-3 py-2', isRTL && '[direction:rtl]')}>
+                    <div>
+                      <p className="text-[10px] font-bold text-white">{copy.quantityTitle}</p>
+                      <p className="mt-0.5 text-[8px] text-white/40">
+                        {copy.min} {formatGroupedNumberString(quantityMeta.minQty)} · {copy.max} {formatGroupedNumberString(quantityMeta.maxQty)}
+                      </p>
+                    </div>
+                    <span className="rounded-md border border-[#d8b86b]/15 bg-[#d8b86b]/8 px-1.5 py-0.5 text-[8px] font-bold text-[#e7cb82]">
+                      {copy.step} {formatGroupedNumberString(quantityMeta.stepQty)}
+                    </span>
                   </div>
 
-                  <div className={cn('grid grid-cols-2 gap-2', isRTL && '[direction:rtl]')}>
-                    <div className="p-1">
-                      <p className="mb-1 text-[10px] font-semibold text-white/78 sm:text-[11px]">{copy.quantityTitle}</p>
-                      <Input
+                  <div className={cn('grid gap-2 px-3 pb-3 pt-2.5', isRTL && '[direction:rtl]')}>
+                    <div className="purchase-sheet__quantity-input purchase-neon-field flex h-10 items-center overflow-hidden rounded-[0.7rem] border border-[#d8b86b]/18 bg-black/25 px-2 focus-within:border-[#d8b86b]/50 focus-within:ring-2 focus-within:ring-[#d8b86b]/8">
+                      <input
                         type="text"
                         inputMode="numeric"
                         value={quantityInput}
@@ -732,35 +743,33 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                         onBlur={handleQuantityBlur}
                         disabled={isSubmitting}
                         placeholder={language === 'en' ? 'Enter quantity' : 'ادخل العدد'}
-                        className="h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 px-2 text-center text-xs font-bold text-white [appearance:textfield] placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-sm font-bold text-white outline-none placeholder:text-[10px] placeholder:font-medium placeholder:text-white/30"
                       />
                     </div>
 
-                    <div className="p-1">
-                      <p className="text-[10px] font-semibold text-[#f7d98a] sm:text-[11px]">{copy.total}</p>
-                      <p className="mt-2 truncate text-center text-sm font-black text-white sm:text-base">{formattedTotalPrice}</p>
+                    <div className="purchase-sheet__total relative overflow-hidden rounded-[0.7rem] border border-[#d8b86b]/25 bg-[linear-gradient(135deg,rgba(216,184,107,0.16),rgba(216,184,107,0.035))] px-3 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#f1d78e]/65 to-transparent" />
+                      <p className="text-[9px] font-semibold tracking-[0.08em] text-[#d8b86b]">{copy.total}</p>
+                      <p className="mt-0.5 break-words text-xl font-bold leading-tight text-[#fff8e5]" dir="ltr">{formattedTotalPrice}</p>
                     </div>
+                    {quantityError ? (
+                      <p className="rounded-md border border-red-400/15 bg-red-500/8 px-2 py-1.5 text-center text-[10px] font-medium text-[#ffb4b4]">{quantityError}</p>
+                    ) : null}
                   </div>
-
-                  {quantityError ? (
-                    <p className="text-[11px] font-medium text-[#ffb4b4]">{quantityError}</p>
-                  ) : null}
                 </section>
 
-                <section className="space-y-1.5 px-0.5 sm:space-y-2">
+                <section className="purchase-sheet__fields space-y-2 rounded-xl border border-[#d8b86b]/12 bg-white/[0.025] p-2.5">
                   {dynamicFields.map((field) => {
                     const label = field.label || field.name;
-                    const commonClassName = 'h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 text-xs text-white placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px]';
-
                     if (field.type === 'select') {
                       return (
-                        <div key={field.name} className="space-y-1.5">
-                          <label className="block text-[11px] font-semibold text-white/80">{label}</label>
+                        <div key={field.name} className="space-y-1.5" dir={isRTL ? 'rtl' : 'ltr'}>
+                          <label className="block px-0.5 text-[10px] font-semibold text-[#ead9a8]">{label}</label>
                           <select
                             value={dynamicValues[field.name] || ''}
                             onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
                             disabled={isSubmitting || statusCard.tone === 'success'}
-                            className={`${commonClassName} w-full px-2 dark:[color-scheme:dark]`}
+                            className={`${purchaseFieldClassName} cursor-pointer appearance-none dark:[color-scheme:dark]`}
                           >
                             <option value="" className="bg-[#120b06] text-white">{copy.placeholder(label)}</option>
                             {(field.options || []).map((option) => (
@@ -768,53 +777,62 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                             ))}
                           </select>
                           {dynamicErrors[field.name] ? (
-                            <p className="text-[11px] font-medium text-[#ffb4b4]">{dynamicErrors[field.name]}</p>
+                            <p className="px-0.5 text-[10px] font-medium text-[#ff9f9f]">{dynamicErrors[field.name]}</p>
                           ) : null}
                         </div>
                       );
                     }
 
                     return (
-                      <Input
-                        key={field.name}
-                        type={field.type === 'number' ? 'number' : 'text'}
-                        inputMode={field.type === 'number' ? 'numeric' : 'text'}
-                        label={label}
-                        value={dynamicValues[field.name] || ''}
-                        onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
-                        error={dynamicErrors[field.name]}
-                        placeholder={copy.placeholder(label)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={isSubmitting || statusCard.tone === 'success'}
-                        className={commonClassName}
-                      />
+                      <div key={field.name} className="space-y-1.5" dir={isRTL ? 'rtl' : 'ltr'}>
+                        <label className="block px-0.5 text-[10px] font-semibold text-[#ead9a8]">{label}</label>
+                        <input
+                          type={field.type === 'number' ? 'number' : 'text'}
+                          inputMode={field.type === 'number' ? 'numeric' : 'text'}
+                          value={dynamicValues[field.name] || ''}
+                          onChange={(event) => handleDynamicFieldChange(field.name, event.target.value)}
+                          placeholder={copy.placeholder(label)}
+                          autoComplete="off"
+                          spellCheck={false}
+                          disabled={isSubmitting || statusCard.tone === 'success'}
+                          className={cn(purchaseFieldClassName, dynamicErrors[field.name] && 'border-red-400/70 focus:border-red-400 focus:ring-red-400/10')}
+                        />
+                        {dynamicErrors[field.name] ? (
+                          <p className="px-0.5 text-[10px] font-medium text-[#ff9f9f]">{dynamicErrors[field.name]}</p>
+                        ) : null}
+                      </div>
                     );
                   })}
 
                   {orderFields.map((field) => {
                     const label = resolveFieldLabel(field, language);
                     return (
-                      <Input
-                        key={field.key}
-                        type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
-                        inputMode={field.type === 'number' ? 'numeric' : field.type === 'email' ? 'email' : 'text'}
-                        label={label}
-                        value={fieldValues[field.key] || ''}
-                        onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                        error={fieldErrors[field.key]}
-                        placeholder={field.placeholder || copy.placeholder(label)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={isSubmitting || statusCard.tone === 'success'}
-                        className="h-9 rounded-md border-[#f0c66f]/24 bg-[#fff0bd]/10 text-xs text-white placeholder:text-white/45 focus:border-[#f0c66f]/48 focus:bg-[#fff0bd]/14 sm:h-10 sm:rounded-lg sm:text-[13px]"
-                      />
+                      <div key={field.key} className="space-y-1.5" dir={isRTL ? 'rtl' : 'ltr'}>
+                        <label className="block px-0.5 text-[10px] font-semibold text-[#ead9a8]">{label}</label>
+                        <input
+                          type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                          inputMode={field.type === 'number' ? 'numeric' : field.type === 'email' ? 'email' : 'text'}
+                          value={fieldValues[field.key] || ''}
+                          onChange={(event) => handleFieldChange(field.key, event.target.value)}
+                          placeholder={field.placeholder || copy.placeholder(label)}
+                          autoComplete="off"
+                          spellCheck={false}
+                          disabled={isSubmitting || statusCard.tone === 'success'}
+                          className={cn(purchaseFieldClassName, fieldErrors[field.key] && 'border-red-400/70 focus:border-red-400 focus:ring-red-400/10')}
+                        />
+                        {fieldErrors[field.key] ? (
+                          <p className="flex items-start gap-1.5 rounded-md border border-red-400/20 bg-red-500/10 px-2 py-1.5 text-[10px] font-semibold leading-4 text-[#ffadad]">
+                            <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span>{fieldErrors[field.key]}</span>
+                          </p>
+                        ) : null}
+                      </div>
                     );
                   })}
                 </section>
               </div>
 
-              <footer className="border-t border-white/12 bg-[#070d19]/94 px-3 py-3.5 sm:px-4 sm:py-4">
+              <footer className="purchase-sheet__footer border-t border-white/8 bg-slate-950/35 px-3 py-3 backdrop-blur-xl">
                 {statusCard.message && !successfulOrderId ? (
                   <div className={`mb-2 flex items-start gap-2 rounded-lg border px-2.5 py-2 text-[11px] sm:mb-2.5 sm:gap-2.5 sm:rounded-xl sm:py-2 sm:text-xs ${statusToneStyles[statusCard.tone] || statusToneStyles.info}`}>
                     <StatusIcon className={cn('mt-0.5 h-4 w-4 shrink-0', statusCard.tone === 'info' && isSubmitting && 'animate-spin')} />
@@ -825,13 +843,13 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-[0.8fr_1.2fr] gap-3">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleClose}
                     disabled={isSubmitting}
-                    className="h-9 rounded-md border-white/20 bg-transparent text-white hover:bg-white/10 sm:h-10 sm:rounded-lg"
+                    className="h-9 rounded-lg border-[#d8b86b]/15 bg-white/[0.03] text-xs font-bold text-white/75 hover:bg-white/8"
                   >
                     {copy.cancel}
                   </Button>
@@ -839,8 +857,9 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                     type="button"
                     onClick={handleSubmit}
                     disabled={!canSubmit}
-                    className="h-9 rounded-md sm:h-10 sm:rounded-lg"
+                    className="h-9 gap-1.5 rounded-lg bg-[linear-gradient(135deg,#f0d58a,#bd9140)] text-xs font-bold text-[#17130b] shadow-[0_12px_26px_-14px_rgba(216,184,107,0.9)] hover:brightness-110 disabled:shadow-none"
                   >
+                    {!isSubmitting ? <ShoppingBag className="h-4 w-4" /> : null}
                     {isSubmitting ? copy.processing : copy.buy}
                   </Button>
                 </div>
@@ -867,7 +886,7 @@ const ProductPurchaseSheet = ({ product, isOpen, onClose }) => {
                   initial={{ opacity: 0, scale: 0.94, y: 18 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 14 }}
-                  className="relative z-10 w-full max-w-sm rounded-[1.6rem] border border-emerald-400/24 bg-[linear-gradient(180deg,rgba(9,20,18,0.98),rgba(7,14,13,0.98))] p-5 text-white shadow-[0_28px_80px_-36px_rgba(16,185,129,0.55)]"
+                  className="purchase-neon-border relative z-10 w-full max-w-sm overflow-hidden rounded-[1.6rem] border border-emerald-400/24 bg-[linear-gradient(180deg,rgba(9,20,18,0.98),rgba(7,14,13,0.98))] p-5 text-white shadow-[0_28px_80px_-36px_rgba(16,185,129,0.55)]"
                 >
                   <button
                     type="button"

@@ -15,7 +15,7 @@ const FilterField = ({ label, value, onChange, options, compact = false }) => (
   <label className="min-w-0">
     <span className={cn(
       'block font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]',
-      compact ? 'mb-1 text-[11px]' : 'mb-1.5 text-xs'
+      compact ? 'mb-1 text-[9px] sm:text-[11px]' : 'mb-1 text-[9px] sm:mb-1.5 sm:text-xs'
     )}>
       {label}
     </span>
@@ -25,8 +25,8 @@ const FilterField = ({ label, value, onChange, options, compact = false }) => (
       className={cn(
         selectClassName,
         compact
-          ? 'h-10 rounded-xl bg-[color:rgb(var(--color-card-rgb)/0.94)] px-3 text-xs'
-          : 'h-12 rounded-[1.1rem] bg-[color:rgb(var(--color-card-rgb)/0.94)] px-4 text-sm'
+          ? 'h-9 rounded-lg bg-[color:rgb(var(--color-card-rgb)/0.94)] px-1 text-[10px] sm:h-10 sm:rounded-xl sm:px-3 sm:text-xs'
+          : 'h-9 rounded-lg bg-[color:rgb(var(--color-card-rgb)/0.94)] px-1 text-[10px] sm:h-12 sm:rounded-[1.1rem] sm:px-4 sm:text-sm'
       )}
     >
       {options.map((option) => (
@@ -53,6 +53,7 @@ const OrdersFiltersBar = ({
   resultCount = 0,
   searchPlaceholder,
   helperText,
+  showStatusFilter = true,
   showTypeFilter = true,
   showDateFilter = true,
   showSort = true,
@@ -80,16 +81,18 @@ const OrdersFiltersBar = ({
           </div>
 
           <div className={cn(
-            'grid min-w-0 flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4',
-            compact ? 'gap-2' : 'gap-3'
+            'grid min-w-0 flex-1 grid-flow-col auto-cols-fr',
+            compact ? 'gap-1 sm:gap-2' : 'gap-1 sm:gap-3'
           )}>
-            <FilterField
-              label={isArabic ? 'الحالة' : 'Status'}
-              value={statusFilter}
-              onChange={onStatusChange}
-              options={statusOptions}
-              compact={compact}
-            />
+            {showStatusFilter ? (
+              <FilterField
+                label={isArabic ? 'الحالة' : 'Status'}
+                value={statusFilter}
+                onChange={onStatusChange}
+                options={statusOptions}
+                compact={compact}
+              />
+            ) : null}
 
             {showTypeFilter ? (
               <FilterField

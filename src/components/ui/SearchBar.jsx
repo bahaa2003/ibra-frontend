@@ -10,6 +10,7 @@ const SearchBar = ({
   placeholder,
   className,
   inputClassName,
+  iconClassName,
   forceIconRight = false,
   ...props
 }) => {
@@ -27,8 +28,9 @@ const SearchBar = ({
       <div className="relative">
         <Search
           className={cn(
-            'pointer-events-none absolute top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-muted)]',
-            isIconOnRight ? 'right-4' : 'left-4'
+            'pointer-events-none absolute top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-[var(--color-muted)]',
+            isIconOnRight ? 'right-4' : 'left-4',
+            iconClassName
           )}
         />
         <input

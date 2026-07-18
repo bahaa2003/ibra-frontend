@@ -1477,11 +1477,51 @@ const realApi = {
 
       let fallback = null;
 
+      const fetchAllProductPages = async (endpoint) => {
+        const pageLimit = 100;
+        const collected = [];
+        const seen = new Set();
+
+        for (let page = 1; page <= 1000; page += 1) {
+          const res = await http.get(endpoint, { params: { page, limit: pageLimit } });
+          const data = unwrap(res);
+          const pageProducts = Array.isArray(data)
+            ? data
+            : (data?.products || data?.items || data?.results || []);
+          const safePageProducts = Array.isArray(pageProducts) ? pageProducts : [];
+          let addedOnThisPage = 0;
+
+          safePageProducts.forEach((product, index) => {
+            const productKey = String(product?._id || product?.id || `${page}:${index}`);
+            if (seen.has(productKey)) return;
+            seen.add(productKey);
+            collected.push(product);
+            addedOnThisPage += 1;
+          });
+
+          const pagination = data?.pagination || data?.meta || {};
+          const currentPage = Number(pagination.page || pagination.currentPage || page);
+          const totalPages = Number(pagination.pages || pagination.totalPages || 0);
+          const totalProducts = Number(pagination.total || pagination.totalItems || pagination.totalCount || 0);
+          const hasMore = pagination.hasMore ?? pagination.hasNextPage;
+
+          if (safePageProducts.length === 0 || addedOnThisPage === 0) break;
+          if (totalProducts > 0 && collected.length >= totalProducts) break;
+          if (totalPages > 0 && currentPage >= totalPages) break;
+          if (hasMore === false) break;
+
+          // An unpaginated endpoint returns its complete array in one response.
+          // A full/default-sized page is followed by another request so backend
+          // defaults such as 50 products do not truncate the catalogue.
+          if (!totalPages && !totalProducts && hasMore == null && safePageProducts.length < 50) break;
+        }
+
+        return collected;
+      };
+
       for (const endpoint of requestPlan) {
         try {
-          const res = await http.get(endpoint);
-          const data = unwrap(res);
-          const products = Array.isArray(data) ? data : (data?.products || []);
+          const products = await fetchAllProductPages(endpoint);
           const normalised = (Array.isArray(products) ? products : []).map(normaliseProduct);
 
           if (!fallback) fallback = normalised;

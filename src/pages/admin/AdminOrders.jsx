@@ -534,6 +534,8 @@ const AdminOrders = () => {
       </section>
 
       <OrdersFiltersBar
+        showStatusFilter={false}
+        showTypeFilter={false}
         isArabic={isArabic}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

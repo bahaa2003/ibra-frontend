@@ -9,16 +9,18 @@ const prefersReducedMotion = () => (
 const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = 'ltr' }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(prefersReducedMotion);
+  const activeItem = items?.[currentIndex];
+  const activeDurationMs = activeItem?.durationMs || durationMs;
 
   useEffect(() => {
     if (!items?.length) return undefined;
 
     const timer = window.setTimeout(() => {
       setCurrentIndex((prev) => (prev + 1) % items.length);
-    }, durationMs);
+    }, activeDurationMs);
 
     return () => window.clearTimeout(timer);
-  }, [currentIndex, durationMs, items]);
+  }, [activeDurationMs, currentIndex, items]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -45,7 +47,6 @@ const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = '
 
   if (!items?.length) return null;
 
-  const activeItem = items[currentIndex];
   const tickerClassName = direction === 'rtl' ? 'announcement-ticker-rtl' : 'announcement-ticker-ltr';
 
   return (
@@ -54,14 +55,18 @@ const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = '
         <div className="relative min-h-[2.8rem] overflow-hidden">
           <div
             key={activeItem.id}
-            style={{ animationDuration: `${durationMs}ms` }}
+            style={{ animationDuration: `${activeDurationMs}ms` }}
             className={[
               'absolute top-1/2 -translate-y-1/2 whitespace-nowrap',
               reduceMotion ? 'left-1/2 -translate-x-1/2 opacity-100' : tickerClassName,
             ].join(' ')}
           >
-            <p className="px-2 text-[13px] font-semibold leading-6 text-[var(--color-text)] sm:text-[15px] sm:leading-7">
-              {activeItem.text}
+            <p className="px-2 font-['Traditional_Arabic','Amiri','Scheherazade_New',serif] text-[17px] font-bold leading-7 tracking-wide text-[var(--color-text)] sm:text-xl sm:leading-8">
+              {Array.isArray(activeItem.words) ? (
+                <span className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap sm:gap-2.5">
+                  {activeItem.words.map((word) => <span key={word}>{word}</span>)}
+                </span>
+              ) : activeItem.text}
             </p>
           </div>
         </div>

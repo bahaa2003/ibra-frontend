@@ -223,7 +223,7 @@ const CreatedByPage = ({ embedded = false }) => {
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(213,173,87,0.18),transparent_31%),radial-gradient(circle_at_18%_20%,rgba(185,120,31,0.1),transparent_24%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(240,198,111,0.18),transparent_31%),radial-gradient(circle_at_18%_20%,rgba(185,120,31,0.14),transparent_24%)]" />
           <div className="absolute inset-y-0 left-0 hidden w-px bg-gradient-to-b from-transparent via-[#d5ad57]/34 to-transparent dark:via-[#f0c66f]/40 lg:block" />
-          <div className="relative grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="relative grid items-center gap-10">
             <div className="space-y-7">
               <motion.div variants={heroItemVariants} className="inline-flex">
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#d5ad57]/28 bg-[#fff7df]/64 px-4 py-2 text-xs font-semibold tracking-[0.22em] text-[#6e4519] shadow-[0_12px_30px_-24px_rgba(126,88,30,0.34)] backdrop-blur-xl dark:border-[#f0c66f]/24 dark:bg-[#f0c66f]/10 dark:text-[#f8dfab] dark:shadow-[0_12px_30px_-20px_rgba(240,198,111,0.55)]">
@@ -297,66 +297,6 @@ const CreatedByPage = ({ embedded = false }) => {
               </motion.div>
 
             </div>
-
-            <motion.div variants={heroItemVariants} className="relative">
-              <motion.div
-                whileHover={{ y: -8 }}
-                transition={{ duration: 0.35, ease: 'easeOut' }}
-                className="relative overflow-hidden rounded-[2rem] border border-[#d5ad57]/26 bg-white/58 p-5 shadow-[0_30px_70px_-46px_rgba(126,88,30,0.34)] backdrop-blur-2xl dark:border-[#f0c66f]/18 dark:bg-[#fff2c7]/8 dark:shadow-[0_30px_70px_-38px_rgba(0,0,0,0.75)]"
-              >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(240,198,111,0.16),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(185,120,31,0.14),transparent_28%)]" />
-                <div className="relative space-y-4">
-                  <div className="rounded-[1.35rem] border border-[#d5ad57]/24 bg-[linear-gradient(135deg,rgba(213,173,87,0.18),rgba(255,255,255,0.58))] p-3.5 dark:border-[#f0c66f]/16 dark:bg-[linear-gradient(135deg,rgba(240,198,111,0.14),rgba(255,255,255,0.055))]">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#6e4519]/58 dark:text-[#f8dfab]/58">
-                          Digital Excellence
-                        </p>
-                        <h2 className="mt-1.5 text-xl font-extrabold text-[#3a2411] dark:text-white">
-                          نبني الثقة قبل أن نبني الواجهة
-                        </h2>
-                      </div>
-                      <div className="rounded-full border border-[#d5ad57]/28 bg-white/58 px-2.5 py-1 text-[0.7rem] font-bold tracking-[0.18em] text-[#6e4519] dark:border-[#f0c66f]/24 dark:bg-[#f0c66f]/10 dark:text-[#f8dfab]">
-                        Premium
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2.5">
-                    {[
-                      'مظهر بصري فاخر يعكس قيمة البراند.',
-                      'أداء سريع وتجربة استخدام واضحة.',
-                      'تفاصيل مدروسة ترفع ثقة العميل.',
-                    ].map((point) => (
-                      <div
-                        key={point}
-                        className="flex items-start gap-2.5 rounded-[1.05rem] border border-[#d5ad57]/22 bg-white/56 p-3 dark:border-[#f0c66f]/14 dark:bg-[#111318]/42"
-                      >
-                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d5ad57]/16 text-[#6e4519] dark:bg-[#f0c66f]/12 dark:text-[#f8dfab]">
-                          <BadgeCheck className="h-3.5 w-3.5" />
-                        </span>
-                        <p className="text-xs leading-6 text-[#6e4519]/74 dark:text-[#f7e8c8]/76 sm:text-sm">{point}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <div className="rounded-[1.1rem] border border-[#d5ad57]/24 bg-[#3a2411] px-3.5 py-4 text-white dark:border-[#f0c66f]/16 dark:bg-[#111318]/72">
-                      <p className="text-[0.7rem] uppercase tracking-[0.18em] text-[#f8dfab]">Premium Delivery</p>
-                      <p className="mt-1.5 text-xs leading-6 text-[#f7e8c8]/82 sm:text-sm">
-                        من الفكرة وحتى الإطلاق، نعمل بمنهجية تمنح المشروع حضورًا راقيًا وتجربة متماسكة.
-                      </p>
-                    </div>
-                    <div className="rounded-[1.1rem] border border-[#d5ad57]/28 bg-white/58 px-3.5 py-4 dark:border-[#f0c66f]/20 dark:bg-[#f0c66f]/10">
-                      <p className="text-[0.7rem] uppercase tracking-[0.18em] text-[#6e4519] dark:text-[#f8dfab]">Brand Impact</p>
-                      <p className="mt-1.5 text-xs leading-6 text-[#6e4519]/74 dark:text-[#f7e8c8]/82 sm:text-sm">
-                        نصمم ما يترك أثرًا بصريًا ونفسيًا يجعل مشروعك يبدو أقوى وأكثر إقناعًا.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
           </div>
         </motion.section>
 

@@ -1,9 +1,9 @@
 import React from 'react';
 import { cn } from './Button';
 
-const Table = ({ className, children, ...props }) => {
+const Table = ({ className, containerClassName, children, ...props }) => {
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.92)] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]">
+    <div className={cn('min-w-0 max-w-full overflow-x-auto rounded-[var(--radius-lg)] border border-[color:rgb(var(--color-border-rgb)/0.82)] bg-[color:rgb(var(--color-card-rgb)/0.92)] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]', containerClassName)}>
       <table className={cn('w-full caption-bottom text-sm', className)} {...props}>
         {children}
       </table>

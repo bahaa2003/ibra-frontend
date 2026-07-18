@@ -78,6 +78,7 @@ const Products = () => {
   const { i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchResetSignal, setSearchResetSignal] = useState(0);
+  const [openedProduct, setOpenedProduct] = useState(null);
 
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
@@ -244,8 +245,10 @@ const Products = () => {
   // ── Existing selection logic ───────────────────────────────────────────
 
   const selectedProduct = useMemo(
-    () => storefrontProducts.find((product) => product.id === activeRequestId) || null,
-    [activeRequestId, storefrontProducts]
+    () => openedProduct || storefrontProducts.find(
+      (product) => String(product?.id || '') === String(activeRequestId || '')
+    ) || null,
+    [activeRequestId, openedProduct, storefrontProducts]
   );
 
   const currentCatalog = useMemo(() => {
@@ -354,21 +357,21 @@ const Products = () => {
   }, [searchParams, setSearchParams]);
 
   const openProduct = useCallback((product) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('request', product.id);
+    if (!product) return;
 
-    startTransition(() => {
-      setSearchParams(next);
-    });
+    setOpenedProduct(product);
+    const next = new URLSearchParams(searchParams);
+    next.set('request', String(product.id));
+
+    setSearchParams(next);
   }, [searchParams, setSearchParams]);
 
   const closeProduct = useCallback(() => {
+    setOpenedProduct(null);
     const next = new URLSearchParams(searchParams);
     next.delete('request');
 
-    startTransition(() => {
-      setSearchParams(next);
-    });
+    setSearchParams(next);
   }, [searchParams, setSearchParams]);
 
   const navigateBreadcrumb = useCallback((catId) => {

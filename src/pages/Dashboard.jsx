@@ -106,15 +106,18 @@ const Dashboard = () => {
     () => [
       {
         id: 'ticker-basmala',
-        text: 'بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ',
+        text: '꧁ بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ ꧂',
+        durationMs: 9000,
       },
       {
         id: 'ticker-verse',
-        text: 'رِجَالٌ لَّا تُلْهِيهِمْ تِجَارَةٌ وَلَا بَيْعٌ عَن ذِكْرِ اللَّهِ',
+        text: '(رِجَالٌ لَّا تُلْهِيهِمْ تِجَارَةٌ وَلَا بَيْعٌ عَن ذِكْرِ اللَّهِ وَإِقَامِ الصَّلَاةِ وَإِيتَاءِ الزَّكَاةِ ۙ يَخَافُونَ يَوْمًا تَتَقَلَّبُ فِيهِ الْقُلُوبُ وَالْأَبْصَارُ )',
+        durationMs: 16000,
       },
       {
         id: 'ticker-closing',
-        text: 'صَدَقَ اللَّهُ العَظِيمُ',
+        text: '꧁صدق الله العظيم꧂',
+        durationMs: 9000,
       }
     ],
     []
@@ -149,7 +152,7 @@ const Dashboard = () => {
 
       <HeroSlider slides={heroSlides} />
 
-      <section className="py-1">
+      <section className="!mt-1 py-0">
         <AnnouncementTicker
           items={tickerItems}
           durationMs={5600}
@@ -158,18 +161,19 @@ const Dashboard = () => {
         />
       </section>
 
-      <section id="categories" className="scroll-mt-28 space-y-3 sm:space-y-3.5">
-        <div className="relative z-10 mx-auto flex w-full max-w-5xl justify-center px-0.5 sm:px-2">
+      <section id="categories" className="!mt-1 scroll-mt-28 space-y-3 sm:space-y-3.5">
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl justify-center px-1 sm:px-2">
           <ProductSearchBar
             products={storefrontProducts}
             language={language}
             onSelectProduct={handleProductSelect}
             forceIconRight
-            placeholder={language === 'ar' ? 'ابحث عن منتج وسيظهر مباشرة أسفل البحث...' : 'Search for a product and get direct matches...'}
+            placeholder={language === 'ar' ? 'بحث عن منتج..' : 'Search for a product..'}
+            iconClassName="right-2.5 h-8 w-8 rounded-full border border-[#d5ad57]/35 bg-[linear-gradient(135deg,#fff8df,#e8c36d)] p-1.5 text-[#704915] shadow-[0_8px_20px_-10px_rgba(126,88,30,0.75)] dark:border-[#f0c66f]/35 dark:bg-[linear-gradient(135deg,rgba(240,198,111,0.24),rgba(185,120,31,0.16))] dark:text-[#f8dda0]"
             noResultsLabel={language === 'ar' ? 'لا يوجد منتج مطابق' : 'No matching product found'}
             className="mx-auto w-full"
             inputClassName={showPublicHeader
-              ? 'h-11 rounded-[1.25rem] border-[#d5ad57]/26 bg-white/68 px-4 text-sm text-[#3a2411] shadow-[0_18px_42px_-34px_rgba(126,88,30,0.34)] backdrop-blur-sm placeholder:text-[#7a5a29]/48 focus:border-[#b9781f]/46 focus:bg-white/86 focus:ring-0 focus:shadow-[0_0_0_1px_rgba(185,120,31,0.34),0_0_18px_rgba(213,173,87,0.16),0_18px_38px_-34px_rgba(126,88,30,0.35)] dark:border-[#f0c66f]/18 dark:bg-[#fff2c7]/8 dark:text-[#fff7df] dark:shadow-[0_18px_42px_-30px_rgba(0,0,0,0.75)] dark:placeholder:text-[#f7e8c8]/42 dark:focus:border-[#f0c66f]/54 dark:focus:bg-[#f0c66f]/10 dark:focus:shadow-[0_0_0_1px_rgba(240,198,111,0.46),0_0_18px_rgba(240,198,111,0.14),0_18px_38px_-30px_rgba(0,0,0,0.75)] sm:h-12 sm:rounded-[1.45rem] sm:text-[15px]'
+              ? 'h-12 rounded-full border-[#d5ad57]/45 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(255,247,218,0.78))] px-4 text-sm font-semibold text-[#3a2411] shadow-[0_18px_45px_-24px_rgba(126,88,30,0.42),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl placeholder:font-bold placeholder:text-[#3a2411] placeholder:opacity-100 focus:border-[#b9781f]/65 focus:bg-white focus:ring-0 focus:shadow-[0_0_0_3px_rgba(213,173,87,0.14),0_20px_48px_-25px_rgba(126,88,30,0.5)] dark:border-[#f0c66f]/28 dark:bg-[linear-gradient(135deg,rgba(25,20,12,0.92),rgba(240,198,111,0.09))] dark:text-[#fff7df] dark:placeholder:text-[#fff3ce] dark:placeholder:opacity-100 dark:focus:border-[#f0c66f]/62 dark:focus:bg-[#17130d] dark:focus:shadow-[0_0_0_3px_rgba(240,198,111,0.12),0_20px_48px_-25px_rgba(0,0,0,0.8)] sm:h-14 sm:text-base'
               : 'h-11 rounded-[1.25rem] border-[color:rgb(var(--color-border-rgb)/0.16)] bg-[color:rgb(var(--color-surface-rgb)/0.88)] px-4 text-sm shadow-[0_14px_34px_-30px_rgba(15,23,42,0.5)] backdrop-blur-sm focus:border-[#efc86f] focus:bg-[color:rgb(var(--color-surface-rgb)/0.96)] focus:ring-0 focus:shadow-[0_0_0_1px_rgba(239,200,111,0.58),0_0_14px_rgba(239,200,111,0.16),0_18px_38px_-30px_rgba(15,23,42,0.52)] sm:h-12 sm:rounded-[1.45rem] sm:text-[15px]'}
           />
         </div>
@@ -187,7 +191,8 @@ const Dashboard = () => {
         </div>
       </section>
 
-      <StoreFooter
+      {showPublicHeader ? <StoreFooter
+        hideBrand
         title="IBRA Store"
         description={language === 'ar'
           ? 'هذا هو الاختيار المناسب لك'
@@ -211,7 +216,7 @@ const Dashboard = () => {
           </>
         )}
         metaLine=""
-      />
+      /> : null}
 
       </div>
     </div>
