@@ -152,7 +152,7 @@ const Dashboard = () => {
 
       <HeroSlider slides={heroSlides} />
 
-      <section className="!mt-1 py-0">
+      <section className="!mt-0 py-0">
         <AnnouncementTicker
           items={tickerItems}
           durationMs={5600}
@@ -161,7 +161,7 @@ const Dashboard = () => {
         />
       </section>
 
-      <section id="categories" className="!mt-1 scroll-mt-28 space-y-3 sm:space-y-3.5">
+      <section id="categories" className="!mt-0 scroll-mt-28 space-y-3 sm:space-y-3.5">
         <div className="relative z-10 mx-auto flex w-full max-w-3xl justify-center px-1 sm:px-2">
           <ProductSearchBar
             products={storefrontProducts}

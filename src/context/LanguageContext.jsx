@@ -55,6 +55,11 @@ export const LanguageProvider = ({ children }) => {
   useEffect(() => {
     document.documentElement.dir = dir;
     document.documentElement.lang = language;
+    if (language === 'ar') {
+      document.documentElement.setAttribute('translate', 'no');
+    } else {
+      document.documentElement.removeAttribute('translate');
+    }
     localStorage.setItem('language', language);
   }, [dir, language]);
 

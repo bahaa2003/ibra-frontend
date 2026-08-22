@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers3, Search, ChevronRight, ArrowLeft, ArrowRight } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
@@ -76,6 +76,7 @@ const Products = () => {
   const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
   const loadCurrencies = useSystemStore((state) => state.loadCurrencies);
   const { i18n } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchResetSignal, setSearchResetSignal] = useState(0);
   const [openedProduct, setOpenedProduct] = useState(null);
@@ -94,7 +95,6 @@ const Products = () => {
 
   const activeCategoryParam = searchParams.get('category') || '';
   const activeRequestId = searchParams.get('request') || '';
-
   // ── Hierarchical navigation state ──────────────────────────────────────
   const [currentParentId, setCurrentParentId] = useState(null);
   const [activeSubcategoryId, setActiveSubcategoryId] = useState(null);
@@ -359,12 +359,17 @@ const Products = () => {
   const openProduct = useCallback((product) => {
     if (!product) return;
 
+    if (!user) {
+      navigate('/auth?mode=login');
+      return;
+    }
+
     setOpenedProduct(product);
     const next = new URLSearchParams(searchParams);
     next.set('request', String(product.id));
 
     setSearchParams(next);
-  }, [searchParams, setSearchParams]);
+  }, [navigate, searchParams, setSearchParams, user]);
 
   const closeProduct = useCallback(() => {
     setOpenedProduct(null);

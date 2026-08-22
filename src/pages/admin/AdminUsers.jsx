@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -164,6 +164,8 @@ const AdminUsers = () => {
   const [filter, setFilter] = useState(initialFilter);
   const [balanceFilter, setBalanceFilter] = useState('highest');
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
+  const previousSearch = useRef('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [approveTarget, setApproveTarget] = useState(null);
@@ -190,11 +192,23 @@ const AdminUsers = () => {
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
 
   useEffect(() => {
-    loadUsers();
+    loadUsers({ search: '' });
     loadGroups();
     loadCurrencies();
     Promise.resolve(loadWallets()).catch(() => null);
   }, [loadCurrencies, loadGroups, loadUsers, loadWallets]);
+
+  useEffect(() => {
+    const normalizedSearch = String(deferredSearch || '').trim();
+    if (previousSearch.current === normalizedSearch) return undefined;
+
+    previousSearch.current = normalizedSearch;
+    const timer = window.setTimeout(() => {
+      loadUsers({ force: true, page: 1, search: normalizedSearch });
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [deferredSearch, loadUsers]);
 
   useEffect(() => {
     if (!FILTER_OPTIONS.includes(statusFromQuery)) return;

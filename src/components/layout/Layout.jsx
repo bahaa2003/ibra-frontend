@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import PublicSidebar from '../PublicSidebar';
 import StoreFooter from '../home/StoreFooter';
 import { useLanguage } from '../../context/LanguageContext';
 import useAuthStore from '../../store/useAuthStore';
@@ -56,6 +57,11 @@ const Layout = () => {
     '/manager/dashboard',
     '/admin/dashboard',
   ].includes(location.pathname);
+  const isPublicProductsPage = location.pathname === '/products' && !user;
+
+  if (isPublicProductsPage) {
+    return <PublicProductsLayout />;
+  }
   const shellOffset = !isMobile ? (isSidebarOpen ? '312px' : '112px') : '0';
 
   const handleGoBack = () => {
@@ -162,6 +168,61 @@ const Layout = () => {
                   <span>{language === 'ar' ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
                 </>
               )}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PublicProductsLayout = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const { dir, language } = useLanguage();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+      setIsSidebarOpen(false);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_right,rgb(var(--color-primary-rgb)/0.16),transparent_30%),linear-gradient(180deg,rgb(var(--color-surface-rgb))_0%,rgb(var(--color-bg-rgb))_48%,rgb(var(--color-card-rgb))_100%)] text-[var(--color-text)]">
+      <PublicSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} isMobile={isMobile} />
+      <div className="flex-1 space-y-4 pb-5 sm:space-y-5">
+        <Header showUserInfo={false} toggleSidebar={() => setIsSidebarOpen(true)} />
+        <div className="flex w-full justify-end px-3 sm:px-4 md:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="group inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-amber-400/65 bg-[radial-gradient(circle_at_35%_30%,rgba(255,248,210,0.98),rgba(226,176,64,0.34)_48%,rgba(72,44,8,0.1))] text-amber-800 shadow-[0_0_0_1px_rgba(245,190,65,0.18),0_0_18px_rgba(245,190,65,0.42),0_10px_28px_-12px_rgba(120,75,10,0.75)] transition-all duration-200 hover:scale-105 hover:border-amber-300 hover:text-amber-950 active:scale-95 dark:border-amber-300/55 dark:bg-[radial-gradient(circle_at_35%_30%,rgba(255,226,143,0.28),rgba(170,110,20,0.16)_48%,rgba(0,0,0,0.35))] dark:text-amber-200"
+            aria-label={dir === 'rtl' ? 'رجوع للرئيسية' : 'Back to home'}
+            title={dir === 'rtl' ? 'رجوع للرئيسية' : 'Back to home'}
+          >
+            {dir === 'rtl' ? <ArrowRight className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+          </button>
+        </div>
+        <main className="px-3 sm:px-4 md:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[var(--shell-max-width)] animate-[page-fade-in_0.35s_ease-out]">
+            <Outlet />
+          </div>
+        </main>
+        <div className="mt-auto px-3 pb-4 sm:px-4 md:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[var(--shell-max-width)]">
+            <StoreFooter
+              hideBrand
+              title="IBRA Store"
+              description={language === 'ar' ? 'هذا هو الاختيار المناسب لك' : 'A calmer and cleaner mobile-first browsing experience.'}
+              chips={[]}
+              copyright={language === 'ar' ? 'جميع الحقوق محفوظة' : 'All rights reserved'}
+              metaLine=""
             />
           </div>
         </div>

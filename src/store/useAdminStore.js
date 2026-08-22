@@ -182,6 +182,7 @@ const useAdminStore = create(
       deletedUsers: [],
       usersPagination: null,
       usersCurrentPage: 1,
+      usersSearch: '',
       usersLastLoadedAt: 0,
       isLoadingUsers: false,
       wallets: [],
@@ -189,11 +190,12 @@ const useAdminStore = create(
       userWalletTransactions: {},
       walletTransactionsLastLoadedAt: {},
 
-      loadUsers: async ({ force = false, page } = {}) => {
+      loadUsers: async ({ force = false, page, search } = {}) => {
         const requestedPageCandidate = Number(page ?? get().usersCurrentPage ?? 1);
         const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
           ? Math.floor(requestedPageCandidate)
           : 1;
+        const normalizedSearch = String(search ?? get().usersSearch ?? '').trim();
         const { users, usersLastLoadedAt } = get();
         const hasUsers = Array.isArray(users) && users.length > 0;
         const shouldBypassHydratedCache = isRealProvider && !hasFetchedAdminUsersFromBackendThisSession;
@@ -217,6 +219,7 @@ const useAdminStore = create(
           limit: USERS_PAGE_LIMIT,
           sortBy: USERS_DEFAULT_SORT_BY,
           sortOrder: USERS_DEFAULT_SORT_ORDER,
+          search: normalizedSearch,
         })
           .then(async (result) => {
             // Handle both old (array) and new ({ users, pagination }) response shapes
@@ -236,6 +239,7 @@ const useAdminStore = create(
               deletedUsers: Array.isArray(nextDeletedUsers) ? nextDeletedUsers : [],
               usersPagination: pagination,
               usersCurrentPage: currentPage,
+              usersSearch: normalizedSearch,
               usersLastLoadedAt: Date.now(),
               isLoadingUsers: false,
             });
@@ -275,7 +279,7 @@ const useAdminStore = create(
         const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
           ? Math.floor(requestedPageCandidate)
           : 1;
-        return get().loadUsers({ force: true, page: requestedPage });
+        return get().loadUsers({ force: true, page: requestedPage, search: get().usersSearch });
       },
 
       loadSupervisors: async ({ force = false } = {}) => {

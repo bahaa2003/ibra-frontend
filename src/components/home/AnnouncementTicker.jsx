@@ -51,8 +51,8 @@ const AnnouncementTicker = ({ items, durationMs = 7000, ariaLabel, direction = '
 
   return (
     <section aria-label={ariaLabel} dir={direction} className="px-0.5">
-      <div className="announcement-float relative mx-auto max-w-4xl overflow-hidden rounded-[1.1rem] bg-transparent px-2 py-1.5 text-center shadow-none sm:px-3 sm:py-2">
-        <div className="relative min-h-[2.8rem] overflow-hidden">
+      <div className="announcement-float relative mx-auto max-w-4xl overflow-hidden rounded-[1.1rem] bg-transparent px-2 py-0 text-center shadow-none sm:px-3 sm:py-0">
+        <div className="relative min-h-[2.4rem] overflow-hidden">
           <div
             key={activeItem.id}
             style={{ animationDuration: `${activeDurationMs}ms` }}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Wallet } from 'lucide-react';
+import { Menu, UserRound, Wallet } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useAuthStore from '../../store/useAuthStore';
@@ -80,6 +80,18 @@ const Header = ({ toggleSidebar }) => {
           )}
 
           {isAuthenticated && <NotificationBell />}
+
+          {!isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => navigate('/auth?mode=login')}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:rgb(var(--color-primary-rgb)/0.22)] bg-[color:rgb(var(--color-card-rgb)/0.9)] text-[var(--color-text)] shadow-[var(--shadow-subtle)] transition-all hover:-translate-y-0.5 hover:border-[color:rgb(var(--color-primary-rgb)/0.42)] hover:text-[var(--color-primary)] sm:h-11 sm:w-11"
+              aria-label={dir === 'rtl' ? 'تسجيل الدخول' : 'Login'}
+              title={dir === 'rtl' ? 'تسجيل الدخول' : 'Login'}
+            >
+              <UserRound className="h-4.5 w-4.5" />
+            </button>
+          )}
 
           <ThemeToggle compact className="h-10 w-10 sm:h-11 sm:w-11" />
 

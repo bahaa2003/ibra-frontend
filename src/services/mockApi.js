@@ -1430,13 +1430,18 @@ const mockApi = {
   
   // --- Admin User Management ---
   users: {
-      list: async () => {
+      list: async ({ search = '' } = {}) => {
           await new Promise(resolve => setTimeout(resolve, DELAY));
           const data = getDB('admin-storage', { state: { users: mockUsers } });
         const migrated = await secureUsersInDb(data);
         if (migrated) saveDB('admin-storage', data);
+        const normalizedSearch = String(search || '').trim().toLowerCase();
         return (data.state.users || mockUsers)
           .filter((entry) => !entry?.deletedAt && entry?.isDeleted !== true)
+          .filter((entry) => !normalizedSearch || [entry?.name, entry?.email, entry?.username, entry?.id]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedSearch))
           .map(sanitizeUser);
       },
 

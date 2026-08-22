@@ -75,7 +75,7 @@ const Header = ({ user, onMenuClick, showUserInfo = true, onLoginClick }) => {
 
           <Link
             to="/auth?mode=login"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d5ad57]/28 bg-white/54 text-[#6e4519] shadow-[0_14px_30px_-24px_rgba(126,88,30,0.32)] transition-all hover:-translate-y-0.5 hover:border-[#b9781f]/38 hover:bg-[#fff7df] hover:text-[#3a2411] dark:border-[#f0c66f]/18 dark:bg-[#f0c66f]/8 dark:text-[#f8dfab] dark:shadow-[0_14px_30px_-22px_rgba(240,198,111,0.65)] dark:hover:border-[#f0c66f]/34 dark:hover:bg-[#f0c66f]/13 dark:hover:text-white sm:h-11 sm:w-11"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d5ad57]/28 bg-white/54 text-[#6e4519] shadow-[0_14px_30px_-24px_rgba(126,88,30,0.32)] transition-all hover:-translate-y-0.5 hover:border-[#b9781f]/38 hover:bg-[#fff7df] hover:text-[#3a2411] dark:border-[#f0c66f]/18 dark:bg-[#f0c66f]/8 dark:text-[#f8dfab] dark:shadow-[0_14px_30px_-22px_rgba(240,198,111,0.65)] dark:hover:border-[#f0c66f]/34 dark:hover:bg-[#f0c66f]/13 dark:hover:text-white sm:h-11 sm:w-11"
             title={isRTL ? 'تسجيل الدخول' : 'Login'}
             aria-label={isRTL ? 'تسجيل الدخول' : 'Login'}
           >
@@ -91,6 +91,7 @@ const Header = ({ user, onMenuClick, showUserInfo = true, onLoginClick }) => {
               {isRTL ? 'الصفحة الرئيسية' : 'Home'}
             </span>
             <motion.button
+              type="button"
               onClick={onMenuClick}
               className="rounded-full border border-[#d5ad57]/28 bg-white/54 p-2 text-[#6e4519] shadow-[0_14px_30px_-24px_rgba(126,88,30,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#b9781f]/38 hover:bg-[#fff7df] hover:text-[#3a2411] dark:border-[#f0c66f]/18 dark:bg-[#f0c66f]/8 dark:text-[#f8dfab] dark:shadow-[0_14px_30px_-22px_rgba(240,198,111,0.65)] dark:hover:border-[#f0c66f]/34 dark:hover:bg-[#f0c66f]/13 dark:hover:text-white"
               whileTap={{ scale: 0.95 }}

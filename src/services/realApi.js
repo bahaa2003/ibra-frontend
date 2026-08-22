@@ -2005,7 +2005,7 @@ const realApi = {
      * unwrap() returns the users array directly from paginated envelope.
      * Supports server-side pagination + sorting params.
      */
-    list: async ({ page = 1, limit = 20, sortBy = 'walletBalance', sortOrder = 'desc' } = {}) => {
+    list: async ({ page = 1, limit = 20, sortBy = 'walletBalance', sortOrder = 'desc', search = '' } = {}) => {
       const normalizedSortBy = typeof sortBy === 'string' && sortBy.trim() ? sortBy.trim() : 'walletBalance';
       const normalizedSortOrder = String(sortOrder || '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
       const query = new URLSearchParams();
@@ -2013,6 +2013,7 @@ const realApi = {
       query.set('limit', String(limit));
       query.set('sortBy', normalizedSortBy);
       query.set('sortOrder', normalizedSortOrder);
+      if (String(search || '').trim()) query.set('search', String(search).trim());
       const res = await http.get(`/admin/users?${query}`);
       const body = res.data || {};
       const data = body.data;
