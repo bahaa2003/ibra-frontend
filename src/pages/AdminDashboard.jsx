@@ -45,7 +45,6 @@ import { normalizeRole, ROLES } from '../utils/authRoles';
 const PENDING_STATUSES = ['pending', 'requested', 'under_review', 'processing'];
 const COMPLETED_STATUSES = ['completed', 'approved', 'success'];
 const REJECTED_STATUSES = ['rejected', 'denied', 'cancelled', 'canceled'];
-const DASHBOARD_DEFAULT_RANGE_DAYS = 30;
 
 const asNumber = (value) => {
   const parsed = Number(value);
@@ -166,8 +165,9 @@ const extractSupplierBalanceSnapshot = (payload = {}) => {
 
 const getDefaultDashboardRange = () => {
   const today = shiftDateByDays(new Date(), 0);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   return {
-    startDate: toDateInputValue(shiftDateByDays(today, -(DASHBOARD_DEFAULT_RANGE_DAYS - 1))),
+    startDate: toDateInputValue(monthStart),
     endDate: toDateInputValue(today),
   };
 };

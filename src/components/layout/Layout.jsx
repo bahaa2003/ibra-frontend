@@ -196,7 +196,7 @@ const PublicProductsLayout = () => {
   return (
     <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_right,rgb(var(--color-primary-rgb)/0.16),transparent_30%),linear-gradient(180deg,rgb(var(--color-surface-rgb))_0%,rgb(var(--color-bg-rgb))_48%,rgb(var(--color-card-rgb))_100%)] text-[var(--color-text)]">
       <PublicSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} isMobile={isMobile} />
-      <div className="flex-1 space-y-4 pb-5 sm:space-y-5">
+      <div className="min-w-0 flex-1 space-y-4 pb-5 sm:space-y-5 lg:mr-[274px]">
         <Header showUserInfo={false} toggleSidebar={() => setIsSidebarOpen(true)} />
         <div className="flex w-full justify-end px-3 sm:px-4 md:px-6 lg:px-8">
           <button

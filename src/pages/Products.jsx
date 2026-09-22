@@ -395,10 +395,30 @@ const Products = () => {
   // When viewing a specific leaf category via URL param
   const isViewingLeafCategory = Boolean(currentCatalog);
 
-  // Products to display — from drill-down OR from leaf category selection
+  // Products to display — show the complete storefront catalog at the public root,
+  // while keeping category and leaf-category filtering when the user drills down.
+  // On the public catalog, show available products below the sections as well.
+  // Also hide paused/unavailable products instead of exposing them in the storefront.
+  const availableProducts = useMemo(
+    () => storefrontProducts.filter((product) => (
+      product?.storefrontStatus?.isPurchasable !== false
+      && product?.storefrontStatus?.badge !== 'paused'
+      && product?.productStatus !== 'paused'
+      && !product?.pauseSales
+    )),
+    [storefrontProducts]
+  );
+
+  const availableProductIds = useMemo(
+    () => new Set(availableProducts.map((product) => product.id)),
+    [availableProducts]
+  );
+
   const displayProducts = isViewingLeafCategory
-    ? catalogProducts
-    : (currentParentId ? currentProducts : []);
+    ? catalogProducts.filter((product) => availableProductIds.has(product.id))
+    : (currentParentId
+      ? currentProducts.filter((product) => availableProductIds.has(product.id))
+      : availableProducts);
 
   return (
     <div className="space-y-6 pb-4">
@@ -504,7 +524,7 @@ const Products = () => {
             ) : null;
           })()}
 
-          {/* Products — from leaf category or parent drill-down */}
+          {/* Products — shown below the sections; prices stay in the purchase sheet */}
           {displayProducts.length > 0 && (
             <section className="grid grid-cols-3 gap-2 p-4 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
               {displayProducts.map((product) => (
@@ -525,7 +545,7 @@ const Products = () => {
           )}
 
           {/* Empty state — root level has no categories at all */}
-          {!currentParentId && !isViewingLeafCategory && currentCategories.length === 0 && (
+          {!currentParentId && !isViewingLeafCategory && currentCategories.length === 0 && displayProducts.length === 0 && (
             <EmptyState
               icon={Search}
               title={copy.emptyCatalogsTitle}

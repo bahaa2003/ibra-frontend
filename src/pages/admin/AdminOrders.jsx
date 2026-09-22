@@ -242,7 +242,9 @@ const AdminOrders = () => {
       storeActionsRef.current.loadAdminOrders({
         page: pg,
         limit: lim,
-        search: search || undefined,
+        // Keep the search term in every paginated request. The API must
+        // filter the complete order set before slicing the requested page.
+        search: String(search || '').trim() || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       }),

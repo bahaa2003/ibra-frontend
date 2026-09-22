@@ -141,7 +141,7 @@ const Dashboard = () => {
       {showPublicHeader && (
         <PublicSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} isMobile={isMobile} />
       )}
-      <div className={`flex-1 space-y-4 pb-5 sm:space-y-5 transition-all duration-300`}>
+      <div className={`min-w-0 flex-1 space-y-4 pb-5 sm:space-y-5 transition-all duration-300 lg:mr-[274px]`}>
         {showPublicHeader && (
           <Header
             user={user}

@@ -279,6 +279,8 @@ const useAdminStore = create(
         const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
           ? Math.floor(requestedPageCandidate)
           : 1;
+        // Always forward the current search term when navigating pages so the
+        // result set remains the same filtered set across the whole paginator.
         return get().loadUsers({ force: true, page: requestedPage, search: get().usersSearch });
       },
 

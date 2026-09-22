@@ -36,7 +36,7 @@ const About = () => {
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
       />
 
-      <main className="mx-auto flex min-h-[calc(100vh-4.75rem)] w-full max-w-5xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto flex min-h-[calc(100vh-4.75rem)] w-full max-w-5xl flex-col px-4 py-6 sm:px-6 lg:mr-[274px] lg:max-w-none lg:px-12 xl:mx-auto xl:max-w-5xl">
         <div className="mb-5 flex justify-end [direction:ltr]">
           <button
             type="button"

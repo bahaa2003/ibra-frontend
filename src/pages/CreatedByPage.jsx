@@ -201,7 +201,7 @@ const CreatedByPage = ({ embedded = false }) => {
         </>
       )}
 
-      <main className={embedded ? 'relative z-10 flex w-full flex-col gap-8' : 'relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8'}>
+      <main className={embedded ? 'relative z-10 flex w-full flex-col gap-8' : 'relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:mr-[274px] lg:max-w-none lg:px-12 xl:mx-auto xl:max-w-7xl'}>
         {!embedded && (
           <div className="flex justify-end [direction:ltr]">
           <button
