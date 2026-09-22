@@ -387,10 +387,15 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
 
         <div className="border-t border-[color:rgb(var(--color-primary-rgb)/0.12)] bg-[linear-gradient(180deg,transparent,rgb(var(--color-primary-rgb)/0.06))] p-4">
           {(isOpen || isMobile) && (
-            <LanguageSwitcher
-              variant="sidebar"
-              className="mb-2 h-7 w-full justify-center text-[10px] [&_button]:min-h-0 [&_button]:py-1 [&_button]:text-[10px]"
-            />
+            <>
+              <LanguageSwitcher
+                variant="sidebar"
+                className="mb-2 h-7 w-full justify-center text-[10px] [&_button]:min-h-0 [&_button]:py-1 [&_button]:text-[10px]"
+              />
+              <div className="text-center text-[10px] font-semibold tracking-wide text-[var(--color-muted)]" dir="ltr">
+                IBRA Store© 2026
+              </div>
+            </>
           )}
           {(!isOpen && !isMobile) && (
           <div className={cn('flex items-center gap-3', !isOpen && 'justify-center')}>

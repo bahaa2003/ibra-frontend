@@ -33,6 +33,7 @@ import ManualTopupsSection from '../components/admin-dashboard/ManualTopupsSecti
 import QuickActionsSection from '../components/admin-dashboard/QuickActionsSection';
 import ActivityFeedSection from '../components/admin-dashboard/ActivityFeedSection';
 import SupplierBalancesSection from '../components/admin-dashboard/SupplierBalancesSection';
+import ProfitTargetsCard from '../components/admin-dashboard/ProfitTargetsCard';
 import DashboardDateRangeFilter from '../components/admin-dashboard/DashboardDateRangeFilter';
 import OrderDetailsDrawer from '../components/orders/OrderDetailsDrawer';
 import Card from '../components/ui/Card';
@@ -912,6 +913,14 @@ const AdminDashboard = () => {
       </Card>
 
       <StatsGrid stats={stats} isLoading={isLoadingDashboardStats} />
+
+      {canViewInternalPricing && (
+        <ProfitTargetsCard
+          profit={statsFinancials.totalProfitUsd ?? statsFinancials.netProfit ?? 0}
+          isArabic={isArabic}
+          formatMoney={formatMoney}
+        />
+      )}
 
       <div className="grid place-items-center gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:place-items-stretch xl:gap-6">
         <div className="w-full space-y-4 md:space-y-6">
