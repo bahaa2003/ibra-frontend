@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -16,7 +16,8 @@ import useAuthStore from '../store/useAuthStore';
 import useOrderStore from '../store/useOrderStore';
 import useMediaStore from '../store/useMediaStore';
 import useSystemStore from '../store/useSystemStore';
-import { filterOrders, enrichOrders, summarizeOrders } from '../utils/orders';
+import apiClient from '../services/client';
+import { enrichOrders, summarizeOrders } from '../utils/orders';
 import { formatNumber } from '../utils/intl';
 import { formatCurrencyAmount } from '../utils/pricing';
 
@@ -46,7 +47,7 @@ const SummaryCard = ({ icon: Icon, label, value, note }) => (
 
 const Orders = () => {
   const { user } = useAuthStore();
-  const { orders, loadPersonalOrders, getPersonalOrderById } = useOrderStore();
+  const { getPersonalOrderById } = useOrderStore();
   const { products, loadProducts } = useMediaStore();
   const { currencies, loadCurrencies } = useSystemStore();
   const { i18n } = useTranslation();
@@ -61,33 +62,43 @@ const Orders = () => {
   const [customEndDate, setCustomEndDate] = useState(() => toDateInputValue(new Date()));
   const [sortOrder, setSortOrder] = useState('newest');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+  const [page, setPage] = useState(1);
+  const deferredSearch = useDeferredValue(searchTerm);
+  const ordersRequestVersion = useRef(0);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = isArabic ? 'ar-EG' : 'en-US';
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadPage = async () => {
+    const requestVersion = ++ordersRequestVersion.current;
+    let active = true;
+    const timer = window.setTimeout(async () => {
       setIsLoading(true);
-
-      await Promise.allSettled([
-        Promise.resolve(loadPersonalOrders(userId)),
-        Promise.resolve(loadProducts()),
-        Promise.resolve(loadCurrencies()),
-      ]);
-
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    };
-
-    loadPage();
-
+      const result = await apiClient.orders.listMinePaginated({
+        page,
+        limit: 20,
+        search: String(deferredSearch || '').trim(),
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        from: customStartDate || undefined,
+        to: customEndDate || undefined,
+      }).catch(() => null);
+      await Promise.allSettled([Promise.resolve(loadProducts()), Promise.resolve(loadCurrencies())]);
+      if (!active || requestVersion !== ordersRequestVersion.current) return;
+      setOrders(result?.orders || []);
+      setPagination(result?.pagination || { page, limit: 20, total: 0, pages: 0 });
+      setIsLoading(false);
+    }, 300);
     return () => {
-      isMounted = false;
+      active = false;
+      window.clearTimeout(timer);
     };
-  }, [loadCurrencies, loadPersonalOrders, loadProducts, userId]);
+  }, [customEndDate, customStartDate, deferredSearch, loadCurrencies, loadProducts, page, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [customEndDate, customStartDate, deferredSearch, statusFilter]);
 
   const enrichedOrders = useMemo(
     () => enrichOrders(orders, {
@@ -98,33 +109,7 @@ const Orders = () => {
     [orders, products, user, isArabic]
   );
 
-  const filteredOrders = useMemo(
-    () => {
-      const baseFiltered = filterOrders(enrichedOrders, {
-        searchTerm,
-        statusFilter,
-        typeFilter: 'all',
-        dateFilter,
-        sortOrder,
-      });
-
-      if (dateFilter !== 'custom') {
-        return baseFiltered;
-      }
-
-      const startBoundary = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null;
-      const endBoundary = customEndDate ? new Date(`${customEndDate}T23:59:59.999`) : null;
-
-      return baseFiltered.filter((order) => {
-        const orderDate = new Date(order?.createdAt || 0);
-        if (Number.isNaN(orderDate.getTime())) return false;
-        if (startBoundary && orderDate < startBoundary) return false;
-        if (endBoundary && orderDate > endBoundary) return false;
-        return true;
-      });
-    },
-    [customEndDate, customStartDate, dateFilter, enrichedOrders, searchTerm, sortOrder, statusFilter]
-  );
+  const filteredOrders = enrichedOrders;
 
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
   const visiblePurchaseTotals = useMemo(() => {
@@ -195,7 +180,7 @@ const Orders = () => {
           <SummaryCard
             icon={ShoppingCart}
             label={isArabic ? 'إجمالي الطلبات' : 'Total orders'}
-            value={formatCount(summary.total)}
+            value={formatCount(pagination.total)}
             note={isArabic ? 'طلباتك المسجلة فقط' : 'Only your own orders'}
           />
           <SummaryCard
@@ -235,7 +220,7 @@ const Orders = () => {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
+        onStatusChange={(value) => { setStatusFilter(value); setPage(1); }}
         dateFilter={dateFilter}
         sortOrder={sortOrder}
         onSortChange={setSortOrder}
@@ -302,6 +287,14 @@ const Orders = () => {
           actionTo={isLoading ? '' : '/products'}
         />
       )}
+
+      {pagination.pages > 1 ? (
+        <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
+          <button type="button" disabled={pagination.page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-40">{isArabic ? 'السابق' : 'Previous'}</button>
+          <span>{isArabic ? `صفحة ${pagination.page} من ${pagination.pages}` : `Page ${pagination.page} of ${pagination.pages}`}</span>
+          <button type="button" disabled={pagination.page >= pagination.pages} onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-40">{isArabic ? 'التالي' : 'Next'}</button>
+        </div>
+      ) : null}
 
       <OrderDetailsDrawer
         isOpen={Boolean(selectedOrder)}

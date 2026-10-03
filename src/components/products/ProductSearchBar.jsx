@@ -7,6 +7,7 @@ import { filterStorefrontProducts, sanitizeStorefrontQuery } from '../../utils/s
 
 const ProductSearchBar = ({
   products = [],
+  searchProducts,
   language = 'ar',
   value,
   onChange,
@@ -24,8 +25,10 @@ const ProductSearchBar = ({
   const [internalValue, setInternalValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [dropdownLayout, setDropdownLayout] = useState(null);
+  const [serverResults, setServerResults] = useState([]);
   const rootRef = useRef(null);
   const layoutFrameRef = useRef(0);
+  const requestVersionRef = useRef(0);
   const searchValue = isControlled ? value : internalValue;
   const deferredQuery = useDeferredValue(searchValue);
   const normalizedQuery = sanitizeStorefrontQuery(deferredQuery);
@@ -34,12 +37,34 @@ const ProductSearchBar = ({
   const results = useMemo(() => {
     if (!normalizedQuery) return [];
 
+    if (typeof searchProducts === 'function') return serverResults.slice(0, maxResults);
+
     return filterStorefrontProducts(products, {
       searchTerm: normalizedQuery,
       activeCategory: 'all',
       language,
     }).slice(0, maxResults);
-  }, [language, maxResults, normalizedQuery, products]);
+  }, [language, maxResults, normalizedQuery, products, searchProducts, serverResults]);
+
+  useEffect(() => {
+    if (typeof searchProducts !== 'function' || !normalizedQuery) {
+      requestVersionRef.current += 1;
+      setServerResults([]);
+      return undefined;
+    }
+    const requestVersion = ++requestVersionRef.current;
+    const timer = window.setTimeout(async () => {
+      try {
+        const nextResults = await searchProducts(normalizedQuery, maxResults);
+        if (requestVersion === requestVersionRef.current) {
+          setServerResults(Array.isArray(nextResults) ? nextResults : []);
+        }
+      } catch {
+        if (requestVersion === requestVersionRef.current) setServerResults([]);
+      }
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [maxResults, normalizedQuery, searchProducts]);
 
   const updateValue = (nextValue) => {
     if (!isControlled) {

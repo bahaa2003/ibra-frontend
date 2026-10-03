@@ -14,6 +14,7 @@ const fetchedOrderScopesThisSession = new Set();
 const ORDERS_CACHE_TTL = 60 * 1000;
 let ordersRequest = null;
 let ordersRequestScope = '';
+let adminOrdersRequestVersion = 0;
 
 const useOrderStore = create(
   persist(
@@ -43,10 +44,12 @@ const useOrderStore = create(
        * Fetch admin orders with server-side pagination.
        * Does NOT use the regular orders cache — admin has its own state slice.
        */
-      loadAdminOrders: async ({ page = 1, limit = 20, status, search, startDate, endDate } = {}) => {
+      loadAdminOrders: async ({ page = 1, limit = 20, status, search, startDate, endDate, providerId, providerCode, type } = {}) => {
         set({ adminOrdersLoading: true });
+        const requestVersion = ++adminOrdersRequestVersion;
         try {
-          const result = await apiClient.orders.listPaginated({ page, limit, status, search, startDate, endDate });
+          const result = await apiClient.orders.listPaginated({ page, limit, status, search, startDate, endDate, providerId, providerCode, type });
+          if (requestVersion !== adminOrdersRequestVersion) return result;
           set({
             adminOrders: result.orders,
             adminPagination: result.pagination,
@@ -54,6 +57,7 @@ const useOrderStore = create(
           });
           return result;
         } catch (error) {
+          if (requestVersion !== adminOrdersRequestVersion) throw error;
           set({ adminOrdersLoading: false });
           throw error;
         }

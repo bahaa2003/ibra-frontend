@@ -6,6 +6,7 @@ import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
 import useGroupStore from '../store/useGroupStore';
 import useSystemStore from '../store/useSystemStore';
+import apiClient from '../services/client';
 import { normalizeRole, ROLES } from '../utils/authRoles';
 import ProductSearchBar from '../components/products/ProductSearchBar';
 import CategoryCard from '../components/home/CategoryCard';
@@ -68,7 +69,6 @@ const getProductsPageCopy = (language = 'ar') => (
 
 const Products = () => {
   const user = useAuthStore((state) => state.user);
-  const sharedProducts = useMediaStore((state) => state.products);
   const sharedCategories = useMediaStore((state) => state.categories);
   const sharedIsLoading = useMediaStore((state) => state.isLoading);
   const storefrontSnapshot = useMediaStore((state) => state.productSnapshots?.storefront);
@@ -80,6 +80,11 @@ const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchResetSignal, setSearchResetSignal] = useState(0);
   const [openedProduct, setOpenedProduct] = useState(null);
+  const [requestedProduct, setRequestedProduct] = useState(null);
+  const [isRequestedProductLoading, setIsRequestedProductLoading] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [catalogPagination, setCatalogPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+  const [catalogPage, setCatalogPage] = useState(1);
 
   const language = getStorefrontLanguage(i18n);
   const isRTL = language === 'ar';
@@ -87,7 +92,7 @@ const Products = () => {
   const normalizedRole = normalizeRole(user?.role);
   const usesCustomerStorefront = [ROLES.CUSTOMER, ROLES.SUPERVISOR].includes(normalizedRole);
   const productLoadContext = usesCustomerStorefront ? 'storefront' : 'auto';
-  const products = usesCustomerStorefront ? (storefrontSnapshot?.products || []) : sharedProducts;
+  const products = catalogProducts;
   const categories = usesCustomerStorefront ? (storefrontSnapshot?.categories || []) : sharedCategories;
   const isLoading = usesCustomerStorefront
     ? (!storefrontSnapshot || storefrontSnapshot.isLoading)
@@ -98,10 +103,34 @@ const Products = () => {
   // ── Hierarchical navigation state ──────────────────────────────────────
   const [currentParentId, setCurrentParentId] = useState(null);
   const [activeSubcategoryId, setActiveSubcategoryId] = useState(null);
+  const requestedCategory = activeCategoryParam || activeSubcategoryId || currentParentId || '';
 
   useEffect(() => {
     loadProducts({ context: productLoadContext });
   }, [loadProducts, productLoadContext]);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.products.listPaginated({
+      context: productLoadContext,
+      page: catalogPage,
+      limit: 20,
+      category: requestedCategory,
+    }).then((result) => {
+      if (!active) return;
+      setCatalogProducts(result.products || []);
+      setCatalogPagination(result.pagination || { page: catalogPage, limit: 20, total: 0, pages: 0 });
+    }).catch(() => {
+      if (!active) return;
+      setCatalogProducts([]);
+      setCatalogPagination({ page: catalogPage, limit: 20, total: 0, pages: 0 });
+    });
+    return () => { active = false; };
+  }, [catalogPage, productLoadContext, requestedCategory]);
+
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [requestedCategory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +164,20 @@ const Products = () => {
     }),
     [groupsLastLoadedAt, language, products, user?.group, user?.groupId, user?.groupPercentage]
   );
+
+  const searchStorefrontProducts = useCallback(async (search, limit) => {
+    const result = await apiClient.products.listPaginated({
+      context: productLoadContext,
+      page: 1,
+      limit,
+      search,
+    });
+    return createStorefrontProducts(result.products, {
+      language,
+      userGroup: user?.groupId || user?.group || 'Normal',
+      userGroupPercentage: user?.groupPercentage ?? null,
+    });
+  }, [language, productLoadContext, user?.group, user?.groupId, user?.groupPercentage]);
 
   const storefrontCategories = useMemo(
     () => createStorefrontCategories(categories, storefrontProducts, language)
@@ -244,11 +287,50 @@ const Products = () => {
 
   // ── Existing selection logic ───────────────────────────────────────────
 
+  useEffect(() => {
+    if (!activeRequestId || String(openedProduct?.id || '') === String(activeRequestId)) {
+      setRequestedProduct(null);
+      setIsRequestedProductLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setIsRequestedProductLoading(true);
+    // Search the same customer-scoped listing endpoint used by the catalogue so
+    // a deep link cannot reveal an inactive or deleted product outside its page.
+    apiClient.products.listPaginated({
+      context: productLoadContext,
+      page: 1,
+      limit: 20,
+      search: activeRequestId,
+    }).then((result) => {
+      if (!active) return;
+      const match = (result.products || []).find(
+        (product) => String(product?.id || '') === String(activeRequestId)
+      );
+      const [normalisedMatch] = createStorefrontProducts(match ? [match] : [], {
+        language,
+        userGroup: user?.groupId || user?.group || 'Normal',
+        userGroupPercentage: user?.groupPercentage ?? null,
+      });
+      setRequestedProduct(normalisedMatch || null);
+    }).catch(() => {
+      if (active) setRequestedProduct(null);
+    }).finally(() => {
+      if (active) setIsRequestedProductLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [activeRequestId, language, openedProduct?.id, productLoadContext, user?.group, user?.groupId, user?.groupPercentage]);
+
   const selectedProduct = useMemo(
-    () => openedProduct || storefrontProducts.find(
-      (product) => String(product?.id || '') === String(activeRequestId || '')
-    ) || null,
-    [activeRequestId, openedProduct, storefrontProducts]
+    () => (
+      (String(openedProduct?.id || '') === String(activeRequestId || '') ? openedProduct : null)
+      || requestedProduct
+      || storefrontProducts.find((product) => String(product?.id || '') === String(activeRequestId || ''))
+      || null
+    ),
+    [activeRequestId, openedProduct, requestedProduct, storefrontProducts]
   );
 
   const currentCatalog = useMemo(() => {
@@ -256,7 +338,7 @@ const Products = () => {
     return storefrontCategories.find((category) => category.id === activeCategoryParam) || null;
   }, [activeCategoryParam, storefrontCategories]);
 
-  const catalogProducts = useMemo(
+  const currentCatalogProducts = useMemo(
     () => (
       currentCatalog
         ? storefrontProducts.filter((product) => String(product?.category || '').trim() === currentCatalog.id)
@@ -276,7 +358,7 @@ const Products = () => {
       shouldReplace = true;
     }
 
-    if (activeRequestId && !selectedProduct) {
+    if (activeRequestId && !selectedProduct && !isRequestedProductLoading) {
       next.delete('request');
       shouldReplace = true;
     }
@@ -290,6 +372,7 @@ const Products = () => {
     activeCategoryParam,
     activeRequestId,
     isLoading,
+    isRequestedProductLoading,
     searchParams,
     selectedProduct,
     setSearchParams,
@@ -415,7 +498,7 @@ const Products = () => {
   );
 
   const displayProducts = isViewingLeafCategory
-    ? catalogProducts.filter((product) => availableProductIds.has(product.id))
+    ? currentCatalogProducts.filter((product) => availableProductIds.has(product.id))
     : (currentParentId
       ? currentProducts.filter((product) => availableProductIds.has(product.id))
       : availableProducts);
@@ -426,6 +509,7 @@ const Products = () => {
         <div className="mx-auto flex w-full max-w-5xl justify-center">
           <ProductSearchBar
             products={storefrontProducts}
+            searchProducts={searchStorefrontProducts}
             language={language}
             resetSignal={searchResetSignal}
             onSelectProduct={openProduct}
@@ -532,6 +616,14 @@ const Products = () => {
               ))}
             </section>
           )}
+
+          {catalogPagination.pages > 1 ? (
+            <div className="flex items-center justify-center gap-3 px-4 pb-4 text-sm text-[var(--color-text-secondary)]">
+              <button type="button" disabled={catalogPagination.page <= 1} onClick={() => setCatalogPage((page) => Math.max(1, page - 1))} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-40">{isRTL ? 'السابق' : 'Previous'}</button>
+              <span>{isRTL ? `صفحة ${catalogPagination.page} من ${catalogPagination.pages}` : `Page ${catalogPagination.page} of ${catalogPagination.pages}`}</span>
+              <button type="button" disabled={catalogPagination.page >= catalogPagination.pages} onClick={() => setCatalogPage((page) => Math.min(catalogPagination.pages, page + 1))} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-40">{isRTL ? 'التالي' : 'Next'}</button>
+            </div>
+          ) : null}
 
           {/* Empty state — inside a category with no children and no products */}
           {(currentParentId || isViewingLeafCategory) && currentCategories.length === 0 && displayProducts.length === 0 && (

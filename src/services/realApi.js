@@ -1457,15 +1457,15 @@ const realApi = {
 
   // ── Products ─────────────────────────────────────────────────────────────
   products: {
-    /**
-     * GET /admin/products (admin) or GET /products (customer)
-     *
-     * Both return products array in `data`.
-     */
-    list: async (options = {}) => {
+    /** Fetch exactly one server-filtered product page. */
+    listPaginated: async (options = {}) => {
       const context = typeof options === 'string' ? options : options?.context;
       const forceAdminContext = context === 'admin';
       const forceStorefrontContext = context === 'storefront';
+      const page = Math.max(1, Number(options?.page) || 1);
+      const limit = Math.max(1, Math.min(200, Number(options?.limit) || 20));
+      const search = String(options?.search || '').trim();
+      const category = String(options?.category || '').trim();
       const requestPlan = (forceAdminContext || (!forceStorefrontContext && isAdmin()))
         ? ['/admin/products']
         : [
@@ -1475,74 +1475,30 @@ const realApi = {
           '/me/products',
         ];
 
-      let fallback = null;
-
-      const fetchAllProductPages = async (endpoint) => {
-        const pageLimit = 100;
-        const collected = [];
-        const seen = new Set();
-
-        for (let page = 1; page <= 1000; page += 1) {
-          const res = await http.get(endpoint, { params: { page, limit: pageLimit } });
-          const data = unwrap(res);
-          const pageProducts = Array.isArray(data)
-            ? data
-            : (data?.products || data?.items || data?.results || []);
-          const safePageProducts = Array.isArray(pageProducts) ? pageProducts : [];
-          let addedOnThisPage = 0;
-
-          safePageProducts.forEach((product, index) => {
-            const productKey = String(product?._id || product?.id || `${page}:${index}`);
-            if (seen.has(productKey)) return;
-            seen.add(productKey);
-            collected.push(product);
-            addedOnThisPage += 1;
-          });
-
-          const pagination = data?.pagination || data?.meta || {};
-          const currentPage = Number(pagination.page || pagination.currentPage || page);
-          const totalPages = Number(pagination.pages || pagination.totalPages || 0);
-          const totalProducts = Number(pagination.total || pagination.totalItems || pagination.totalCount || 0);
-          const hasMore = pagination.hasMore ?? pagination.hasNextPage;
-
-          if (safePageProducts.length === 0 || addedOnThisPage === 0) break;
-          if (totalProducts > 0 && collected.length >= totalProducts) break;
-          if (totalPages > 0 && currentPage >= totalPages) break;
-          if (hasMore === false) break;
-
-          // An unpaginated endpoint returns its complete array in one response.
-          // A full/default-sized page is followed by another request so backend
-          // defaults such as 50 products do not truncate the catalogue.
-          if (!totalPages && !totalProducts && hasMore == null && safePageProducts.length < 50) break;
-        }
-
-        return collected;
-      };
-
       for (const endpoint of requestPlan) {
         try {
-          const products = await fetchAllProductPages(endpoint);
-          const normalised = (Array.isArray(products) ? products : []).map(normaliseProduct);
-
-          if (!fallback) fallback = normalised;
-
-          // Storefront categories are loaded and normalized separately. Once the
-          // customer catalogue succeeds, keep its complete page/order instead of
-          // replacing it with a role-specific fallback based on category shape.
-          if (forceStorefrontContext && endpoint === '/products') {
-            return normalised;
-          }
-
-          // Prefer the endpoint that returns readable category values (name/object vs ObjectId).
-          if (productsHaveReadableCategories(normalised)) {
-            return normalised;
-          }
+          const res = await http.get(endpoint, {
+            params: { page, limit, ...(search ? { search } : {}), ...(category ? { category } : {}) },
+          });
+          const raw = res.data || {};
+          const data = raw.data;
+          const products = Array.isArray(data) ? data : (data?.products || data?.items || data?.results || []);
+          return {
+            products: products.map(normaliseProduct),
+            pagination: raw.pagination || { page, limit, total: products.length, pages: products.length ? 1 : 0 },
+          };
         } catch {
           // Silent fallback across endpoints.
         }
       }
 
-      return fallback || [];
+      return { products: [], pagination: { page, limit, total: 0, pages: 0 } };
+    },
+
+    /** Compatibility wrapper for small, non-paginated consumers. */
+    list: async (options = {}) => {
+      const result = await realApi.products.listPaginated(options);
+      return result.products;
     },
 
     /**
@@ -1679,11 +1635,17 @@ const realApi = {
     /**
      * GET /admin/provider-products/:providerId — raw provider products.
      */
-    listProviderProducts: async (providerId) => {
-      const res = await http.get(`/admin/provider-products/${providerId}`);
-      const data = unwrap(res);
+    listProviderProducts: async (providerId, params = {}) => {
+      const page = Math.max(1, Number(params?.page) || 1);
+      const limit = Math.max(1, Math.min(200, Number(params?.limit) || 50));
+      const res = await http.get(`/admin/provider-products/${providerId}`, {
+        params: { page, limit, ...(String(params?.search || '').trim() ? { search: String(params.search).trim() } : {}) },
+      });
+      const raw = res.data || {};
+      const data = raw.data;
       const items = Array.isArray(data) ? data : (data?.providerProducts || []);
-      return items.map((pp) => ({
+      return {
+        products: items.map((pp) => ({
         ...pp,
         id: pp._id || pp.id,
         _id: undefined,
@@ -1696,7 +1658,9 @@ const realApi = {
         minimumOrderQty: getProviderCatalogMinQtyValue(pp),
         maxQty: getProviderCatalogMaxQtyValue(pp),
         maximumOrderQty: getProviderCatalogMaxQtyValue(pp),
-      }));
+        })),
+        pagination: raw.pagination || { page, limit, total: items.length, pages: items.length ? 1 : 0 },
+      };
     },
 
     /**
@@ -1704,9 +1668,11 @@ const realApi = {
      */
     listSafeProviderProductOptions: async (providerId, params = {}) => {
       const res = await http.get(`/admin/product-provider-options/${providerId}/products`, { params });
-      const data = unwrap(res);
+      const raw = res.data || {};
+      const data = raw.data;
       const items = Array.isArray(data) ? data : (data?.providerProducts || data?.products || []);
-      return items.map((pp) => ({
+      return {
+        products: items.map((pp) => ({
         id: pp._id || pp.id,
         name: pp.name || pp.displayName || pp.translatedName || pp.rawName || '',
         providerName: pp.providerName || pp.provider?.name || '',
@@ -1716,7 +1682,9 @@ const realApi = {
         maxQty: pp.maxQty ?? pp.maximumOrderQty ?? null,
         maximumOrderQty: pp.maxQty ?? pp.maximumOrderQty ?? null,
         isActive: pp.isActive !== false,
-      })).filter((item) => item.id && item.name);
+        })).filter((item) => item.id && item.name),
+        pagination: raw.pagination || { page: Number(params?.page) || 1, limit: Number(params?.limit) || 50, total: items.length, pages: items.length ? 1 : 0 },
+      };
     },
 
     /**
@@ -2005,7 +1973,7 @@ const realApi = {
      * unwrap() returns the users array directly from paginated envelope.
      * Supports server-side pagination + sorting params.
      */
-    list: async ({ page = 1, limit = 20, sortBy = 'walletBalance', sortOrder = 'desc', search = '' } = {}) => {
+    list: async ({ page = 1, limit = 20, sortBy = 'walletBalance', sortOrder = 'desc', search = '', status } = {}) => {
       const normalizedSortBy = typeof sortBy === 'string' && sortBy.trim() ? sortBy.trim() : 'walletBalance';
       const normalizedSortOrder = String(sortOrder || '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
       const query = new URLSearchParams();
@@ -2014,6 +1982,7 @@ const realApi = {
       query.set('sortBy', normalizedSortBy);
       query.set('sortOrder', normalizedSortOrder);
       if (String(search || '').trim()) query.set('search', String(search).trim());
+      if (status && status !== 'all') query.set('status', status);
       const res = await http.get(`/admin/users?${query}`);
       const body = res.data || {};
       const data = body.data;
@@ -2022,12 +1991,14 @@ const realApi = {
       return { users: normaliseUsers(users), pagination: body.pagination || null };
     },
 
-    listSupervisors: async ({ page = 1, limit = 100, sortBy = 'createdAt', sortOrder = 'desc' } = {}) => {
+    listSupervisors: async ({ page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', search = '', status } = {}) => {
       const query = new URLSearchParams();
       query.set('page', String(page));
       query.set('limit', String(limit));
       query.set('sortBy', sortBy);
       query.set('sortOrder', sortOrder);
+      if (String(search || '').trim()) query.set('search', String(search).trim());
+      if (status && status !== 'all') query.set('status', status);
 
       const res = await http.get(`/admin/supervisors?${query}`);
       const body = res.data || {};
@@ -2530,11 +2501,29 @@ const realApi = {
      * Used by customer/supervisor personal pages so role alone never switches
      * the request to the admin orders endpoint.
      */
-    listMine: async () => {
-      const res = await http.get('/me/orders');
-      const data = unwrap(res);
+    listMinePaginated: async ({ page = 1, limit = 20, search, status, from, to } = {}) => {
+      const res = await http.get('/me/orders', {
+        params: {
+          page,
+          limit,
+          ...(String(search || '').trim() ? { search: String(search).trim() } : {}),
+          ...(status && status !== 'all' ? { status } : {}),
+          ...(from ? { from } : {}),
+          ...(to ? { to } : {}),
+        },
+      });
+      const raw = res.data || {};
+      const data = raw.data;
       const orders = Array.isArray(data) ? data : (data?.orders || []);
-      return orders.map(normaliseOrder);
+      return {
+        orders: orders.map(normaliseOrder),
+        pagination: raw.pagination || { page, limit, total: orders.length, pages: orders.length ? 1 : 0 },
+      };
+    },
+
+    listMine: async (params = {}) => {
+      const result = await realApi.orders.listMinePaginated(params);
+      return result.orders;
     },
 
     /**
@@ -2551,7 +2540,7 @@ const realApi = {
      * @param {string}  [params.startDate] - ISO date string (from)
      * @param {string}  [params.endDate]   - ISO date string (to)
      */
-    listPaginated: async ({ page = 1, limit = 20, status, search, startDate, endDate } = {}) => {
+    listPaginated: async ({ page = 1, limit = 20, status, search, startDate, endDate, providerId, providerCode, type } = {}) => {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('limit', String(limit));
@@ -2559,6 +2548,9 @@ const realApi = {
       if (search && String(search).trim()) params.set('search', String(search).trim());
       if (startDate) params.set('from', startDate);
       if (endDate) params.set('to', endDate);
+      if (providerId) params.set('providerId', providerId);
+      if (providerCode && providerCode !== 'all') params.set('providerCode', providerCode);
+      if (type && type !== 'all') params.set('type', type);
 
       const res = await http.get(`/admin/orders?${params.toString()}`);
       const raw = res.data;

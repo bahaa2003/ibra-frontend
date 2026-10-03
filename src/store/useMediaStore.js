@@ -531,13 +531,9 @@ const useMediaStore = create(
         const categories = get().categories || [];
         const current = get().products.find((p) => p.id === id);
 
-        if (!current) {
-          throw new Error('Product not found');
-        }
-
         const toggled = await apiClient.products.toggleStatus(id);
         const normalizedProduct = normalizeProductRecord(
-          mergeSavedProductSnapshot(current, toggled || {}),
+          mergeSavedProductSnapshot(current || { id }, toggled || {}),
           categories
         );
 

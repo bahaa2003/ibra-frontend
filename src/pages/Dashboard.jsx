@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, Sparkles } from 'lucide-react';
@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import useAuthStore from '../store/useAuthStore';
 import useMediaStore from '../store/useMediaStore';
 import useGroupStore from '../store/useGroupStore';
+import apiClient from '../services/client';
 import HeroSlider from '../components/home/HeroSlider';
 import AnnouncementTicker from '../components/home/AnnouncementTicker';
 import CategoryCard from '../components/home/CategoryCard';
@@ -26,6 +27,8 @@ const COMMUNITY_WHATSAPP_LINK = 'https://chat.whatsapp.com/FqEYPVChqXB7CFS7hbN5D
 const Dashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [categoryProductCounts, setCategoryProductCounts] = useState({});
+  const categoryCountsRequestVersion = useRef(0);
   const { user, refreshProfile } = useAuthStore();
   const { categories, products, loadProducts } = useMediaStore();
   const groupsLastLoadedAt = useGroupStore((state) => state.groupsLastLoadedAt);
@@ -57,6 +60,40 @@ const Dashboard = () => {
     loadProducts();
   }, [loadProducts]);
 
+  useEffect(() => {
+    const categoryIds = (Array.isArray(categories) ? categories : [])
+      .map((category) => String(category?.id || '').trim())
+      .filter(Boolean);
+    const requestVersion = ++categoryCountsRequestVersion.current;
+    let active = true;
+
+    if (!categoryIds.length) {
+      setCategoryProductCounts({});
+      return () => { active = false; };
+    }
+
+    Promise.allSettled(categoryIds.map(async (categoryId) => {
+      const result = await apiClient.products.listPaginated({
+        context: 'storefront',
+        page: 1,
+        limit: 1,
+        category: categoryId,
+      });
+      return [categoryId, Number(result?.pagination?.total) || 0];
+    })).then((results) => {
+      if (!active || requestVersion !== categoryCountsRequestVersion.current) return;
+      const nextCounts = {};
+      results.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        const [categoryId, total] = result.value;
+        nextCounts[categoryId] = total;
+      });
+      setCategoryProductCounts(nextCounts);
+    });
+
+    return () => { active = false; };
+  }, [categories, user?.group, user?.groupId, user?.id]);
+
   const heroSlides = useMemo(() => ([
     {
       id: 'hero-games',
@@ -85,9 +122,31 @@ const Dashboard = () => {
     [groupsLastLoadedAt, language, products, user?.group, user?.groupId, user?.groupPercentage]
   );
 
+  const searchStorefrontProducts = useCallback(async (search, limit) => {
+    const result = await apiClient.products.listPaginated({
+      context: 'storefront',
+      page: 1,
+      limit,
+      search,
+    });
+    return createStorefrontProducts(result.products, {
+      language,
+      userGroup: user?.groupId || user?.group || 'Normal',
+      userGroupPercentage: user?.groupPercentage ?? null,
+    });
+  }, [language, user?.group, user?.groupId, user?.groupPercentage]);
+
+  const categoriesWithServerCounts = useMemo(
+    () => (Array.isArray(categories) ? categories : []).map((category) => ({
+      ...category,
+      productCount: categoryProductCounts[String(category?.id || '').trim()],
+    })),
+    [categories, categoryProductCounts]
+  );
+
   const storefrontCategories = useMemo(
-    () => createStorefrontCategories(categories, storefrontProducts, language),
-    [categories, storefrontProducts, language]
+    () => createStorefrontCategories(categoriesWithServerCounts, storefrontProducts, language),
+    [categoriesWithServerCounts, storefrontProducts, language]
   );
 
   const visibleHomepageCategories = useMemo(
@@ -165,6 +224,7 @@ const Dashboard = () => {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl justify-center px-1 sm:px-2">
           <ProductSearchBar
             products={storefrontProducts}
+            searchProducts={searchStorefrontProducts}
             language={language}
             onSelectProduct={handleProductSelect}
             forceIconRight

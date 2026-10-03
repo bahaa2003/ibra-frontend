@@ -20,6 +20,8 @@ const USERS_PAGE_LIMIT = 20;
 const USERS_DEFAULT_SORT_BY = 'walletBalance';
 const USERS_DEFAULT_SORT_ORDER = 'desc';
 let usersRequest = null;
+let usersRequestScope = '';
+let usersRequestVersion = 0;
 let walletsRequest = null;
 const walletTransactionsRequests = new Map();
 
@@ -183,6 +185,7 @@ const useAdminStore = create(
       usersPagination: null,
       usersCurrentPage: 1,
       usersSearch: '',
+      usersStatus: '',
       usersLastLoadedAt: 0,
       isLoadingUsers: false,
       wallets: [],
@@ -190,29 +193,34 @@ const useAdminStore = create(
       userWalletTransactions: {},
       walletTransactionsLastLoadedAt: {},
 
-      loadUsers: async ({ force = false, page, search } = {}) => {
+      loadUsers: async ({ force = false, page, search, status } = {}) => {
         const requestedPageCandidate = Number(page ?? get().usersCurrentPage ?? 1);
         const requestedPage = Number.isFinite(requestedPageCandidate) && requestedPageCandidate > 0
           ? Math.floor(requestedPageCandidate)
           : 1;
         const normalizedSearch = String(search ?? get().usersSearch ?? '').trim();
+        const normalizedStatus = String(status ?? get().usersStatus ?? '').trim();
+        const requestScope = `${requestedPage}:${normalizedSearch}:${normalizedStatus}`;
         const { users, usersLastLoadedAt } = get();
         const hasUsers = Array.isArray(users) && users.length > 0;
         const shouldBypassHydratedCache = isRealProvider && !hasFetchedAdminUsersFromBackendThisSession;
         const hasFreshUsers = !shouldBypassHydratedCache
           && hasUsers
           && !page
+          && status === undefined
           && (Date.now() - Number(usersLastLoadedAt || 0) < USERS_CACHE_TTL);
 
         if (!force && hasFreshUsers) {
           return users;
         }
 
-        if (usersRequest) {
+        if (usersRequest && usersRequestScope === requestScope) {
           return usersRequest;
         }
 
         set({ isLoadingUsers: true });
+        const requestVersion = ++usersRequestVersion;
+        usersRequestScope = requestScope;
 
         usersRequest = apiClient.users.list({
           page: requestedPage,
@@ -220,6 +228,7 @@ const useAdminStore = create(
           sortBy: USERS_DEFAULT_SORT_BY,
           sortOrder: USERS_DEFAULT_SORT_ORDER,
           search: normalizedSearch,
+          status: normalizedStatus || undefined,
         })
           .then(async (result) => {
             // Handle both old (array) and new ({ users, pagination }) response shapes
@@ -234,12 +243,14 @@ const useAdminStore = create(
             const nextDeletedUsers = canLoadDeletedUsers && apiClient.users.listDeleted
               ? await apiClient.users.listDeleted().catch((error) => (isPermissionDeniedError(error) ? [] : []))
               : [];
+            if (requestVersion !== usersRequestVersion) return nextUsers;
             set({
               users: nextUsers,
               deletedUsers: Array.isArray(nextDeletedUsers) ? nextDeletedUsers : [],
               usersPagination: pagination,
               usersCurrentPage: currentPage,
               usersSearch: normalizedSearch,
+              usersStatus: normalizedStatus,
               usersLastLoadedAt: Date.now(),
               isLoadingUsers: false,
             });
@@ -250,6 +261,7 @@ const useAdminStore = create(
             return nextUsers;
           })
           .catch((error) => {
+            if (requestVersion !== usersRequestVersion) return get().users;
             if (isPermissionDeniedError(error)) {
               set({
                 users: [],
@@ -268,7 +280,10 @@ const useAdminStore = create(
             return get().users;
           })
           .finally(() => {
-            usersRequest = null;
+            if (requestVersion === usersRequestVersion) {
+              usersRequest = null;
+              usersRequestScope = '';
+            }
           });
 
         return usersRequest;
@@ -281,7 +296,12 @@ const useAdminStore = create(
           : 1;
         // Always forward the current search term when navigating pages so the
         // result set remains the same filtered set across the whole paginator.
-        return get().loadUsers({ force: true, page: requestedPage, search: get().usersSearch });
+        return get().loadUsers({
+          force: true,
+          page: requestedPage,
+          search: get().usersSearch,
+          status: get().usersStatus,
+        });
       },
 
       loadSupervisors: async ({ force = false } = {}) => {

@@ -127,10 +127,6 @@ const getTopupDashboardDate = (topup) => (
   || null
 );
 
-const formatRelativeProductName = (product, isArabic) => (
-  product?.nameAr || product?.name || (isArabic ? 'منتج غير معروف' : 'Unknown product')
-);
-
 const extractSupplierBalanceSnapshot = (payload = {}) => {
   const raw = payload || {};
   const balanceNode = raw?.balance;
@@ -412,10 +408,6 @@ const AdminDashboard = () => {
     () => manualTopups.filter((entry) => isPendingStatus(entry?.status)),
     [manualTopups]
   );
-
-  const filteredProducts = useMemo(() => {
-    return Array.isArray(products) ? products : [];
-  }, [products]);
 
   const recentOrders = useMemo(
     () => [...filteredOrders].sort(byNewestDate).slice(0, 6),
@@ -703,7 +695,6 @@ const AdminDashboard = () => {
     const newestCompletedOrder = [...completedOrders].sort(byNewestDate)[0];
     const newestPendingTopup = [...pendingManualTopups].sort(byNewestDate)[0];
     const newestRejectedOrder = [...filteredOrders.filter((entry) => isRejectedStatus(entry?.status))].sort(byNewestDate)[0];
-    const newestProduct = [...filteredProducts].sort(byNewestDate)[0];
 
     if (newestCompletedOrder) {
       items.push({
@@ -747,16 +738,16 @@ const AdminDashboard = () => {
       });
     }
 
-    if (newestProduct) {
+    if (asNumber(statsProducts.total) > 0) {
       items.push({
-        id: `product-snapshot-${newestProduct.id}`,
+        id: 'product-snapshot',
         icon: Package,
         tone: 'info',
         title: isArabic ? 'حالة الكاتالوج الحالية' : 'Current catalog snapshot',
         description: isArabic
-          ? `إجمالي ${formatCount(filteredProducts.length)} منتج داخل نطاق العرض الحالي. آخر منتج ظاهر: ${formatRelativeProductName(newestProduct, true)}.`
-          : `${formatCount(filteredProducts.length)} products are currently inside the selected range. Latest visible item: ${formatRelativeProductName(newestProduct, false)}.`,
-        timestamp: newestProduct.updatedAt || newestProduct.createdAt || null,
+          ? `يوجد حاليًا ${formatCount(statsProducts.total)} منتج في الكاتالوج.`
+          : `The catalog currently contains ${formatCount(statsProducts.total)} products.`,
+        timestamp: null,
       });
     }
 
@@ -779,11 +770,11 @@ const AdminDashboard = () => {
     allCustomerUsers.length,
     completedOrders,
     filteredOrders,
-    filteredProducts,
     formatCount,
     formatMoney,
     isArabic,
     pendingManualTopups,
+    statsProducts.total,
   ]);
 
   const handleViewOrderFromDashboard = async (order) => {

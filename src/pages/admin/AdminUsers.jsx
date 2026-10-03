@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -165,7 +165,6 @@ const AdminUsers = () => {
   const [balanceFilter, setBalanceFilter] = useState('highest');
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
-  const previousSearch = useRef('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [approveTarget, setApproveTarget] = useState(null);
@@ -191,24 +190,39 @@ const AdminUsers = () => {
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = getNumericLocale(isArabic ? 'ar-EG' : 'en-US');
 
+  const serverStatus = filter === 'pending'
+    ? 'PENDING'
+    : filter === 'approved'
+      ? 'ACTIVE'
+      : filter === 'rejected'
+        ? 'REJECTED'
+        : '';
+
   useEffect(() => {
-    loadUsers({ search: '' });
     loadGroups();
     loadCurrencies();
     Promise.resolve(loadWallets()).catch(() => null);
-  }, [loadCurrencies, loadGroups, loadUsers, loadWallets]);
+  }, [loadCurrencies, loadGroups, loadWallets]);
 
   useEffect(() => {
     const normalizedSearch = String(deferredSearch || '').trim();
-    if (previousSearch.current === normalizedSearch) return undefined;
-
-    previousSearch.current = normalizedSearch;
+    if (filter === 'deleted') return undefined;
     const timer = window.setTimeout(() => {
-      loadUsers({ force: true, page: 1, search: normalizedSearch });
+      loadUsers({ force: true, page: 1, search: normalizedSearch, status: serverStatus });
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [deferredSearch, loadUsers]);
+  }, [deferredSearch, filter, loadUsers, serverStatus]);
+
+  const reloadCurrentUsers = useCallback(
+    () => loadUsers({
+      force: true,
+      page: 1,
+      search: String(search || '').trim(),
+      status: serverStatus,
+    }),
+    [loadUsers, search, serverStatus]
+  );
 
   useEffect(() => {
     if (!FILTER_OPTIONS.includes(statusFromQuery)) return;
@@ -239,12 +253,9 @@ const AdminUsers = () => {
     }
   }, [currencies, groups, selectedUser?.id, users]);
 
-  const customerUsers = useMemo(
-    () => (users || []).filter((entry) => (
-      String(entry?.role || '').trim().toLowerCase() === 'customer' || isSupervisorAccount(entry)
-    )),
-    [users]
-  );
+  // The API response is the authoritative admin-user page. Do not remove
+  // roles locally after pagination, because that makes the page incomplete.
+  const customerUsers = useMemo(() => (users || []), [users]);
 
   const pendingCount = useMemo(
     () => customerUsers.filter((entry) => isPendingAccountStatus(entry?.status)).length,
@@ -258,12 +269,7 @@ const AdminUsers = () => {
     () => customerUsers.filter((entry) => isRejectedAccountStatus(entry?.status)).length,
     [customerUsers]
   );
-  const deletedCustomerUsers = useMemo(
-    () => (deletedUsers || []).filter((entry) => (
-      String(entry?.role || '').trim().toLowerCase() === 'customer' || isSupervisorAccount(entry)
-    )),
-    [deletedUsers]
-  );
+  const deletedCustomerUsers = useMemo(() => (deletedUsers || []), [deletedUsers]);
   const deletedCount = useMemo(
     () => deletedCustomerUsers.length,
     [deletedCustomerUsers]
@@ -287,18 +293,10 @@ const AdminUsers = () => {
       .filter((entry) => {
         const normalizedStatus = normalizeAccountStatus(entry?.status);
         const isDeletedEntry = Boolean(entry?.deletedAt) || Boolean(entry?.isDeleted) || normalizedStatus === 'deleted';
-        const matchesFilter = filter === 'all'
-          ? true
-          : filter === 'deleted'
-            ? isDeletedEntry
-            : normalizedStatus === filter;
-        const haystack = [
-          entry?.name,
-          entry?.email,
-          entry?.username,
-          entry?.id,
-        ].join(' ').toLowerCase();
-        const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch);
+        const matchesFilter = filter === 'deleted' ? isDeletedEntry : true;
+        // Active-list search and status are part of the API request. Never
+        // filter the received page again, or page 2 would look incomplete.
+        const matchesSearch = true;
         const matchesBalance = balanceFilter !== 'debtor' || getEntryBalance(entry) < 0;
         return matchesFilter && matchesSearch && matchesBalance;
       })
@@ -372,6 +370,13 @@ const AdminUsers = () => {
 
   const handleFilterChange = (value) => {
     setFilter(value);
+    if (value !== 'deleted') {
+      const nextStatus = value === 'pending' ? 'PENDING' : value === 'approved' ? 'ACTIVE' : value === 'rejected' ? 'REJECTED' : '';
+    } else {
+      // The deleted-users endpoint has no server-side search contract. Do not
+      // suggest that the current page is being searched locally.
+      setSearch('');
+    }
     if (value === 'all') {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('status');
@@ -437,7 +442,7 @@ const AdminUsers = () => {
       setApproveTarget(null);
 
       await Promise.allSettled([
-        loadUsers({ force: true }),
+        reloadCurrentUsers(),
         getUserWallet(approveTarget.id, { force: true }),
       ]);
     } catch (error) {
@@ -463,7 +468,7 @@ const AdminUsers = () => {
       setIsRejectModalOpen(false);
       setRejectTarget(null);
       await Promise.allSettled([
-        loadUsers({ force: true }),
+        reloadCurrentUsers(),
         getUserWallet(rejectTarget.id, { force: true }),
       ]);
     } catch (error) {
@@ -490,7 +495,7 @@ const AdminUsers = () => {
     try {
       await updateUserGroup(selectedUser.id, settingsGroup, actor);
       addToast('تم تحديث المجموعة بنجاح.', 'success');
-      await loadUsers({ force: true });
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر تحديث المجموعة.', 'error');
     }
@@ -503,7 +508,7 @@ const AdminUsers = () => {
       await updateUserCurrency(selectedUser.id, settingsCurrency, actor);
       addToast('تم تحديث العملة بنجاح.', 'success');
       await Promise.allSettled([
-        loadUsers({ force: true }),
+        reloadCurrentUsers(),
         getUserWallet(selectedUser.id, { force: true }),
       ]);
     } catch (error) {
@@ -527,7 +532,7 @@ const AdminUsers = () => {
       syncSelectedUser(updated || { ...selectedUser, creditLimit: normalizedValue });
       setSettingsCreditLimit(String(normalizedValue));
       addToast('تم تحديث حد الدين بنجاح.', 'success');
-      await loadUsers({ force: true });
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر تحديث حد الدين.', 'error');
     }
@@ -545,7 +550,7 @@ const AdminUsers = () => {
           : (isArabic ? 'تم إيقاف الـ API لهذا المستخدم.' : 'API access disabled for this user.'),
         'success'
       );
-      await loadUsers({ force: true });
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || (isArabic ? 'تعذر تحديث إعدادات الـ API.' : 'Could not update API access.'), 'error');
     }
@@ -586,7 +591,7 @@ const AdminUsers = () => {
       addToast('تم إلغاء صلاحيات الإشراف بنجاح، وعاد كعميل عادي.', 'success');
       setIsRevokeSupervisorModalOpen(false);
       setRevokeSupervisorTarget(null);
-      await loadUsers({ force: true });
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر إلغاء صلاحيات الإشراف.', 'error');
     } finally {
@@ -606,7 +611,7 @@ const AdminUsers = () => {
       addToast('تم تطبيق الرصيد الإضافي بنجاح.', 'success');
       setSettingsTopupAmount('');
       await Promise.allSettled([
-        loadUsers({ force: true }),
+        reloadCurrentUsers(),
         getUserWallet(selectedUser.id, { force: true }),
       ]);
     } catch (error) {
@@ -693,7 +698,7 @@ const AdminUsers = () => {
       setOpenActionsUserId(null);
       setIsDetailsOpen(false);
       setSelectedUser(null);
-      await loadUsers();
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر حذف المستخدم.', 'error');
     } finally {
@@ -710,7 +715,7 @@ const AdminUsers = () => {
       await updateUserStatus(entry.id, 'rejected', actor);
       addToast('تم حظر الحساب بنجاح.', 'success');
       setOpenActionsUserId(null);
-      await loadUsers({ force: true });
+      await reloadCurrentUsers();
     } catch (error) {
       addToast(error?.message || 'تعذر حظر الحساب.', 'error');
     } finally {
@@ -735,7 +740,7 @@ const AdminUsers = () => {
         setSelectedUser(null);
       }
       await Promise.allSettled([
-        loadUsers({ force: true }),
+        reloadCurrentUsers(),
         getUserWallet(entry.id, { force: true }),
       ]);
     } catch (error) {
@@ -792,6 +797,7 @@ const AdminUsers = () => {
             placeholder={t('searchUsers')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            disabled={filter === 'deleted'}
             icon={<Search className="h-3 w-3" />}
             variant="search"
             className={compactFieldClassName}
@@ -1080,7 +1086,7 @@ const AdminUsers = () => {
       </div>
 
       {/* ── Pagination Controls (bottom of users list/table) ───────────────── */}
-      {usersPagination && usersPagination.pages > 1 && (
+      {filter !== 'deleted' && usersPagination && usersPagination.pages > 1 && (
         <div className="admin-premium-panel mt-2.5 flex flex-col gap-2 rounded-[var(--radius-md)] border border-[color:rgb(var(--color-border-rgb)/0.78)] bg-[color:rgb(var(--color-card-rgb)/0.84)] px-3 py-2 md:flex-row md:items-center md:justify-between">
           <p className="text-[11px] text-[var(--color-text-secondary)]">
             صفحة {usersPagination.page} من {usersPagination.pages} — إجمالي {usersPagination.total} مستخدم

@@ -26,7 +26,6 @@ import useAdminStore from '../../store/useAdminStore';
 import useMediaStore from '../../store/useMediaStore';
 import useSystemStore from '../../store/useSystemStore';
 import {
-  filterOrders,
   enrichOrders,
   getManualOrderStatusLabel,
   summarizeOrders,
@@ -236,7 +235,7 @@ const AdminOrders = () => {
   });
 
   // ── Core page loader (stable, receives explicit params) ───────────────
-  const loadPage = useCallback(async ({ pg, lim, search, startDate, endDate }) => {
+  const loadPage = useCallback(async ({ pg, lim, search, startDate, endDate, status, providerCode, type }) => {
     setIsLoading(true);
     await Promise.allSettled([
       storeActionsRef.current.loadAdminOrders({
@@ -247,6 +246,9 @@ const AdminOrders = () => {
         search: String(search || '').trim() || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        status: status && status !== 'all' ? status : undefined,
+        providerCode: providerCode && providerCode !== 'all' ? providerCode : undefined,
+        type: type && type !== 'all' ? type : undefined,
       }),
       storeActionsRef.current.loadUsers(),
       storeActionsRef.current.loadProducts(),
@@ -256,39 +258,24 @@ const AdminOrders = () => {
   }, []); // intentionally no deps — storeActionsRef is always current
 
   // ── Debounced server-side search ─────────────────────────────────────
-  // We store the committed search term so the pagination effect below can
-  // read it, but we also call loadPage directly from the debounce callback
-  // so we never miss a trigger due to stale state.
+  // Commit the query first; the single pagination effect below then issues
+  // the request with the current complete filter set.
   const [serverSearchTerm, setServerSearchTerm] = useState('');
-  const searchTimerRef = useRef(null);
   useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const trimmed = deferredSearchTerm.trim();
-    searchTimerRef.current = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setServerSearchTerm(trimmed);
       setPage(1);
-      // Trigger the API call immediately with the new search term at page 1;
-      // do NOT rely on the pagination useEffect below to re-fire,
-      // because setServerSearchTerm + setPage(1) may batch and produce
-      // no observable dep change if page was already 1.
-      loadPage({
-        pg: 1,
-        lim: limit,
-        search: trimmed,
-        startDate: appliedStartDate,
-        endDate: appliedEndDate,
-      });
     }, 500);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deferredSearchTerm]); // loadPage / limit / dates intentionally omitted — they have their own effects below
+  }, [deferredSearchTerm]);
 
   const isArabic = String(i18n.resolvedLanguage || i18n.language || 'ar').toLowerCase().startsWith('ar');
   const locale = isArabic ? 'ar-EG' : 'en-US';
   const language = isArabic ? 'ar' : 'en';
 
-  // ── Re-fetch when page / limit / dates change ────────────────────────
-  // (Search changes are handled directly inside the debounce above.)
+  // ── Re-fetch when any committed server filter changes ─────────────────
   useEffect(() => {
     loadPage({
       pg: page,
@@ -296,9 +283,12 @@ const AdminOrders = () => {
       search: serverSearchTerm,
       startDate: appliedStartDate,
       endDate: appliedEndDate,
+      status: statusFilter,
+      providerCode: providerFilter,
+      type: typeFilter,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, appliedStartDate, appliedEndDate]); // serverSearchTerm changes are handled in the debounce effect above
+  }, [page, limit, appliedStartDate, appliedEndDate, serverSearchTerm, statusFilter, providerFilter, typeFilter]);
 
   useEffect(() => {
     const orderIdFromQuery = String(searchParams.get('orderId') || '').trim();
@@ -335,19 +325,10 @@ const AdminOrders = () => {
     [adminOrders, users, products, isArabic]
   );
 
-  // NOTE: Search is handled server-side via the debounced `serverSearchTerm` → `loadAdminOrders`.
-  // Do NOT pass `searchTerm` here — that would re-filter the already-correct server response,
-  // causing results to disappear on every page except page 1.
+  // All result-affecting filters are handled server-side before pagination.
   const filteredOrders = useMemo(
-    () => filterOrders(enrichedOrders, {
-      searchTerm: '',        // ← intentionally blank: server already filtered by search
-      statusFilter,
-      typeFilter,
-      dateFilter,
-      sortOrder,
-      providerFilter,
-    }),
-    [dateFilter, enrichedOrders, sortOrder, statusFilter, typeFilter, providerFilter]
+    () => enrichedOrders,
+    [enrichedOrders]
   );
 
   const summary = useMemo(() => summarizeOrders(enrichedOrders), [enrichedOrders]);
@@ -448,6 +429,9 @@ const AdminOrders = () => {
           search: serverSearchTerm || undefined,
           startDate: appliedStartDate || undefined,
           endDate: appliedEndDate || undefined,
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          providerCode: providerFilter !== 'all' ? providerFilter : undefined,
+          type: typeFilter !== 'all' ? typeFilter : undefined,
         })),
       ]);
       addToast(
@@ -544,7 +528,7 @@ const AdminOrders = () => {
         statusFilter={statusFilter}
         onStatusChange={(v) => { setStatusFilter(v); setPage(1); }}
         typeFilter={typeFilter}
-        onTypeChange={setTypeFilter}
+        onTypeChange={(value) => { setTypeFilter(value); setPage(1); }}
         dateFilter={dateFilter}
         onDateChange={setDateFilter}
         sortOrder={sortOrder}

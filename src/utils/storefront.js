@@ -220,6 +220,7 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
     },
     ...safeCategories.map((category) => {
       const rawParent = category?.parentCategory;
+      const serverProductCount = Number(category?.productCount);
       let parentCategory = null;
       if (rawParent) {
         if (typeof rawParent === 'object') parentCategory = rawParent._id || rawParent.id || String(rawParent) || null;
@@ -231,7 +232,9 @@ export const createStorefrontCategories = (categories, products, language = 'ar'
         image: getCategoryDisplayImage(category),
         title: getCategoryDisplayTitle(category, language),
         subtitle: getCategoryDisplaySubtitle(category, language),
-        count: countsByCategory.get(String(category?.id || '').trim()) || 0,
+        count: Number.isFinite(serverProductCount) && serverProductCount >= 0
+          ? serverProductCount
+          : (countsByCategory.get(String(category?.id || '').trim()) || 0),
         tone: getCategoryDisplayKey(category),
         sortOrder: Number(category?.sortOrder ?? category?.displayOrder),
         parentCategory,

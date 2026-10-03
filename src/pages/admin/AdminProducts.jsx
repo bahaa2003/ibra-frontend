@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Plus, RefreshCw, Trash2, Info, Search, Check, Package } from 'lucide-react';
 import { resolveImageUrl } from '../../utils/imageUrl';
 import { uploadImage } from '../../services/realApi';
@@ -376,7 +376,6 @@ const getLinkageModeLabel = (mode, isEnglish) => {
 
 const AdminProducts = () => {
     const {
-        products,
         categories,
         addCategory,
         updateCategory,
@@ -385,7 +384,6 @@ const AdminProducts = () => {
         updateProduct,
         toggleProductStatus,
         deleteProduct,
-        loadProducts,
         resetProducts,
     } = useMediaStore();
     const { user } = useAuthStore();
@@ -423,6 +421,11 @@ const AdminProducts = () => {
     const [productSearchQuery, setProductSearchQuery] = useState('');
     const [productsPage, setProductsPage] = useState(1);
     const [productsPerPage, setProductsPerPage] = useState(20);
+    const [products, setProducts] = useState([]);
+    const [productsPagination, setProductsPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+    const [productsRefreshKey, setProductsRefreshKey] = useState(0);
+    const deferredProductSearch = useDeferredValue(productSearchQuery);
+    const productsRequestVersion = useRef(0);
 
     const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
     const [deleteCategoryTarget, setDeleteCategoryTarget] = useState(null);
@@ -435,7 +438,11 @@ const AdminProducts = () => {
     });
     const [providers, setProviders] = useState([]);
     const [providerProducts, setProviderProducts] = useState([]);
+    const [providerProductsPagination, setProviderProductsPagination] = useState({ page: 1, limit: 50, total: 0, pages: 0 });
+    const [providerProductsPage, setProviderProductsPage] = useState(1);
     const [providerProductQuery, setProviderProductQuery] = useState('');
+    const deferredProviderProductQuery = useDeferredValue(providerProductQuery);
+    const providerProductsRequestVersion = useRef(0);
     const [isSyncingPrice, setIsSyncingPrice] = useState(false);
     const [isLinkingProvider, setIsLinkingProvider] = useState(false);
     const [isBlindSyncingProviderPrice, setIsBlindSyncingProviderPrice] = useState(false);
@@ -542,43 +549,38 @@ const AdminProducts = () => {
         return matchedCategory?.name || matchedCategory?.nameAr || selectedProductsCategory;
     }, [isEnglish, selectedProductsCategory, sortedAdminCategories]);
 
-    const visibleAdminProducts = useMemo(() => {
-        const categoryProducts = selectedProductsCategory === 'all'
-            ? sortedAdminProducts
-            : sortedAdminProducts.filter((product) => String(product?.category || '') === String(selectedProductsCategory));
-        const query = productSearchQuery.trim().toLocaleLowerCase(isEnglish ? 'en' : 'ar');
-        if (!query) return categoryProducts;
-
-        return categoryProducts.filter((product) => {
-            const categoryName = categories.find((category) => String(category.id) === String(product?.category))?.name || '';
-            return [product?.name, product?.nameAr, product?.id, product?.providerName, categoryName]
-                .map((value) => String(value || '').toLocaleLowerCase(isEnglish ? 'en' : 'ar'))
-                .some((value) => value.includes(query));
-        });
-    }, [categories, isEnglish, productSearchQuery, selectedProductsCategory, sortedAdminProducts]);
+    // Search and category filtering are performed by /admin/products before
+    // pagination. These are exactly the rows returned for this server page.
+    const visibleAdminProducts = sortedAdminProducts;
 
     const activeProductsInSelectedCategory = useMemo(
         () => visibleAdminProducts.filter((product) => String(product?.status || '').toLowerCase() === 'active').length,
         [visibleAdminProducts]
     );
 
-    const productsPageCount = Math.max(1, Math.ceil(visibleAdminProducts.length / productsPerPage));
-    const paginatedAdminProducts = useMemo(() => {
-        const startIndex = (productsPage - 1) * productsPerPage;
-        return visibleAdminProducts.slice(startIndex, startIndex + productsPerPage);
-    }, [productsPage, productsPerPage, visibleAdminProducts]);
+    const productsPageCount = Math.max(1, Number(productsPagination.pages || 0));
+    const paginatedAdminProducts = visibleAdminProducts;
 
     useEffect(() => {
         setProductsPage(1);
     }, [productSearchQuery, productsPerPage, selectedProductsCategory]);
 
     useEffect(() => {
-        setProductsPage((currentPage) => Math.min(currentPage, productsPageCount));
-    }, [productsPageCount]);
-
-    useEffect(() => {
-        loadProducts();
-    }, [loadProducts]);
+        const timer = window.setTimeout(async () => {
+            const requestVersion = ++productsRequestVersion.current;
+            const result = await apiClient.products.listPaginated({
+                context: 'admin',
+                page: productsPage,
+                limit: productsPerPage,
+                search: String(deferredProductSearch || '').trim(),
+                category: selectedProductsCategory === 'all' ? '' : selectedProductsCategory,
+            }).catch(() => null);
+            if (requestVersion !== productsRequestVersion.current || !result) return;
+            setProducts(result.products || []);
+            setProductsPagination(result.pagination || { page: productsPage, limit: productsPerPage, total: 0, pages: 0 });
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [deferredProductSearch, productsPage, productsPerPage, productsRefreshKey, selectedProductsCategory]);
 
     useEffect(() => {
         if (isProductModalOpen && !productForm.category && categories.length > 0) {
@@ -626,38 +628,45 @@ const AdminProducts = () => {
     useEffect(() => {
         const selectedSupplier = productForm.supplierId || productForm.providerId;
         if (!canLoadProviderOptions || !isProductModalOpen || !selectedSupplier) {
+            providerProductsRequestVersion.current += 1;
             setProviderProducts([]);
+            setProviderProductsPagination({ page: 1, limit: 50, total: 0, pages: 0 });
             return;
         }
         const providerProductsRequest = canViewInternalPricing
-            ? apiClient.products.listProviderProducts(selectedSupplier)
-            : apiClient.products.listSafeProviderProductOptions(selectedSupplier);
+            ? apiClient.products.listProviderProducts(selectedSupplier, { page: providerProductsPage, limit: 50, search: String(deferredProviderProductQuery || '').trim() })
+            : apiClient.products.listSafeProviderProductOptions(selectedSupplier, { page: providerProductsPage, limit: 50, search: String(deferredProviderProductQuery || '').trim() });
+        const requestVersion = ++providerProductsRequestVersion.current;
+        // Do not render the previous provider/search page while this request is pending.
+        setProviderProducts([]);
+        setProviderProductsPagination({ page: providerProductsPage, limit: 50, total: 0, pages: 0 });
 
         providerProductsRequest
-            .then((items) => {
-                const nextItems = Array.isArray(items) ? items : [];
+            .then((result) => {
+                if (requestVersion !== providerProductsRequestVersion.current) return;
+                const nextItems = Array.isArray(result?.products) ? result.products : [];
                 setProviderProducts(nextItems);
-                // If the currently selected product ID is not in the new list, reset it
-                setProductForm((prev) => {
-                    const currentPPId = prev.providerProductId || prev.externalProductId;
-                    if (currentPPId && !nextItems.some((p) => hasMatchingProviderProduct(p, prev.providerProductId, prev.externalProductId))) {
-                        return { ...prev, externalProductId: '', providerProductId: '', externalProductName: '' };
-                    }
-                    return prev;
-                });
+                setProviderProductsPagination(result?.pagination || { page: providerProductsPage, limit: 50, total: nextItems.length, pages: nextItems.length ? 1 : 0 });
             })
             .catch(() => {
+                if (requestVersion !== providerProductsRequestVersion.current) return;
                 setProviderProducts([]);
+                setProviderProductsPagination({ page: providerProductsPage, limit: 50, total: 0, pages: 0 });
                 addToast('فشل تحميل منتجات المزود', 'error');
             });
         // Fix 4: Only re-fetch when the provider ID changes or the modal opens/closes.
         // providerProductId/externalProductId are removed to prevent race conditions
         // when they are cleared by the provider onChange handler.
-    }, [canLoadProviderOptions, canViewInternalPricing, isProductModalOpen, productForm.providerId, productForm.supplierId, addToast]);
+    }, [canLoadProviderOptions, canViewInternalPricing, deferredProviderProductQuery, isProductModalOpen, productForm.providerId, productForm.supplierId, providerProductsPage, addToast]);
 
     useEffect(() => {
         setProviderProductQuery('');
+        setProviderProductsPage(1);
     }, [isProductModalOpen, productForm.providerId, productForm.supplierId]);
+
+    useEffect(() => {
+        setProviderProductsPage(1);
+    }, [deferredProviderProductQuery]);
 
     const selectedSupplierId = productForm.supplierId || productForm.providerId;
     const selectedProviderProductId = productForm.providerProductId || productForm.externalProductId;
@@ -670,17 +679,7 @@ const AdminProducts = () => {
         )) || null,
         [productForm.externalProductId, productForm.providerProductId, providerProducts]
     );
-    const filteredProviderProducts = useMemo(() => {
-        const normalizedQuery = String(providerProductQuery || '').trim().toLowerCase();
-        if (!normalizedQuery) {
-            return providerProducts;
-        }
-
-        const getSearchToken = canViewInternalPricing
-            ? getProviderProductSearchToken
-            : getSafeProviderProductSearchToken;
-        return providerProducts.filter((product) => getSearchToken(product).includes(normalizedQuery));
-    }, [canViewInternalPricing, providerProducts, providerProductQuery]);
+    const filteredProviderProducts = providerProducts;
     const activeProviders = useMemo(
         () => providers.filter((provider) => provider.isActive !== false),
         [providers]
@@ -793,7 +792,7 @@ const AdminProducts = () => {
                     : 'تم ربط المنتج بالمورد بنجاح',
                 'success'
             );
-            void loadProducts({ force: true });
+            setProductsRefreshKey((key) => key + 1);
         } catch (error) {
             addToast(
                 error?.message || (isEnglish ? 'Failed to link product to provider.' : 'فشل ربط المنتج بالمورد.'),
@@ -819,7 +818,7 @@ const AdminProducts = () => {
                     : 'تمت مزامنة السعر بنجاح',
                 'success'
             );
-            void loadProducts({ force: true });
+            setProductsRefreshKey((key) => key + 1);
         } catch (error) {
             addToast(
                 error?.message || (isEnglish ? 'Failed to sync provider price.' : 'فشل مزامنة السعر.'),
@@ -1132,7 +1131,7 @@ const AdminProducts = () => {
                 await updateProduct(editingProduct.id, supervisorPayload);
                 setIsProductModalOpen(false);
                 addToast(t('productUpdated') || 'تم تحديث المنتج', 'success');
-                void loadProducts({ force: true });
+                setProductsRefreshKey((key) => key + 1);
             } catch (error) {
                 addToast(error?.message || 'فشل حفظ المنتج', 'error');
             } finally {
@@ -1255,7 +1254,7 @@ const AdminProducts = () => {
                 'success'
             );
 
-            void loadProducts({ force: true });
+            setProductsRefreshKey((key) => key + 1);
         } catch (error) {
             addToast(error?.message || 'فشل حفظ المنتج', 'error');
         } finally {
@@ -1277,6 +1276,7 @@ const AdminProducts = () => {
         try {
             setTogglingProductId(product.id);
             const updatedProduct = await toggleProductStatus(product.id);
+            setProductsRefreshKey((key) => key + 1);
             addToast(
                 updatedProduct?.status === 'active'
                     ? (isEnglish ? 'Product activated successfully' : 'تم تفعيل المنتج بنجاح')
@@ -1430,6 +1430,7 @@ const AdminProducts = () => {
         setIsDeletingProduct(true);
         try {
             await deleteProduct(deleteProductTarget.id);
+            setProductsRefreshKey((key) => key + 1);
             addToast(isEnglish ? 'Product deleted' : 'تم حذف المنتج', 'success');
             setIsDeleteProductDialogOpen(false);
             setDeleteProductTarget(null);
@@ -1595,7 +1596,7 @@ const AdminProducts = () => {
                             {isEnglish ? 'Products in Category' : 'منتجات القسم'}
                         </h2>
                         <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">
-                            {selectedProductsCategoryLabel} - {formatNumber(visibleAdminProducts.length, language === 'en' ? 'en-US' : 'ar-EG')} {isEnglish ? 'products' : 'منتج'}
+                            {selectedProductsCategoryLabel} - {formatNumber(productsPagination.total || 0, language === 'en' ? 'en-US' : 'ar-EG')} {isEnglish ? 'products' : 'منتج'}
                             {' / '}
                             {formatNumber(activeProductsInSelectedCategory, language === 'en' ? 'en-US' : 'ar-EG')} {isEnglish ? 'active' : 'ظاهر'}
                         </p>
@@ -1847,9 +1848,9 @@ const AdminProducts = () => {
                             <span>
                                 {formatNumber((productsPage - 1) * productsPerPage + 1, language === 'en' ? 'en-US' : 'ar-EG')}
                                 {' - '}
-                                {formatNumber(Math.min(productsPage * productsPerPage, visibleAdminProducts.length), language === 'en' ? 'en-US' : 'ar-EG')}
+                                {formatNumber(Math.min(productsPage * productsPerPage, productsPagination.total || 0), language === 'en' ? 'en-US' : 'ar-EG')}
                                 {' / '}
-                                {formatNumber(visibleAdminProducts.length, language === 'en' ? 'en-US' : 'ar-EG')}
+                                {formatNumber(productsPagination.total || 0, language === 'en' ? 'en-US' : 'ar-EG')}
                             </span>
                         </div>
 
@@ -2188,7 +2189,7 @@ const AdminProducts = () => {
 
                                                     <div className="flex items-center justify-between gap-3 px-1 text-xs text-[var(--color-muted)]">
                                                         <span>
-                                                            {isEnglish ? `${filteredProviderProducts.length} products found` : `${filteredProviderProducts.length} منتج متاح`}
+                                                            {isEnglish ? `${providerProductsPagination.total} products found` : `${providerProductsPagination.total} منتج متاح`}
                                                         </span>
                                                         {selectedProviderProduct ? (
                                                             <span className="truncate text-[var(--color-primary)]">
@@ -2196,6 +2197,14 @@ const AdminProducts = () => {
                                                             </span>
                                                         ) : null}
                                                     </div>
+
+                                                    {providerProductsPagination.pages > 1 ? (
+                                                        <div className="flex items-center justify-between px-1 text-xs text-[var(--color-muted)]">
+                                                            <Button size="sm" variant="outline" disabled={providerProductsPagination.page <= 1} onClick={() => setProviderProductsPage((page) => page - 1)}>{isEnglish ? 'Previous' : 'السابق'}</Button>
+                                                            <span>{providerProductsPagination.page} / {providerProductsPagination.pages}</span>
+                                                            <Button size="sm" variant="outline" disabled={providerProductsPagination.page >= providerProductsPagination.pages} onClick={() => setProviderProductsPage((page) => page + 1)}>{isEnglish ? 'Next' : 'التالي'}</Button>
+                                                        </div>
+                                                    ) : null}
 
                                                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                                                         {filteredProviderProducts.length ? filteredProviderProducts.map((providerProduct) => {
@@ -2622,7 +2631,7 @@ const AdminProducts = () => {
 
                                                     <div className="flex items-center justify-between gap-3 px-1 text-xs text-[var(--color-muted)]">
                                                         <span>
-                                                            {isEnglish ? `${filteredProviderProducts.length} products found` : `${filteredProviderProducts.length} منتج متاح`}
+                                                            {isEnglish ? `${providerProductsPagination.total} products found` : `${providerProductsPagination.total} منتج متاح`}
                                                         </span>
                                                         {selectedProviderProduct ? (
                                                             <span className="truncate text-[var(--color-primary)]">
@@ -2630,6 +2639,14 @@ const AdminProducts = () => {
                                                             </span>
                                                         ) : null}
                                                     </div>
+
+                                                    {providerProductsPagination.pages > 1 ? (
+                                                        <div className="flex items-center justify-between px-1 text-xs text-[var(--color-muted)]">
+                                                            <Button size="sm" variant="outline" disabled={providerProductsPagination.page <= 1} onClick={() => setProviderProductsPage((page) => page - 1)}>{isEnglish ? 'Previous' : 'السابق'}</Button>
+                                                            <span>{providerProductsPagination.page} / {providerProductsPagination.pages}</span>
+                                                            <Button size="sm" variant="outline" disabled={providerProductsPagination.page >= providerProductsPagination.pages} onClick={() => setProviderProductsPage((page) => page + 1)}>{isEnglish ? 'Next' : 'التالي'}</Button>
+                                                        </div>
+                                                    ) : null}
 
                                                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                                                         {filteredProviderProducts.length ? filteredProviderProducts.map((providerProduct) => {

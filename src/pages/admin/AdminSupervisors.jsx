@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Ban,
   Check,
@@ -20,6 +20,7 @@ import {
   WalletCards,
 } from 'lucide-react';
 import useAdminStore from '../../store/useAdminStore';
+import apiClient from '../../services/client';
 import useAuthStore from '../../store/useAuthStore';
 import { useToast } from '../../components/ui/Toast';
 import Input from '../../components/ui/Input';
@@ -167,6 +168,12 @@ const AdminSupervisors = () => {
   const { addToast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [supervisors, setSupervisors] = useState([]);
+  const [supervisorsPagination, setSupervisorsPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+  const [supervisorsPage, setSupervisorsPage] = useState(1);
+  const [supervisorsRefreshKey, setSupervisorsRefreshKey] = useState(0);
+  const deferredSearch = useDeferredValue(search);
+  const supervisorRequestVersion = useRef(0);
   const [selectedId, setSelectedId] = useState('');
   const [candidateId, setCandidateId] = useState('');
   const [candidateRole, setCandidateRole] = useState(ROLES.SUPERVISOR);
@@ -177,10 +184,36 @@ const AdminSupervisors = () => {
     loadUsers();
   }, [loadUsers]);
 
-  const supervisors = useMemo(
-    () => (users || []).filter((entry) => SUPERVISOR_ROLES.includes(normalizeRole(entry.role))),
-    [users]
-  );
+  useEffect(() => {
+    const requestVersion = ++supervisorRequestVersion.current;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const status = statusFilter === 'approved' ? 'ACTIVE' : statusFilter === 'pending' ? 'PENDING' : statusFilter === 'rejected' ? 'REJECTED' : '';
+      try {
+        const result = await apiClient.users.listSupervisors({
+          page: supervisorsPage,
+          limit: 20,
+          search: String(deferredSearch || '').trim(),
+          status,
+        });
+        if (!active || requestVersion !== supervisorRequestVersion.current) return;
+        setSupervisors(Array.isArray(result?.users) ? result.users : []);
+        setSupervisorsPagination(result?.pagination || { page: supervisorsPage, limit: 20, total: 0, pages: 0 });
+      } catch {
+        if (!active || requestVersion !== supervisorRequestVersion.current) return;
+        setSupervisors([]);
+        setSupervisorsPagination({ page: supervisorsPage, limit: 20, total: 0, pages: 0 });
+      }
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [deferredSearch, statusFilter, supervisorsPage, supervisorsRefreshKey]);
+
+  useEffect(() => {
+    setSupervisorsPage(1);
+  }, [deferredSearch, statusFilter]);
 
   const candidates = useMemo(
     () => (users || []).filter((entry) => {
@@ -190,20 +223,7 @@ const AdminSupervisors = () => {
     [users]
   );
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-
-    return supervisors.filter((entry) => {
-      const normalizedStatus = normalizeAccountStatus(entry.status);
-      const matchesStatus = statusFilter === 'all' ? true : normalizedStatus === statusFilter;
-      const matchesSearch = !term
-        ? true
-        : String(entry.name || '').toLowerCase().includes(term)
-          || String(entry.email || '').toLowerCase().includes(term);
-
-      return matchesStatus && matchesSearch;
-    });
-  }, [search, statusFilter, supervisors]);
+  const filtered = supervisors;
 
   const selectedSupervisor = useMemo(
     () => supervisors.find((entry) => String(entry.id) === String(selectedId)) || filtered[0] || supervisors[0] || null,
@@ -237,6 +257,8 @@ const AdminSupervisors = () => {
       await updateUserRole(id, normalizedRole, actor, defaults);
       addToast('تم تحديث الدور والصلاحيات الافتراضية.', 'success');
       await loadUsers({ force: true });
+      setSupervisorsPage(1);
+      setSupervisorsRefreshKey((value) => value + 1);
       return true;
     } catch (error) {
       addToast(error?.message || 'فشل تحديث الدور.', 'error');
@@ -266,6 +288,7 @@ const AdminSupervisors = () => {
       await updateUserStatus(target.id, nextStatus, actor);
       addToast(nextStatus === 'approved' ? 'تم تفعيل المشرف.' : 'تم إيقاف وصول المشرف.', 'success');
       await loadUsers({ force: true });
+      setSupervisorsRefreshKey((value) => value + 1);
     } catch (error) {
       addToast(error?.message || 'فشل تحديث الحالة.', 'error');
     }
@@ -279,6 +302,7 @@ const AdminSupervisors = () => {
       await deleteUser(target.id, actor);
       addToast('تم حذف المشرف.', 'success');
       await loadUsers({ force: true });
+      setSupervisorsRefreshKey((value) => value + 1);
     } catch (error) {
       addToast(error?.message || 'فشل حذف المشرف.', 'error');
     }
@@ -300,6 +324,7 @@ const AdminSupervisors = () => {
       await updateSupervisorPermissions(selectedSupervisor.id, draftPermissions, actor);
       addToast('تم حفظ صلاحيات المشرف.', 'success');
       await loadUsers({ force: true });
+      setSupervisorsRefreshKey((value) => value + 1);
     } catch (error) {
       addToast(error?.message || 'فشل حفظ الصلاحيات.', 'error');
     } finally {
@@ -327,7 +352,7 @@ const AdminSupervisors = () => {
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[34rem]">
             {[
-              { label: 'المشرفين', value: supervisors.length, icon: Users },
+              { label: 'المشرفين', value: supervisorsPagination.total, icon: Users },
               { label: 'نشط', value: activeCount, icon: CheckCircle2 },
               { label: 'انتظار', value: pendingCount, icon: Eye },
               { label: 'موقوف', value: blockedCount, icon: Ban },
@@ -391,7 +416,7 @@ const AdminSupervisors = () => {
                   فلتر واختار مشرف لتعديل صلاحياته.
                 </p>
               </div>
-              <Badge variant="premium">{filtered.length} نتيجة</Badge>
+              <Badge variant="premium">{supervisorsPagination.total} نتيجة</Badge>
             </div>
 
             <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_9rem] xl:grid-cols-1">
@@ -477,6 +502,13 @@ const AdminSupervisors = () => {
               </div>
             )}
           </div>
+          {supervisorsPagination.pages > 1 ? (
+            <div className="flex items-center justify-between border-t border-[color:rgb(var(--color-border-rgb)/0.76)] p-3 text-xs">
+              <Button size="sm" variant="outline" disabled={supervisorsPagination.page <= 1} onClick={() => setSupervisorsPage((page) => page - 1)}>السابق</Button>
+              <span>صفحة {supervisorsPagination.page} من {supervisorsPagination.pages}</span>
+              <Button size="sm" variant="outline" disabled={supervisorsPagination.page >= supervisorsPagination.pages} onClick={() => setSupervisorsPage((page) => page + 1)}>التالي</Button>
+            </div>
+          ) : null}
         </section>
 
         <section className="admin-premium-panel overflow-hidden">
