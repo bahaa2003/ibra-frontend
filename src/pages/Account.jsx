@@ -19,6 +19,7 @@ import useAuthStore from '../store/useAuthStore';
 import useAdminStore from '../store/useAdminStore';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../components/ui/Toast';
+import { validatePhone } from '../utils/validation';
 
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -31,7 +32,6 @@ const PRESET_AVATARS = [
 ];
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const phoneRegex = /^\+?[0-9 ()-]{7,20}$/;
 const usernameRegex = /^[a-zA-Z0-9_.-]{3,30}$/;
 const getSelectedAvatarStorageKey = (userId) => `ibra:selected-avatar:${userId}`;
 
@@ -367,7 +367,7 @@ const Account = () => {
     if (!email) validationErrors.email = text.validationRequired;
     else if (!emailRegex.test(email)) validationErrors.email = text.validationEmail;
 
-    if (phone && !phoneRegex.test(phone)) validationErrors.phone = text.validationPhone;
+    if (phone && validatePhone(phone)) validationErrors.phone = text.validationPhone;
 
     return validationErrors;
   };
@@ -687,6 +687,10 @@ const Account = () => {
               label={text.phoneNumber}
               value={form.phone}
               onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              dir="ltr"
               error={errors.phone}
               placeholder={isEnglish ? '+1 555 123 4567' : '+20 100 123 4567'}
             />

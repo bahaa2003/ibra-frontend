@@ -17,12 +17,13 @@ let profileRefreshRequest = null;
 const buildAuthOutcome = (user) => {
   const normalizedUser = normalizeAuthUser(user);
   const status = normalizeAccountStatus(normalizedUser?.status);
+  const profileCompletionRequired = normalizedUser?.profileCompletionRequired === true;
   return {
     ok: true,
     status,
     user: normalizedUser,
-    redirectTo: getAccountAccessRoute(status) || getDefaultRouteForRole(normalizedUser?.role),
-    canAccessApp: isApprovedAccountStatus(status),
+    redirectTo: getAccountAccessRoute(status) || (profileCompletionRequired ? '/complete-phone' : getDefaultRouteForRole(normalizedUser?.role)),
+    canAccessApp: isApprovedAccountStatus(status) && !profileCompletionRequired,
   };
 };
 
@@ -58,6 +59,7 @@ const useAuthStore = create(
       blockedStatus: null,
       blockedUser: null,
       twoFactorChallenge: null,
+      googleProfileCompletionToken: null,
       profileLastLoadedAt: 0,
 
       hasPermission: (permission) => userHasPermission(get().user, permission),
@@ -95,6 +97,7 @@ const useAuthStore = create(
           blockedStatus: null,
           blockedUser: null,
           twoFactorChallenge: null,
+          googleProfileCompletionToken: null,
         });
         try {
           const response = await apiClient.auth.login(email, password);
@@ -232,9 +235,29 @@ const useAuthStore = create(
           blockedStatus: null,
           blockedUser: null,
           twoFactorChallenge: null,
+          googleProfileCompletionToken: null,
         });
         try {
           const response = await apiClient.auth.loginWithGoogle();
+          if (response?.profileCompletionToken) {
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+              isLoading: false,
+              blockedStatus: null,
+              blockedUser: null,
+              twoFactorChallenge: null,
+              googleProfileCompletionToken: response.profileCompletionToken,
+              profileLastLoadedAt: 0,
+            });
+            return {
+              ok: true,
+              profileCompletionRequired: true,
+              redirectTo: '/complete-phone?mode=google',
+              canAccessApp: false,
+            };
+          }
           if (response?.redirectTo && !response?.user && !response?.token) {
             const callbackStatus = normalizeAccountStatus(response?.status);
 
@@ -246,6 +269,7 @@ const useAuthStore = create(
               blockedStatus: callbackStatus || null,
               blockedUser: null,
               twoFactorChallenge: null,
+              googleProfileCompletionToken: null,
               profileLastLoadedAt: 0,
             });
 
@@ -269,6 +293,7 @@ const useAuthStore = create(
             blockedStatus: outcome.canAccessApp ? null : outcome.status,
             blockedUser: outcome.canAccessApp ? null : outcome.user,
             twoFactorChallenge: null,
+            googleProfileCompletionToken: null,
             profileLastLoadedAt: Date.now(),
           });
 
@@ -285,6 +310,7 @@ const useAuthStore = create(
               blockedStatus,
               blockedUser: null,
               twoFactorChallenge: null,
+              googleProfileCompletionToken: null,
               isAuthenticated: false,
               profileLastLoadedAt: 0,
             });
@@ -300,6 +326,7 @@ const useAuthStore = create(
             blockedStatus: null,
             blockedUser: null,
             twoFactorChallenge: null,
+            googleProfileCompletionToken: null,
             profileLastLoadedAt: 0,
           });
           return { ok: false, error: formattedError };
@@ -313,6 +340,7 @@ const useAuthStore = create(
           blockedStatus: null,
           blockedUser: null,
           twoFactorChallenge: null,
+          googleProfileCompletionToken: null,
         });
         try {
           const response = await apiClient.auth.register(userData);
@@ -360,6 +388,55 @@ const useAuthStore = create(
         }
       },
 
+      completePhone: async (phone) => {
+        set({ isLoading: true, error: null });
+        try {
+          const user = await apiClient.auth.completePhone(phone);
+          const outcome = buildAuthOutcome(user);
+          set({
+            user: outcome.user,
+            isLoading: false,
+            blockedStatus: outcome.canAccessApp ? null : outcome.status,
+            blockedUser: outcome.canAccessApp ? null : outcome.user,
+            profileLastLoadedAt: Date.now(),
+          });
+          return outcome;
+        } catch (err) {
+          const error = formatAuthErrorMessage(err, { action: 'register' });
+          set({ isLoading: false, error });
+          return { ok: false, error };
+        }
+      },
+
+      completeGooglePhone: async (phone) => {
+        const completionToken = get().googleProfileCompletionToken;
+        if (!completionToken) {
+          return { ok: false, error: 'Your Google completion session has expired. Please sign in again.' };
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const response = await apiClient.auth.completeGoogleProfile({ completionToken, phone });
+          const outcome = buildAuthOutcome(response.user);
+          const isActiveSession = Boolean(response.token);
+          set({
+            user: isActiveSession ? outcome.user : null,
+            token: response.token || null,
+            isAuthenticated: isActiveSession,
+            isLoading: false,
+            blockedStatus: isActiveSession && outcome.canAccessApp ? null : outcome.status,
+            blockedUser: isActiveSession && outcome.canAccessApp ? null : outcome.user,
+            googleProfileCompletionToken: null,
+            profileLastLoadedAt: isActiveSession ? Date.now() : 0,
+          });
+          return outcome;
+        } catch (err) {
+          const error = formatAuthErrorMessage(err, { action: 'google' });
+          set({ isLoading: false, error });
+          return { ok: false, error };
+        }
+      },
+
       logout: async () => {
         profileRefreshRequest = null;
         set({
@@ -371,6 +448,7 @@ const useAuthStore = create(
           blockedStatus: null,
           blockedUser: null,
           twoFactorChallenge: null,
+          googleProfileCompletionToken: null,
           profileLastLoadedAt: 0,
         });
 

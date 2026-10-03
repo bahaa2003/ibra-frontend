@@ -1372,7 +1372,20 @@ const realApi = {
       // This method is called from FE after capturing the token from the redirect.
       // We keep it compatible by parsing the token from the current URL if present.
       const params = new URLSearchParams(window.location.search);
+      const completionHash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const profileCompletionToken = completionHash.get('profileCompletionToken');
       const callbackStatus = normalizeAccountStatus(params.get('status'));
+      if (profileCompletionToken) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+        return {
+          user: null,
+          token: null,
+          profileCompletionToken,
+          profileCompletionRequired: true,
+          status: 'profile_completion_required',
+          canAccessApp: false,
+        };
+      }
       if (callbackStatus && !params.get('token')) {
         return {
           user: null,
@@ -1421,6 +1434,17 @@ const realApi = {
       const data = unwrap(res);
       const user = normaliseUser(data.user);
       return { user };
+    },
+
+    completePhone: async (phone) => {
+      const res = await http.patch('/users/me/phone', { phone });
+      return normaliseUser(unwrap(res));
+    },
+
+    completeGoogleProfile: async ({ completionToken, phone }) => {
+      const res = await http.post('/auth/google/complete-profile', { completionToken, phone });
+      const data = unwrap(res);
+      return { ...data, user: normaliseUser(data.user) };
     },
 
     getProfile: async (_userId) => {

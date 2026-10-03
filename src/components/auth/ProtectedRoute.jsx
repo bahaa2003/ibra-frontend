@@ -31,6 +31,10 @@ const ProtectedRoute = ({ children, roles = [], permissions = [] }) => {
     return <Navigate to={blockedRoute} state={{ from: location }} replace />;
   }
 
+  if (user?.profileCompletionRequired === true && location.pathname !== '/complete-phone') {
+    return <Navigate to="/complete-phone" replace />;
+  }
+
   const fallbackPath = getDefaultRouteForRole(user?.role);
 
   if (roles.length > 0 && !hasRequiredRole(user?.role, roles)) {

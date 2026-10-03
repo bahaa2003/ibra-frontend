@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ProtectedRoute, { AdminRoute } from './components/auth/ProtectedRoute';
 import FloatingWhatsApp from './components/ui/FloatingWhatsApp';
 import Loader from './components/ui/Loader';
@@ -35,6 +35,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const CreatedByPage = lazy(() => import('./pages/CreatedByPage'));
 const Account = lazy(() => import('./pages/Account'));
 const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
+const PhoneCompletion = lazy(() => import('./pages/PhoneCompletion'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
@@ -83,6 +84,21 @@ const ApiDocsRoute = () => {
   return renderSuspended(<ApiDocs />);
 };
 
+const CompletionRedirect = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+
+  React.useEffect(() => {
+    if (isAuthenticated && user?.profileCompletionRequired === true && location.pathname !== '/complete-phone') {
+      navigate('/complete-phone', { replace: true });
+    }
+  }, [isAuthenticated, location.pathname, navigate, user?.profileCompletionRequired]);
+
+  return null;
+};
+
 function App() {
   return (
     <ThemeProvider>
@@ -93,10 +109,12 @@ function App() {
           <FirstVisitNotice />
           <RouteWarmup />
           <BrowserRouter>
+            <CompletionRedirect />
             <Routes>
               <Route path="/" element={renderSuspended(<Dashboard />)} />
               <Route path="/catalog" element={<Navigate to="/products" replace />} />
               <Route path="/auth" element={renderSuspended(<Auth />)} />
+              <Route path="/complete-phone" element={renderSuspended(<PhoneCompletion />)} />
               <Route path="/login" element={renderSuspended(<Auth />)} />
               <Route path="/email-verified" element={renderSuspended(<EmailVerified />)} />
               <Route path="/created-by" element={<CreatedByRoute />} />

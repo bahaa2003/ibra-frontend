@@ -9,6 +9,7 @@ import {
   Globe,
   Lock,
   Mail,
+  Phone,
   ShieldCheck,
   User,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ import {
   validateEmail,
   validateFullName,
   validatePassword,
+  validatePhone,
 } from '../utils/validation';
 import { COUNTRY_CATALOG } from '../data/countryCatalog';
 import { getDefaultRouteForRole } from '../utils/authRoles';
@@ -81,6 +83,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [registerStep, setRegisterStep] = useState(0);
   const [country, setCountry] = useState('US');
   const [currency, setCurrency] = useState('USD');
@@ -230,6 +233,9 @@ const countryOptions = useMemo(() => {
 
       if (nameError) nextErrors.name = nameError;
 
+      const phoneError = validatePhone(phone);
+      if (phoneError) nextErrors.phone = phoneError;
+
       if (!confirmPassword) {
         nextErrors.confirmPassword = t('auth.passwordConfirmRequired');
       } else if (password !== confirmPassword) {
@@ -247,6 +253,9 @@ const countryOptions = useMemo(() => {
     if (step === 0) {
       const nameError = validateFullName(name);
       if (nameError) nextErrors.name = nameError;
+
+      const phoneError = validatePhone(phone);
+      if (phoneError) nextErrors.phone = phoneError;
 
       if (!currency) {
         addToast(t('auth.noCurrenciesConfigured'), 'error');
@@ -375,6 +384,7 @@ const countryOptions = useMemo(() => {
           password,
           country,
           currency,
+          phone,
           signupMethod: 'email',
         });
 
@@ -663,6 +673,19 @@ const countryOptions = useMemo(() => {
                       onChange={(event) => setName(event.target.value)}
                       icon={<User className="h-4 w-4" />}
                       error={errors.name}
+                    />
+
+                    <Input
+                      label={t('auth.phone', { defaultValue: dir === 'rtl' ? 'رقم الهاتف' : 'Phone number' })}
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      dir="ltr"
+                      placeholder="+20 101 234 5678"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      icon={<Phone className="h-4 w-4" />}
+                      error={errors.phone}
                     />
 
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -1015,4 +1038,3 @@ const countryOptions = useMemo(() => {
 };
 
 export default Auth;
-

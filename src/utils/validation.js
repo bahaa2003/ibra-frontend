@@ -45,6 +45,21 @@ export const validateMobilePhone = (phone, phoneCode = '') => {
   return null;
 };
 
+const normalizePhoneDigits = (value) => String(value || '')
+  .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+  .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+
+export const validatePhone = (phone) => {
+  const value = normalizePhoneDigits(phone).trim();
+  if (!value) return 'Phone number is required';
+  if (!/^[0-9+ ()-]+$/.test(value)) return 'Enter a valid phone number';
+  const normalized = value.replace(/[\s()-]/g, '');
+  if (!/^\+?\d+$/.test(normalized)) return 'Enter a valid phone number';
+  const digits = normalized.startsWith('+') ? normalized.slice(1) : normalized;
+  if (digits.length < 7 || digits.length > 15) return 'Phone number must contain 7 to 15 digits';
+  return null;
+};
+
 export const validateGameId = (gameId) => {
   if (!gameId) return 'المعرف مطلوب';
   if (gameId.trim().length < 3) return 'المعرف قصير جدًا';
